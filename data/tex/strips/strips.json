@@ -1,0 +1,92 @@
+{
+  "lum_1": {
+    "name": "lum_1",
+    "tiles": [
+      {
+        "file": "lum_1_0.webp",
+        "w": 2048
+      },
+      {
+        "file": "lum_1_1.webp",
+        "w": 1617
+      }
+    ],
+    "h": 205,
+    "pxPerM": 16,
+    "height_m": 12.8,
+    "length_m": 229,
+    "source": "BOULEVARD LUMUMBA _ DE LA 7\u00e8me rue Limete au Q1 NDJILI _ Kinshasa -Rdc.mp4"
+  },
+  "lum_2": {
+    "name": "lum_2",
+    "tiles": [
+      {
+        "file": "lum_2_0.webp",
+        "w": 2048
+      },
+      {
+        "file": "lum_2_1.webp",
+        "w": 360
+      }
+    ],
+    "h": 205,
+    "pxPerM": 16,
+    "height_m": 12.8,
+    "length_m": 150,
+    "source": "BOULEVARD LUMUMBA _ DE LA 7\u00e8me rue Limete au Q1 NDJILI _ Kinshasa -Rdc.mp4"
+  },
+  "lum_3": {
+    "name": "lum_3",
+    "tiles": [
+      {
+        "file": "lum_3_0.webp",
+        "w": 2048
+      },
+      {
+        "file": "lum_3_1.webp",
+        "w": 475
+      }
+    ],
+    "h": 205,
+    "pxPerM": 16,
+    "height_m": 12.8,
+    "length_m": 158,
+    "source": "BOULEVARD LUMUMBA _ DE LA 7\u00e8me rue Limete au Q1 NDJILI _ Kinshasa -Rdc.mp4"
+  },
+  "lum_4": {
+    "name": "lum_4",
+    "tiles": [
+      {
+        "file": "lum_4_0.webp",
+        "w": 2048
+      },
+      {
+        "file": "lum_4_1.webp",
+        "w": 752
+      }
+    ],
+    "h": 205,
+    "pxPerM": 16,
+    "height_m": 12.8,
+    "length_m": 175,
+    "source": "BOULEVARD LUMUMBA _ DE LA 7\u00e8me rue Limete au Q1 NDJILI _ Kinshasa -Rdc.mp4"
+  },
+  "lum_5": {
+    "name": "lum_5",
+    "tiles": [
+      {
+        "file": "lum_5_0.webp",
+        "w": 2048
+      },
+      {
+        "file": "lum_5_1.webp",
+        "w": 1061
+      }
+    ],
+    "h": 205,
+    "pxPerM": 16,
+    "height_m": 12.8,
+    "length_m": 194,
+    "source": "BOULEVARD LUMUMBA _ DE LA 7\u00e8me rue Limete au Q1 NDJILI _ Kinshasa -Rdc.mp4"
+  }
+}

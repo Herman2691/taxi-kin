@@ -1,0 +1,53 @@
+{
+ "note": "Prédications dans les bus : audio tiré des vidéos du dossier Predication (tools: ffmpeg, mono 22 kHz 48 kb/s, 6 min au plus). longue : pour les longs trajets.",
+ "predications": [
+  {
+   "fichier": "predication-1.mp3",
+   "duree": 360,
+   "longue": true,
+   "source": "JEM Kinshasa - Prédication Bus 03 @Fr Joel"
+  },
+  {
+   "fichier": "predication-2.mp3",
+   "duree": 360,
+   "longue": true,
+   "source": "LINGALA FACILE - PREDICATION NA KATI YA BUS - TOLI YA PETE"
+  },
+  {
+   "fichier": "predication-3.mp3",
+   "duree": 63,
+   "longue": false,
+   "source": "WhatsApp Video 2026-11-10 at 13.39.07"
+  },
+  {
+   "fichier": "predication-4.mp3",
+   "duree": 58,
+   "longue": false,
+   "source": "WhatsApp Video 2026-11-10 at 13.39.12"
+  },
+  {
+   "fichier": "predication-5.mp3",
+   "duree": 94,
+   "longue": false,
+   "source": "WhatsApp Video 2026-11-10 at 13.39.19"
+  },
+  {
+   "fichier": "predication-6.mp3",
+   "duree": 124,
+   "longue": true,
+   "source": "WhatsApp Video 2026-11-10 at 13.39.57"
+  },
+  {
+   "fichier": "predication-7.mp3",
+   "duree": 123,
+   "longue": true,
+   "source": "WhatsApp Video 2026-11-10 at 13.40.06"
+  },
+  {
+   "fichier": "predication-8.mp3",
+   "duree": 60,
+   "longue": false,
+   "source": "Évangélisation dans les bus (bus2)"
+  }
+ ]
+}
