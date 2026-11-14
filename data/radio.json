@@ -1,1 +1,24 @@
-{ "titres": [] }
+{
+ "titres": [
+  {
+   "fichier": "music/WhatsApp Audio 2026-11-07 at 19.52.08.mpeg",
+   "titre": "Carlito – Maya"
+  },
+  {
+   "fichier": "music/congo_avenir_mp3_25683.mp3.mpeg",
+   "titre": "Congo Avenir"
+  },
+  {
+   "fichier": "music/mpr_dollar_clip_officiel_mp3_25574.mp3.mpeg",
+   "titre": "MPR Dollar"
+  },
+  {
+   "fichier": "music/mpr_semeki_clip_officiel_mp3_25503.mp3.mpeg",
+   "titre": "MPR Semeki"
+  },
+  {
+   "fichier": "music/sokoro_indingama_mp3_25831.mp3.mpeg",
+   "titre": "Sokoro Indingama"
+  }
+ ]
+}
