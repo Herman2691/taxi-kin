@@ -312,7 +312,7 @@ export class Traffic {
     const our = this.list.filter(v => v.side === 1 && !v.racer);
     const onc = this.list.filter(v => v.side === -1 && !v.racer);
     our.forEach((v, i) => this.place(v, taxi.z - 40 - i * (AHEAD / our.length), 10, taxi));
-    onc.forEach((v, i) => this.place(v, taxi.z + 60 - i * 26, 20, taxi));
+    onc.forEach((v, i) => this.place(v, taxi.z + 60 - i * ((AHEAD + 40) / onc.length), 14, taxi));
     for (const v of this.list) put(v, v.side === 1 ? 0 : Math.PI);
     this.resetCrossing();
   }

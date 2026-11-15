@@ -4,7 +4,7 @@ import { buildCockpit } from './cockpit.js';
 import { Lunettes } from './lunettes.js';
 import * as THREE from 'three';
 import * as W1 from './world.js';
-import { createCar, createMinibus, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight } from './models.js';
+import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight } from './models.js';
 import { NightGlow, makeBeam, setBeam } from './nuit.js';
 import { Retro } from './retro.js';
 import { buildCabin } from './cabine.js';
@@ -189,15 +189,20 @@ let ROAD2 = null, ROAD3 = null, ROAD4 = null, ROAD5 = null, ROAD6 = null, ROAD7 
 async function loadRoad(route) {
   const q = `?route=${route}`;
   const [W, RT, T, P, L, H] = await Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`)));
+  await new Promise(r => setTimeout(r, 0));
   const group = new THREE.Group();
   scene.add(group);
   return { W, RT, group, world: W.buildWorld(group, { env: false, fog: scene.fog }), Hud: H.Hud,
     Traffic: T.Traffic, Passengers: P.Passengers, StreetLife: L.StreetLife, endName: ROUTES[route].end.name, startMsg: 'Fin de la route', title: ROUTES[route].title };
 }
 const ang = v => Math.atan2(v.x, v.z);
-if (CURRENT.attach && want('30juin')) {
+const [r2Loaded, r3Loaded] = await Promise.all([
+  CURRENT.attach && want('30juin') ? loadRoad(CURRENT.attach.route) : null,
+  CURRENT.attachPL && want('pl') ? loadRoad(CURRENT.attachPL.route) : null,
+]);
+if (r2Loaded) {
   const at = CURRENT.attach;
-  ROAD2 = await loadRoad(at.route);
+  ROAD2 = r2Loaded;
   const { RT: RT2, group } = ROAD2;
   // alignement : le bout du trajet principal (axe, sens de la marche) = l'entrée du trajet attaché, vers sa chaussée
   const zJ1 = -W1.ROUTE_LEN, th1 = RT1.yawAt(zJ1);
@@ -219,8 +224,8 @@ if (CURRENT.attach && want('30juin')) {
 // été calculé pour que son bout tombe sur le bout du Boulevard du 30 Juin.
 const JOINS = [];                                // raccords : { a, za, b, zb, w (point de la scène), r (décor de l'autre route affiché en deçà) }
 if (JOIN_W) JOINS.push({ a: ROAD1, za: ROAD1.zJoin, b: ROAD2, zb: ROAD2.zJoin, w: JOIN_W, r: 900 });
-if (CURRENT.attachPL && want('pl')) {
-  ROAD3 = await loadRoad(CURRENT.attachPL.route);
+if (r3Loaded) {
+  ROAD3 = r3Loaded;
   const { RT: RT3, group } = ROAD3;
   const [jx, jz] = W1.plDiagAt(W1.PL_JOIN_U), [kx, kz] = W1.plDiagAt(W1.PL_JOIN_U + 2);
   const P = RT1.worldVec(jx, 0, jz, new THREE.Vector3()), dir = RT1.worldVec(kx, 0, kz, new THREE.Vector3()).sub(P);
@@ -1266,32 +1271,46 @@ function mandelaPaths() {
   const V = THREE.Vector3, s = CURRENT.attach.side, zJ1 = ROAD1.zJoin, zr = ROAD2.zJoin, L1 = W1.LANE_X, W2 = ROAD2.W, L2 = W2.LANE_X;
   const p1 = (x, z) => RT1.worldVec(x, 0, z, new V());
   const p2 = (x, z) => ROAD2.group.localToWorld(ROAD2.RT.worldVec(x, 0, z, new V()));
-  const r1 = L1[L1.length - 1], l1 = L1[0], r2 = L2[L2.length - 1], l2 = L2[0];
+  const r1 = L1[L1.length - 1], m1 = L1[Math.min(1, L1.length - 1)], l1 = L1[0];
+  const r2 = L2[L2.length - 1], m2 = L2[Math.min(2, L2.length - 1)], l2 = L2[0];
   TURN.paths = [
     // du 24 Novembre vers le 30 Juin : à droite sur la chaussée proche, à gauche sur la chaussée d'en face
-    [p1(r1, zJ1 + 45), p2(s * (W2.ROAD_EDGE + 1), zr), p2(s * r2, zr - s * 45)],
-    [p1(l1, zJ1 + 45), p2(0, zr), p2(-s * l2, zr + s * 45)],
+    [p1(r1, zJ1 + 55), p2(s * (W2.ROAD_EDGE + 1), zr), p2(s * r2, zr - s * 65)],
+    [p1(m1, zJ1 + 50), p2(s * (W2.ROAD_EDGE - 2), zr - s * 4), p2(s * m2, zr - s * 60)],
+    [p1(l1, zJ1 + 50), p2(0, zr), p2(-s * l2, zr + s * 60)],
     // du 30 Juin vers le 24 Novembre
-    [p2(s * r2, zr + s * 45), p2(s * (W2.ROAD_EDGE + 1), zr), p1(-r1, zJ1 + 45)],
-    [p2(-s * l2, zr - s * 45), p2(0, zr), p1(-l1, zJ1 + 45)],
+    [p2(s * r2, zr + s * 65), p2(s * (W2.ROAD_EDGE + 1), zr), p1(-r1, zJ1 + 55)],
+    [p2(s * m2, zr + s * 60), p2(s * (W2.ROAD_EDGE - 2), zr + s * 4), p1(-m1, zJ1 + 50)],
+    [p2(-s * l2, zr - s * 60), p2(0, zr), p1(-l1, zJ1 + 50)],
   ];
   return TURN.paths;
 }
 const qbez = (P, t, out) => out.set(0, 0, 0).addScaledVector(P[0], (1 - t) * (1 - t)).addScaledVector(P[1], 2 * t * (1 - t)).addScaledVector(P[2], t * t);
+function makeMandelaMesh() {
+  const r = Math.random();
+  return r < 0.38 ? createMinibus() : r < 0.65 ? createCar({ color: 0xf2c200, taxi: true, roof: false }) : r < 0.82 ? createCityBus() : createSUV();
+}
+function spawnMandelaTurner(P, t0 = 0) {
+  const mesh = makeMandelaMesh();
+  scene.add(mesh);
+  let len = 0; const a = new THREE.Vector3(), b = new THREE.Vector3();
+  for (let k = 1; k <= 20; k++) { qbez(P, (k - 1) / 20, a); qbez(P, k / 20, b); len += a.distanceTo(b); }
+  TURN.list.push({ mesh, P, t: t0, len, speed: 6.5 + Math.random() * 3.5 });
+}
 function mandelaTurners(dt) {
   const paths = mandelaPaths();
   if (!paths) return;
-  const near = G.state === 'play' && A.group.localToWorld(worldVec(taxi.x, 0, taxi.z, TURN.at ??= new THREE.Vector3())).distanceTo(JOIN_W) < 320;   // (le véhicule près du carrefour)
-  if (near && (TURN.spawnT -= dt) <= 0 && TURN.list.length < 4) {
-    TURN.spawnT = 2.5 + Math.random() * 3.5;
+  const near = G.state === 'play' && A.group.localToWorld(worldVec(taxi.x, 0, taxi.z, TURN.at ??= new THREE.Vector3())).distanceTo(JOIN_W) < 360;   // (le véhicule près du carrefour)
+  if (near && TURN.list.length === 0) {
+    spawnMandelaTurner(paths[0], 0.35);
+    spawnMandelaTurner(paths[3], 0.45);
+    spawnMandelaTurner(paths[1], 0.15);
+    TURN.spawnT = 1.0;
+  }
+  if (near && (TURN.spawnT -= dt) <= 0 && TURN.list.length < 8) {
+    TURN.spawnT = 1.0 + Math.random() * 1.8;
     const P = paths[Math.floor(Math.random() * paths.length)];
-    if (!TURN.list.some(v => v.P === P && v.t < 0.35)) {           // (pas deux à la fois au même départ)
-      const mesh = Math.random() < 0.6 ? createMinibus() : createCar({ color: 0xf2c200, taxi: true, roof: false });
-      scene.add(mesh);
-      let len = 0; const a = new THREE.Vector3(), b = new THREE.Vector3();
-      for (let k = 1; k <= 20; k++) { qbez(P, (k - 1) / 20, a); qbez(P, k / 20, b); len += a.distanceTo(b); }
-      TURN.list.push({ mesh, P, t: 0, len, speed: 6 + Math.random() * 3 });
-    }
+    if (!TURN.list.some(v => v.P === P && v.t < 0.28)) spawnMandelaTurner(P, 0);
   }
   const here = new THREE.Vector3(), ahead = new THREE.Vector3();
   for (let i = TURN.list.length - 1; i >= 0; i--) {
@@ -1301,6 +1320,104 @@ function mandelaTurners(dt) {
     qbez(v.P, v.t, here); qbez(v.P, Math.min(1, v.t + 0.02), ahead);
     v.mesh.position.set(here.x, 0.02, here.z);
     v.mesh.rotation.set(0, Math.atan2(-(ahead.x - here.x), -(ahead.z - here.z)), 0);
+  }
+}
+
+// ---------- Entrée de la Route Poids Lourds au Pont Matete (bretelle Hôpital Akram & route des rails en biais) ----------
+const PL_TURN = { list: [], spawnT: 0, paths: null, center: null };
+function matetePlPaths() {
+  if (PL_TURN.paths !== null) return PL_TURN.paths;
+  if (!W1.MAT_PL_PTS || W1.plBandU(92, W1.MAT_PL_PTS[3][1]) < 0) return (PL_TURN.paths = false);
+  const V = THREE.Vector3, M = W1.MAT_PL_PTS, zm = M[0][1] - 176;
+  const cbez = (P, t) => {
+    const u = 1 - t;
+    return [
+      u * u * u * P[0][0] + 3 * u * u * t * P[1][0] + 3 * u * t * t * P[2][0] + t * t * t * P[3][0],
+      u * u * u * P[0][1] + 3 * u * u * t * P[1][1] + 3 * u * t * t * P[2][1] + t * t * t * P[3][1],
+    ];
+  };
+  const sm = t => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k); };
+  const nOut = u => 1.8 + 1.4 * sm((u - 115) / 40);
+  const nIn = u => -(1.8 + 1.4 * sm((u - 115) / 40));
+  const poly = raw => {
+    const pts = raw.map(([x, z]) => new V(x, 0, z)), cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
+    return { pts, cum, len: cum[cum.length - 1] };
+  };
+  // 1) Bretelle Hôpital Akram depuis le boulevard Lumumba → jonction en Y → Route Poids Lourds (u = 250)
+  const raw0 = [];
+  for (let z = zm + 212; z >= zm + 180; z -= 8) { const p = RT1.worldVec(W1.LANE_R, 0, z, new V()); raw0.push([p.x, p.z]); }
+  for (let k = 1; k <= 12; k++) {
+    const t = k / 13, [rx, rz] = cbez(M, t), p = RT1.worldVec(rx + 1.2 * t, 0, rz, new V());
+    raw0.push([p.x, p.z]);
+  }
+  for (let u = 115; u <= 250; u += 9) raw0.push(W1.plPt(u, nOut(u)));
+  // 2) Route des rails depuis le dessous du Pont Matete (u = 15) → Route Poids Lourds (u = 250)
+  const raw1 = [];
+  for (let u = 15; u <= 250; u += 10) raw1.push(W1.plPt(u, nOut(u)));
+  // 3) Sens inverse : de la Route Poids Lourds (u = 250) vers le Pont Matete (u = 15) sur la voie de gauche
+  const raw2 = [];
+  for (let u = 250; u >= 15; u -= 10) raw2.push(W1.plPt(u, nIn(u)));
+  const c = W1.plPt(120, 0);
+  PL_TURN.center = new V(c[0], 0, c[1]);
+  return (PL_TURN.paths = [poly(raw0), poly(raw1), poly(raw2)]);
+}
+function plPolyAt(P, u, out) {
+  const { pts, cum } = P;
+  let i = 1;
+  while (i < pts.length - 1 && cum[i] < u) i++;
+  const a = pts[i - 1], b = pts[i], seg = cum[i] - cum[i - 1] || 1, t = clamp((u - cum[i - 1]) / seg, 0, 1);
+  out.x = a.x + (b.x - a.x) * t;
+  out.z = a.z + (b.z - a.z) * t;
+  const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz) || 1;
+  out.hx = dx / L; out.hz = dz / L;
+}
+function spawnPlTurner(P, pIdx, u0 = 0) {
+  const r = Math.random();
+  const mesh = r < 0.30 ? createTruck() : r < 0.56 ? createMinibus() : r < 0.78 ? createCar({ color: 0xf2c200, taxi: true, roof: false }) : r < 0.90 ? createTricycle() : createMoto();
+  scene.add(mesh);
+  const cruise = 7.5 + Math.random() * 3.5;
+  PL_TURN.list.push({ mesh, P, pIdx, u: u0, speed: cruise, cruise, vl: mesh.userData.L ?? 4.5, vw: mesh.userData.W ?? 1.9, x: 0, z: 0, hx: 0, hz: -1 });
+}
+function matetePlTurners(dt) {
+  const paths = matetePlPaths();
+  if (!paths) return;
+  const pTaxi = A.group.localToWorld(worldVec(taxi.x, 0, taxi.z, PL_TURN.at ??= new THREE.Vector3()));
+  const near = G.state === 'play' && pTaxi.distanceTo(PL_TURN.center) < 380;
+  if (near && PL_TURN.list.length === 0) {
+    spawnPlTurner(paths[0], 0, paths[0].len * 0.24);
+    spawnPlTurner(paths[0], 0, paths[0].len * 0.62);
+    spawnPlTurner(paths[1], 1, paths[1].len * 0.42);
+    spawnPlTurner(paths[2], 2, paths[2].len * 0.35);
+    PL_TURN.spawnT = 1.2;
+  }
+  if (near && (PL_TURN.spawnT -= dt) <= 0 && PL_TURN.list.length < 7) {
+    PL_TURN.spawnT = 1.4 + Math.random() * 2.0;
+    const idx = Math.random() < 0.48 ? 0 : Math.random() < 0.5 ? 1 : 2, P = paths[idx];
+    if (!PL_TURN.list.some(v => v.P === P && v.u < 24)) spawnPlTurner(P, idx, 0);
+  }
+  const st = { x: 0, z: 0, hx: 0, hz: -1 };
+  for (const v of PL_TURN.list) { plPolyAt(v.P, v.u, st); v.x = st.x; v.z = st.z; v.hx = st.hx; v.hz = st.hz; }
+  for (let i = PL_TURN.list.length - 1; i >= 0; i--) {
+    const v = PL_TURN.list[i];
+    if (!near) { scene.remove(v.mesh); PL_TURN.list.splice(i, 1); continue; }
+    let target = v.cruise;
+    for (const o of PL_TURN.list) {
+      if (o === v) continue;
+      const dx = o.x - v.x, dz = o.z - v.z, along = dx * v.hx + dz * v.hz, across = Math.abs(dz * v.hx - dx * v.hz);
+      if (along > 0 && along < 22 && across < 2.2) target = Math.min(target, Math.max(0, (along - (o.vl + v.vl) / 2 - 2.5) * 0.8));
+    }
+    const tx = pTaxi.x - v.x, tz = pTaxi.z - v.z, tAlong = tx * v.hx + tz * v.hz, tAcross = Math.abs(tz * v.hx - tx * v.hz);
+    if (taxi.level !== 'up' && tAlong > 0 && tAlong < v.vl / 2 + 8 && tAcross < 2.3) target = 0;
+    if (taxi.level !== 'up' && Math.abs(tAlong) < (v.vl + VEH.l) / 2 - 0.3 && tAcross < (v.vw + VEH.w) / 2 - 0.25 && Math.abs(taxi.speed) > 1.5) {
+      taxi.speed *= 0.6;
+    }
+    v.speed += Math.sign(target - v.speed) * Math.min(Math.abs(target - v.speed), (target > v.speed ? 3.5 : 9) * dt);
+    v.u += v.speed * dt;
+    if (v.u >= v.P.len) { scene.remove(v.mesh); PL_TURN.list.splice(i, 1); continue; }
+    plPolyAt(v.P, v.u, st);
+    v.mesh.position.set(st.x, 0.02, st.z);
+    v.mesh.rotation.set(0, Math.atan2(-st.hx, -st.hz), 0);
   }
 }
 
@@ -1441,11 +1558,19 @@ function drive(dt) {
     // (on ne glisse que dans un sens où le taxi avançait vraiment : de face contre un obstacle, il s'arrête)
     // (l'auteur, 13/11 : rien ne passe à travers) : on ne glisse que là où ni bordure ni obstacle du décor ni personne ne bloque
     const free = (x, z) => !blockedAt(x, z, taxi.level) && (taxi.level || !solidAround(x, z, taxi.heading));
-    const slideZ = Math.abs(nz - taxi.z) > 0.002 && free(taxi.x, nz);
-    const slideX = !slideZ && Math.abs(nx - taxi.x) > 0.002 && free(nx, taxi.z);
-    if (slideZ) taxi.z = nz; else if (slideX) taxi.x = nx;
+    const axis = roadAxisAt(taxi.x, taxi.z);
+    const diag = axis !== null && Math.abs(axis) > 0.05 ? (Math.cos(taxi.heading - axis) >= 0 ? axis : wrapA(axis + Math.PI)) : null;
+    const step = taxi.speed * dt * Math.max(0.4, diag !== null ? Math.cos(taxi.heading - diag) : 1);
+    const sx = diag !== null ? taxi.x + Math.sin(diag) * step / k : taxi.x;
+    const sz = diag !== null ? taxi.z - Math.cos(diag) * step : taxi.z;
+    const slideDiag = diag !== null && Math.abs(step) > 0.002 && free(sx, sz);
+    const slideZ = !slideDiag && Math.abs(nz - taxi.z) > 0.002 && free(taxi.x, nz);
+    const slideX = !slideDiag && !slideZ && Math.abs(nx - taxi.x) > 0.002 && free(nx, taxi.z);
+    if (slideDiag) { taxi.x = sx; taxi.z = sz; }
+    else if (slideZ) taxi.z = nz;
+    else if (slideX) taxi.x = nx;
     taxi.level = nextLevel(taxi.level, x0, z0, taxi.x, taxi.z);
-    if (sp > 4 && G.wallCd <= 0 && (!(slideZ || slideX) || Math.abs(slideZ ? Math.sin(taxi.heading) : Math.cos(taxi.heading)) > 0.08)) {
+    if (sp > 4 && G.wallCd <= 0 && (!(slideDiag || slideZ || slideX) || Math.abs(slideDiag ? Math.sin(taxi.heading - diag) : slideZ ? Math.sin(taxi.heading) : Math.cos(taxi.heading)) > 0.12)) {
       G.wallCd = 1;
       taxi.speed *= 0.75;
       { const l = passengers.jolt(8); if (l) say(l, 'client'); }
@@ -1453,7 +1578,7 @@ function drive(dt) {
       hud.toast(why === 'start' ? A.startMsg : WALL_MSG[why], 1.5);
     }
     // le taxi se remet le long de ce qu'il longe ; de face (bout d'une avenue), il s'arrête presque
-    const along = slideZ ? (Math.cos(taxi.heading) >= 0 ? 0 : Math.PI) : slideX ? (Math.sin(taxi.heading) >= 0 ? Math.PI / 2 : -Math.PI / 2) : null;
+    const along = diag !== null ? diag : slideZ ? (Math.cos(taxi.heading) >= 0 ? 0 : Math.PI) : slideX ? (Math.sin(taxi.heading) >= 0 ? Math.PI / 2 : -Math.PI / 2) : null;
     if (along !== null) taxi.heading = wrapA(taxi.heading + wrapA(along - taxi.heading) * 0.7);
     else taxi.speed *= 0.3;
   }
@@ -1506,6 +1631,13 @@ function handleTraffic(dt) {
   // Emprise du taxi selon son cap (en x : largeur, en z : longueur), pour les chocs avec la circulation
   const ch = Math.abs(Math.cos(taxi.heading)), sh = Math.abs(Math.sin(taxi.heading));
   taxi.bw = ch * VEH.w + sh * VEH.l; taxi.bl = ch * VEH.l + sh * VEH.w;
+  // Circulation vivante sur les routes voisines quand on approche d'un raccord (Mandela / 30 Juin, Route Poids Lourds, Place de la Gare)
+  for (const other of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
+    if (!other || other === A || other.nearZ === null || other.nearZ === undefined) continue;
+    const proxy = { x: 999, z: other.nearZ, speed: 0, heading: 0, bw: 2, bl: 4, level: 'pont', core: true };
+    if (!other.nearActive) { other.nearActive = true; other.traffic.reset(proxy); }
+    other.traffic.update(dt, proxy, G.time);
+  }
   const hit = traffic.update(dt, taxi, G.time);
   if (!hit) return;
   const dz = taxi.z - hit.z, dx = taxi.x - hit.x;
@@ -2017,7 +2149,13 @@ function switchRoad(to, x, z, heading, quiet = false, name = null) {
   hud.setClients(passengers.clients);
   if (quiet) return;
   Object.assign(taxi, { x, z, heading, level: null });
-  traffic.reset(taxi);
+  if (!to.nearActive) traffic.reset(taxi);
+  else {
+    to.nearActive = false;
+    for (const v of traffic.list) {
+      if (Math.abs(v.x - taxi.x) < 2.6 && Math.abs(v.z - taxi.z) < 14) traffic.place(v, taxi.z - 65, 45, taxi);
+    }
+  }
   life.reset(taxi.z);
   hud.toast(name ?? (A === ROAD2 ? 'Boulevard du 30 Juin' : A === ROAD7 || A === ROAD8 ? A.title : 'Avenue de la Libération (ex-24 Novembre)'), 3);
 }
@@ -2060,7 +2198,7 @@ function handleAttach() {
     if (ROAD8 && !to && taxi.x < -(ROAD_EDGE + 2) && sh < 0 && Math.abs(taxi.z - MM.z1) < 8) { to = ROAD8; zHint = 0; name = "Première Entrée · Route Mama Mobutu"; }
     if (to) { /* liaison vers une route attachée */ }
     else if (ROAD2 && taxi.z <= ROAD1.zJoin) { to = ROAD2; zHint = ROAD2.zJoin; }
-    else if (ROAD3 && W1.plBandU(taxi.x, taxi.z) >= W1.PL_JOIN_U + 6) { to = ROAD3; name = 'Route Poids Lourds'; }
+    else if (ROAD3 && W1.plBandU(taxi.x, taxi.z) >= W1.PL_JOIN_U - 2) { to = ROAD3; name = 'Route Poids Lourds'; }
   } else if (A === ROAD2 && ROAD6 && KV.zK2 !== undefined && taxi.x > ROAD_EDGE + 3 && sh > 0 && (Math.abs(taxi.z - KV.zK2) < 7 || Math.abs(taxi.z - KV.zG2) < 7)) {
     // (on prend l'entrée « Avenue Kasa-Vubu », à droite du 30 Juin : on passe sur l'avenue)
     const kin = Math.abs(taxi.z - KV.zK2) < 7;
@@ -2154,8 +2292,8 @@ function followRoads() {
         const d = p.distanceTo(j.w);
         if (d < j.r && d < bd) { bd = d; best = j; }
       }
-      if (!best) other.world.follow(0, 1e7, 0);
-      else { const c = roadCoords(other, p, best.a === other ? best.za : best.zb, 450); other.world.follow(c.x, c.z, Math.PI / 2); }
+      if (!best) { other.nearZ = null; other.nearActive = false; other.world.follow(0, 1e7, 0); }
+      else { const c = roadCoords(other, p, best.a === other ? best.za : best.zb, 450); other.nearZ = c.z; other.world.follow(c.x, c.z, Math.PI / 2); }
     }
   }
   ROAD1.world.light(p);                          // soleil et ciel : sur le taxi
@@ -2211,6 +2349,7 @@ function update(dt) {
   cityAudio(dt);
   updateTrain(dt);
   mandelaTurners(dt);
+  matetePlTurners(dt);
   incidents.update(dt, taxi);
   incidents.blockVehicle(taxi);
   const siren = traffic.sirenNear(taxi) ?? incidents.siren;

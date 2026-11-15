@@ -1009,6 +1009,24 @@ export const ROUTES = {
     subtitle: 'Rond-point Kintambo Magasin → Socimat → Mandela → Gare Centrale',
     realKm: 7.62,
     jams: [[150, 7500, 1]],        // (l'auteur, 08/11) embouteillages sur tout le boulevard du 30 Juin
+    traffic: {
+      our: [
+        'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi',
+        'bus', 'bus', 'bus', 'bus', 'bus', 'bus', 'bus', 'bus',
+        'city', 'city', 'city', 'edv', 'edv', 'van', 'van',
+        'car', 'car', 'car', 'car', 'car', 'car', 'car', 'car', 'car', 'car',
+        'police', 'police', 'amb', 'truck', 'truck', 'keke', 'keke', 'keke',
+        'moto', 'moto', 'moto', 'moto', 'moto', 'moto', 'moto',
+      ],
+      onc: [
+        'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi',
+        'bus', 'bus', 'bus', 'bus', 'bus', 'bus', 'bus',
+        'city', 'city', 'edv', 'van', 'van',
+        'car', 'car', 'car', 'car', 'car', 'car', 'car', 'car',
+        'police', 'police', 'amb', 'truck', 'truck', 'keke', 'keke',
+        'moto', 'moto', 'moto', 'moto', 'moto',
+      ],
+    },
     data: 'data/30juin.json',
     scale: 0.7,                   // 7,62 km réels → ~5,33 km de jeu
     lanes: 4,
@@ -1277,7 +1295,7 @@ export const ITINERAIRES = [
     title: 'Aéroport ↔ Gare Centrale',
     via: 'Bd Lumumba · Échangeur · Sendwe · 24 Novembre · Bd du 30 Juin',
     stops: ["Aéroport N'djili", 'Masina', 'Échangeur', '24 Novembre', 'Gare Centrale'],
-    km: 26.8, route: 'lumumba', roads: ['30juin'],
+    km: 26.8, route: 'lumumba', roads: ['30juin', 'pl'],
     A: { name: "Aéroport de N'djili", cri: 'Aéroport', road: 1, s: 45, dir: 1 },
     B: { name: 'Gare Centrale · Bd du 30 Juin', cri: 'Gare', road: 2, at: 'plaza', dir: 1 },
     variants: [
@@ -1285,14 +1303,14 @@ export const ITINERAIRES = [
         id: 'limete-30juin', label: 'Via Limete · 24 Nov · 30 Juin', short: 'Limete · 24 Nov · 30 Juin',
         via: 'Bd Lumumba · Échangeur · Sendwe · 24 Novembre · Bd du 30 Juin',
         stops: ["Aéroport N'djili", 'Masina', 'Échangeur', '24 Novembre', 'Gare Centrale'],
-        km: 26.8, roads: ['30juin'],
+        km: 26.8, roads: ['30juin', 'pl'],
         B: { name: 'Gare Centrale · Bd du 30 Juin', cri: 'Gare', road: 2, at: 'plaza', dir: 1 },
       },
       {
         id: 'poidslourds', label: 'Via Route Poids Lourds', short: 'Route Poids Lourds',
         via: 'Bd Lumumba · Pont Matete · Route Poids Lourds · Kingabwa · Gare Centrale',
         stops: ["Aéroport N'djili", 'Masina', 'Pont Matete', 'Poids Lourds', 'Gare Centrale'],
-        km: 24.1, roads: ['pl'],
+        km: 24.1, roads: ['30juin', 'pl'],
         B: { name: 'Gare Centrale · Poids Lourds', cri: 'Gare', road: 3, at: 'plaza', dir: 1 },
       },
     ],

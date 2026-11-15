@@ -66,7 +66,7 @@ export function flyH(z) {
 export const flySlope = z => flyH(z - 0.5) - flyH(z + 0.5);
 export const inFlyover = (z, margin = 0) => FLYOVERS.some(f => z < f.z0 + margin && z > f.z1 - margin);
 export const FOOTBRIDGES = R.footbridges.map(g);
-export const TRAFFIC_MIX = R.pl?.traffic ?? null;    // (véhicules propres au trajet : voir traffic.js)
+export const TRAFFIC_MIX = R.traffic ?? R.pl?.traffic ?? null;    // (véhicules propres au trajet : voir traffic.js)
 /** Embouteillages (routes.js `jams`) : zones où la circulation roule au pas, en accordéon. */
 export const JAMS = (R.jams ?? []).map(([a, b, lvl = 1]) => ({ z0: g(a), z1: g(b), lvl }));
 // ---------- Les travaux (l'auteur, 13/11 : « ajouter aussi des travaux dans le boulevard ») : routes.js `works`. Les voies fermées sont entourées de
@@ -701,7 +701,7 @@ const LIM_EDGE_GAPS = [
 ];
 /** Au-delà, plus de circulation (bout de la chaussée construite). Un carrefour à feux juste après l'arrivée est traversé en
  *  entier ; à une fourche (croisement Sendwe), les voitures s'engagent un peu dans la fourche avant de disparaître. */
-export const TRAFFIC_START = START_ATTACHED ? -10 : Infinity;   // (trajet attaché : les voitures s'arrêtent avant son début)
+export const TRAFFIC_START = START_ATTACHED ? -2 : Infinity;    // (trajet attaché : la circulation part dès son raccord)
 export const TRAFFIC_END = R.end.kind === 'open' ? Z_END + 8 : !IS_TOWER ? -Infinity : R.ext ? Z_END + 6 : R.end.fork ? Z_END - 12
   : Math.min(Z_END + 40, ...SIGNALS.filter(sg => sg.stopL > Z_END + 20).map(sg => Math.max(Z_END + 14, sg.stopL - 15)));
 /** Les piétons font demi-tour au bout de la chaussée construite (au-delà : la fourche, ou rien). */
@@ -1140,7 +1140,7 @@ const onMatPB = (x, z) => !!MAT_PB && (onRibbon(MAT_PB, x, z)
 const MAT_ZPD = ZM + 9;                               // route des rails en biais à droite : par (0, MAT_ZPD), direction (0,8 ; -0,6)
 // (l'auteur, 08/11, croquis « corrction poilourd pont matete » : en Y, la bretelle d'Akram rejoint la route qui vient de sous le pont plus loin,
 // en biais et dans le même sens ; entre les deux, un îlot en pointe. Avant, elle la coupait en travers tout près du pont.)
-const MAT_PL_PTS = [[ROAD_EDGE + 4, ZM + 176], [ROAD_EDGE + 4, ZM + 146], [50, MAT_ZPD - 20], [92, MAT_ZPD - 69]];   // fin : alongRail(ZPD, 115), presque dans l'axe
+export const MAT_PL_PTS = [[ROAD_EDGE + 4, ZM + 176], [ROAD_EDGE + 4, ZM + 146], [50, MAT_ZPD - 20], [92, MAT_ZPD - 69]];   // fin : alongRail(ZPD, 115), presque dans l'axe
 /** [le long, en travers] de la route des rails en biais (u = 0 sous le milieu du Pont Matete, n > 0 côté de la bretelle). */
 const plDiag = (x, z) => [0.8 * x - 0.6 * (z - MAT_ZPD), 0.6 * x + 0.8 * (z - MAT_ZPD)];
 const MAT_PL = HAS_MATETE ? (() => {
@@ -1150,9 +1150,9 @@ const MAT_PL = HAS_MATETE ? (() => {
   const tSep = tAtGap(MAT_PL_PTS, 8, 4.2), edge = Array.from({ length: 11 }, (_, k) => bez(MAT_PL_PTS, tSep * k / 10));
   const u = 75, n = 8;                                // aire de demi-tour : dans l'angle entre la bretelle et la route des rails (pointe de l'îlot)
   return {
-    pts, hw: pts.map(() => 4), box: bboxOf(pts, 8), tSep,
-    mouth: [[ROAD_EDGE - 0.6, edge[0][1] + 1], ...edge, [ROAD_EDGE - 0.6, edge[10][1]]],
-    pad: [u * 0.8 + n * 0.6, MAT_ZPD - u * 0.6 + n * 0.8], padR: 6.5,  // (on y tourne à gauche, vers le Pont Matete)
+    pts, hw: pts.map(() => 5.0), box: bboxOf(pts, 10), tSep,
+    mouth: [[ROAD_EDGE - 1.2, edge[0][1] + 2.5], ...edge, [ROAD_EDGE - 1.2, edge[10][1] - 2.5]],
+    pad: [u * 0.8 + n * 0.6, MAT_ZPD - u * 0.6 + n * 0.8], padR: 9.0,  // (on y tourne à gauche, vers le Pont Matete)
   };
 })() : null;
 // Fin de la route des rails en biais (l'auteur, 08/11 : « ça doit avoir la même grandeur », « ça ne doit pas montrer qu'il y a un raccordement ») :
@@ -1179,7 +1179,7 @@ function plK(u) {
   return at(k0) * (1 - t) + at(k0 + 5) * t;                 // (entre deux points tous les 5 m)
 }
 /** Point du monde (scène) à u, n (n en vrais mètres une fois passé u = 200). */
-function plPt(u, n) {
+export function plPt(u, n) {
   const w = plMetric(u), b = plBent(u, n);
   if (w <= 0) return b;
   const c = plBent(u, 0), a = plBent(u - 0.5, 0), d = plBent(u + 0.5, 0), q = plBent(u, 1);
@@ -1187,14 +1187,14 @@ function plPt(u, n) {
   let rx = -tz, rz = tx; if (rx * (q[0] - c[0]) + rz * (q[1] - c[1]) < 0) { rx = -rx; rz = -rz; }
   return [b[0] + (c[0] + rx * n - b[0]) * w, b[1] + (c[1] + rz * n - b[1]) * w];
 }
-/** Limite en travers, dans le plan, d'un bord dessiné à `half` (et marge de 0,7 m réels). */
-const plRoadN = (u, half) => { const k = plK(u), w = plMetric(u); return half * ((1 - w) + w / k) - 0.7 / k; };
+/** Limite en travers, dans le plan, d'un bord dessiné à `half` (et marge de 0,45 m réels). */
+const plRoadN = (u, half) => { const k = plK(u), w = plMetric(u); return half * ((1 - w) + w / k) - 0.45 / k; };
 /** Sur la chaussée de la Route Poids Lourds au sol, de part et d'autre du Pont Matete (tout droit à gauche, en biais à droite). */
 function onPLBand(x, z) {
   if (!HAS_MATETE) return false;
   if (x <= 6 && x > -206 && Math.abs(z - MAT_ZPL) < 4 - 0.7) return true;
   const [u, n] = plDiag(x, z);
-  return u > -2 && u < 255 && n < plRoadN(u, plHalfR(u)) && n > -plRoadN(u, plHalfL(u));
+  return u > -2 && u < 268 && n < plRoadN(u, plHalfR(u)) && n > -plRoadN(u, plHalfL(u));
 }
 const onPLPad = (x, z, m = 0.7) => !!MAT_PL && Math.hypot(x - MAT_PL.pad[0], z - MAT_PL.pad[1]) < MAT_PL.padR - m;
 // Raccord avec la Route Poids Lourds attachée (main.js, ROAD3) : son z = 0 est à u = PL_JOIN_U sur la route des rails en biais
@@ -1205,7 +1205,7 @@ export const plDiagAt = u => [0.8 * u, MAT_ZPD - 0.6 * u];
 export function plBandU(x, z) {
   if (!HAS_MATETE) return -1;
   const [u, n] = plDiag(x, z);
-  return u > -2 && u < 255 && n < plRoadN(u, plHalfR(u)) && n > -plRoadN(u, plHalfL(u)) ? u : -1;
+  return u > -2 && u < 268 && n < plRoadN(u, plHalfR(u)) && n > -plRoadN(u, plHalfL(u)) ? u : -1;
 }
 const onMatPL = (x, z) => !!MAT_PL && (onPLBand(x, z) || onRibbon(MAT_PL, x, z) || pointInPoly([x, z], MAT_PL.mouth) || onPLPad(x, z));
 const MAT_RAMP = HAS_MATETE ? (() => {
@@ -1335,6 +1335,7 @@ function onSideAsphalt(x, z) {
  *  véhicule dans l'axe de la route s'y coupe (main.js). */
 export function openingNear(x, z) {
   const s = x >= 0 ? 1 : -1, ax = Math.abs(x);
+  if (MAT_PL && !onPLPad(x, z, 0) && ((onRibbon(MAT_PL, x, z) && x > ROAD_EDGE + 4.5) || onPLBand(x, z))) return false;
   if (ax > TX_OUT + 0.3) return true;                                    // (hors des voies : avenue, aire, terre)
   if (ax > LANE_R - LANE_W * 0.8 && (atSideRoad(s, z, 16) || onDirt(s * (ROAD_EDGE + 1), z))) return true;
   if (ax < MEDIAN + LANE_W * 1.3 && !inHighway(z) && !R.twoLane && R.separator !== false && (medianOpen(z) || inSignalCrossing(z, 8))) return true;
