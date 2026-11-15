@@ -2409,6 +2409,45 @@ function addAirport(b, signs) {
   }
 }
 
+/** Clôture unique « en escalier » du périmètre aéroportuaire / CETA / Badara à droite (side = 1),
+ *  de 10 m avant l'aéroport (z0 = -58) jusqu'à 20 m avant la Station Cobil de l'Entrée Siforco (z1 = g(4064) + 35). */
+function addAirportFence(chunks, details, z0, z1) {
+  const x = FRONT - 0.5, bay = 3.9, steps = 3, sw = bay / steps;
+  const WALL = 0xded9cc, PANEL = 0xcbc4b4, CAP = 0x7e786d, PIL = 0xe8e3d6, IRON = 0x2f3640;
+  for (const [a, c] of solid(z0, z1, true)) {
+    for (const [p, q] of pieces(a, c, 64)) {
+      const len = p - q, zc = (p + q) / 2, b = chunks.at(zc);
+      // Bande herbeuse du domaine aéroportuaire derrière la clôture + soubassement continu
+      b.box(28, 0.04, len, 0x6f9244, x + 15, 0.02, zc)
+        .box(0.38, 0.45, len, 0x9e988c, x, 0.225, zc);
+      // Travées crénelées « en escalier » (3 marches montantes par travée entre deux piliers)
+      for (let z = p; z - bay >= q - 0.5; z -= bay) {
+        // Pilier béton à chapeau débordant
+        b.box(0.50, 2.75, 0.50, PIL, x, 1.375, z)
+          .box(0.62, 0.16, 0.62, CAP, x, 2.83, z);
+        for (let s = 0; s < steps; s++) {
+          const sz = z - (s + 0.5) * sw;
+          if (sz < q) break;
+          const h = 1.45 + s * 0.42; // marches d'escalier : 1,45 m → 1,87 m → 2,29 m
+          b.box(0.30, h - 0.45, sw + 0.02, WALL, x, 0.45 + (h - 0.45) / 2, sz)
+            .box(0.34, h - 0.85, sw * 0.76, PANEL, x, 0.55 + (h - 0.85) / 2, sz)
+            .box(0.44, 0.13, sw + 0.08, CAP, x, h + 0.065, sz)
+            .box(0.06, 0.34, 0.06, IRON, x, h + 0.28, sz - sw * 0.28)
+            .box(0.06, 0.34, 0.06, IRON, x, h + 0.28, sz + sw * 0.28)
+            .box(0.05, 0.05, sw + 0.04, IRON, x, h + 0.42, sz);
+        }
+      }
+      // Dernier pilier de la tranche
+      b.box(0.50, 2.75, 0.50, PIL, x, 1.375, q)
+        .box(0.62, 0.16, 0.62, CAP, x, 2.83, q);
+      // Arbres derrière la clôture (domaine aéroportuaire / Parc Présidentiel / Camp CETA)
+      for (let z = p - rand(6, 14); z > q + 4; z -= rand(18, 32)) {
+        (chance(0.45) ? addPalm : addMango)(b, x + rand(9, 28), z, rand(0.95, 1.45));
+      }
+    }
+  }
+}
+
 /** Polygone plat convexe (x, z) à la hauteur y, face vers le haut. */
 function flatPoly(b, pts, y, color) {
   const [a, c] = [pts[1], pts[2]].map(p => [p[0] - pts[0][0], p[1] - pts[0][1]]);
@@ -11345,7 +11384,11 @@ export function buildWorld(scene, opts = {}) {
   for (const z of FOOTBRIDGES.filter(z => z > Z_END)) addFootbridge(chunks.at(z), z);
   for (const st of STATIONS) if (st.kind !== 'fork') (st.kind === 'strip' ? addStripStation : addStation)(chunks.at(st.z), signs, st);
   CROSSINGS.forEach((c, i) => { if (!c.hide) addCrossStreet(chunks.at(c.z), details, signs, c.z, c.name, `cross${i}`); });
-  if (R.start === 'airport') addAirport(chunks.at(0), signs);
+  if (R.start === 'airport') {
+    addAirport(chunks.at(0), signs);
+    // Clôture continue à droite : de 10 m avant le parvis de l'aéroport (z = -58) jusqu'à 20 m avant la Station Cobil de Siforco (g(4064) + 35)
+    addAirportFence(chunks, details, -58, g(4064) + 35);
+  }
   else if (!START_ATTACHED) addCrossStreet(chunks.at(24), details, signs, 24, R.landmarks[0][0], 'crossStart');
   if (R.end.kind === 'tower') addInterchange(scene, chunks, details, signs);
   else if (R.end.kind !== 'open') addCrossStreet(chunks.at(END_Z + 4), details, signs, END_Z + 4, R.end.name, 'crossEnd');
@@ -11526,7 +11569,8 @@ export function buildWorld(scene, opts = {}) {
       return { side: 1, z: (z0 + z1) / 2, d: (z0 - z1) / 2 };
     })];
   const DENSE = R.dense.map(([at, r]) => ({ z: lmZ(at), d: r }));
-  const blockedAt = (side, cz) => (side > 0 && ((R.start === 'airport' && cz > -110) || nearAny(cz, SKIP_R))) || nearAny(cz, SKIP_BOTH)
+  const zAirportFenceEnd = g(4064) + 35;   // 20 m avant l'aire de la Station Cobil de l'Entrée Siforco
+  const blockedAt = (side, cz) => (side > 0 && ((R.start === 'airport' && cz > zAirportFenceEnd) || nearAny(cz, SKIP_R))) || nearAny(cz, SKIP_BOTH)
     || SKIP_SIDE.some(m => m.side === side && Math.abs(cz - m.z) < m.d) || cz < Z_GEN + 20;
   const backdrops = addBackdrops(scene, PHOTO, blockedAt);
   for (const side of R.industrial ? [] : [-1, 1]) {   // (Route Poids Lourds : addPoidsLourds)
@@ -11584,7 +11628,7 @@ export function buildWorld(scene, opts = {}) {
       }
       // vie de l'accotement
       const busPark = side > 0 ? [...PARKS, ...BUS_STOPS].some(zc => cz < zc + 36 && cz > zc - 52) : BUS_STOPS_L.some(zc => Math.abs(cz - zc) < 18);
-      if (cz > Z_GEN + 2 && !nearRing(cz, 4) && !(R.campus && cz < CAMPUS_Z) && !inRiver(cz, 3) && !(side > 0 && R.start === 'airport' && cz > -110) && !busPark && !inCrossing(cz, 2) && !atSideRoad(side, cz, 3) && !inSideRoadSpan(side, cz) && !inMateteZone(side, cz, 3)) {
+      if (cz > Z_GEN + 2 && !nearRing(cz, 4) && !(R.campus && cz < CAMPUS_Z) && !inRiver(cz, 3) && !(side > 0 && R.start === 'airport' && cz > zAirportFenceEnd) && !busPark && !inCrossing(cz, 2) && !atSideRoad(side, cz, 3) && !inSideRoadSpan(side, cz) && !inMateteZone(side, cz, 3)) {
         const dense = nearAny(cz, DENSE, 0);
         if (dense || chance(inHighway(cz) && !R.twoLane ? 0.12 : 0.35)) addVendors(details.at(cz), side, cz, dense);
         if (chance(0.4)) for (let k = 0; k < 4; k++) details.at(cz).box(rand(0.1, 0.3), 0.04, rand(0.1, 0.3), pick([0xe8e8e8, 0x1d6fd1, 0x2b2b2b, 0xd62828]), side * (ROAD_EDGE + rand(0.7, 3)), 0.03, cz + rand(-w / 2, w / 2));

@@ -162,8 +162,8 @@ export const ROUTES = {
     dense: [['Liberté', 160], ['Pascal', 90], ['Quartier 3', 160], ['Quartier 1', 110], ['Pont Matete', 85]],
     // Foule (l'auteur, 07/11) : beaucoup de piétons, des gens qui traversent le boulevard, des clients qui se précipitent vers les taxis [début, fin (m), nom]
     crowds: [[4000, 7000, 'Siforco · Kingasani · Masina · Pascal · BKTF'], [7300, 8300, 'Bitabe · Liberté'], [8650, 9320, 'Quartier 1']],
-    // Embouteillages (l'auteur, 08/11 : « surtout sur 24, 30 Juin et boulevard Lumumba de Bitabe au Quartier 1 ») [début, fin (m réels), force]
-    jams: [[8100, 9050, 1], [14300, 14600, 1], [15560, 15860, 1], [21089, 24185, 1]],   // Bitabe → Quartier 1 ; Limete 13e Rue et 7e Rue (l'auteur, 10/11) ; avenue de la Libération (ex-24 Novembre) → Mandela
+    // Embouteillages (l'auteur, 08/11 & 16/11 : Pascal, Bitabe → Quartier 1, Limete 13e & 12e Rues et 7e Rue, Av. de la Libération → Mandela) [début, fin (m réels), force]
+    jams: [[5780, 6750, 1], [8100, 9050, 1], [14300, 15050, 1], [15560, 15860, 1], [21089, 24185, 1]],
     // (l'auteur, 10/11) bagarres de Kuluna qui bloquent la route : Masina Quartier 3 et Kingasani ya Suka ; vols à moto : Pascal (et la Place Victoire, Kasa-Vubu)
     kuluna: [[4250, 5150]],
     thefts: [[5850, 6450]],
@@ -732,6 +732,7 @@ export const ROUTES = {
     greenMedianUntil: null,
     guardrails: [],
     dense: [],
+    jams: [[plKm(1250), plKm(3400), 1], [plKm(5750), plKm(7400), 1], [plKm(8500), plKm(10550), 1]],   // Limete Industriel (17e–14e Rues), Kingabwa / Pont Funa, Ndolo / Bralima / Gare
     market: null,
     busParks: [],
     tallNearEnd: 0,
@@ -761,10 +762,24 @@ export const ROUTES = {
     // boulevard Lumumba. La vidéo « de A à Z » va de la Gare vers Matete : sa droite est notre gauche (côté rails).
     pl: {
       railFrom: 1057, railTo: 10640,
-      // Circulation (vidéos) : surtout des camions et des tuk-tuks ; moitié moins de véhicules que sur 2 × 4 voies
+      // Circulation (vidéos + embouteillages Route Poids Lourds) : files denses de camions, taxis-bus, tricycles (keke), taxis et motos
       traffic: {
-        our: ['truck', 'truck', 'truck', 'truck', 'keke', 'keke', 'keke', 'keke', 'moto', 'moto', 'moto', 'bus', 'bus', 'amb', 'taxi', 'car', 'police'],
-        onc: ['truck', 'truck', 'truck', 'keke', 'keke', 'keke', 'moto', 'moto', 'bus', 'taxi', 'car'],
+        our: [
+          'truck', 'truck', 'truck', 'truck', 'truck', 'truck', 'truck', 'truck',
+          'keke', 'keke', 'keke', 'keke', 'keke', 'keke', 'keke', 'keke',
+          'bus', 'bus', 'bus', 'bus', 'bus', 'van', 'van',
+          'taxi', 'taxi', 'taxi', 'taxi', 'car', 'car', 'car',
+          'moto', 'moto', 'moto', 'moto', 'moto', 'moto',
+          'amb', 'police',
+        ],
+        onc: [
+          'truck', 'truck', 'truck', 'truck', 'truck', 'truck',
+          'keke', 'keke', 'keke', 'keke', 'keke', 'keke',
+          'bus', 'bus', 'bus', 'van', 'van',
+          'taxi', 'taxi', 'taxi', 'car', 'car',
+          'moto', 'moto', 'moto', 'moto',
+          'police',
+        ],
       },
       crossings: [[3189, 34, 'Passage à niveau'], [10201, -28, 'Passage à niveau']],   // (km, biais en degrés) : voie vers la droite
       // [début, fin, genre] : la suite des façades de chaque côté
