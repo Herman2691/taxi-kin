@@ -30,10 +30,23 @@ let { FINISH_LEN, FUELS, FLYOVERS, inFlyover, SIGNALS, signalState, blockedAt, r
 let { place, worldVec, stretchX, yawAt } = RT1;
 const { toGame, EXT_ARCS } = RT1;                // (positions du trajet principal)
 
-// ---------- Itinéraire, sens et véhicule choisis (menu) : ?trajet=, ?sens=, ?veh= ; sans ?trajet= mais avec ?route=, l'ancien fonctionnement (tests) ----------
+// ---------- Itinéraire, variante, sens et véhicule choisis (menu) : ?trajet=, ?var=, ?sens=, ?veh= ; sans ?trajet= mais avec ?route=, l'ancien fonctionnement (tests) ----------
 const PARAMS = new URLSearchParams(location.search);
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(`taxikin.${k}`); localStorage.setItem(`taxikin.${k}`, v); } catch { /* (navigation privée) */ } return null; };
-const IT = PARAMS.get('trajet') || !PARAMS.get('route') ? (ITINERAIRES.find(i => i.id === (PARAMS.get('trajet') ?? store('trajet'))) ?? ITINERAIRES[0]) : null;
+const OLD_TRAJETS = { 'masina-gare': 'aeroport-gare', 'aeroport-limete': 'masina-limete', 'ngaba-masina': 'kingasani-ngaba', 'bypass-ngaba': 'kingasani-ngaba', kulumba: 'masina-limete' };
+const syncVariant = (it, forceId) => {
+  if (!it?.variants) return it;
+  it.baseRoads ??= it.roads;
+  const vid = forceId ?? (PARAMS.get('trajet') === it.id ? PARAMS.get('var') : null) ?? store(`var.${it.id}`);
+  const v = it.variants.find(x => x.id === vid) ?? it.variants[0];
+  Object.assign(it, { variant: v.id, variantLabel: v.label, variantShort: v.short, via: v.via, stops: v.stops, km: v.km, A: v.A ?? it.A, B: v.B ?? it.B, roads: v.roads ?? it.baseRoads });
+  return it;
+};
+ITINERAIRES.forEach(it => syncVariant(it));
+const rawTid = PARAMS.get('trajet') ?? store('trajet');
+const tid = OLD_TRAJETS[rawTid] ?? rawTid;
+let IT = PARAMS.get('trajet') || !PARAMS.get('route') ? (ITINERAIRES.find(i => i.id === tid) ?? ITINERAIRES[0]) : null;
+syncVariant(IT);
 if (IT && IT.route !== CURRENT.id) {                // (la page doit être construite sur le trajet de l'itinéraire)
   const url = new URL(location.href);
   url.searchParams.set('route', IT.route);
@@ -46,8 +59,14 @@ let VEH_ID = VEHICULES[PARAMS.get('veh')] ? PARAMS.get('veh') : VEHICULES[store(
 let VEH = VEHICULES[VEH_ID];
 const want = key => !IT || IT.roads.includes(key);
 // Mode : journée de travail, ou course (à l'aller, sur un itinéraire qui reste sur une seule route ; taxis ou motos)
-const raceOK = it => it.A.road === it.B.road;
+const raceOK = it => it.A.road === it.B.road || (it.variants?.some(v => (v.A ?? it.A).road === (v.B ?? it.B).road) ?? false);
+const ensureRaceVariant = it => {
+  if (!it?.variants || it.A.road === it.B.road) return;
+  const v = it.variants.find(x => (x.A ?? it.A).road === (x.B ?? it.B).road);
+  if (v) { store(`var.${it.id}`, v.id); syncVariant(it, v.id); }
+};
 let MODE = IT && store('mode') === 'course' && raceOK(IT) ? 'course' : 'travail';
+if (MODE === 'course' && IT) ensureRaceVariant(IT);
 let TRIP = store('trip') === 'simple' ? 'simple' : 'ar';   // (l'auteur, 08/11 : aller simple → la partie finit au terminus ; aller-retour → au retour)
 let RACE_AR = store('course') === 'ar';             // (l'auteur, 08/11 : la course est soit un aller simple, soit un aller-retour)
 
@@ -80,6 +99,65 @@ const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
 const isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+let worldReady = false;
+
+// ---------- Menu affiché immédiatement avant la construction 3D ----------
+const radioGroup = (box, items, isOn, onPick) => {
+  box.innerHTML = '';
+  for (const it of items) {
+    const btn = document.createElement('button');
+    btn.className = 'route-btn';
+    btn.disabled = !!it.disabled;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(isOn(it)));
+    btn.innerHTML = it.html;
+    btn.addEventListener('click', () => onPick(it));
+    box.append(btn);
+  }
+};
+const VEH_ART = {
+  berline: '<svg viewBox="0 0 110 48"><path d="M6 34 Q6 28 14 27 L28 25 L40 15 Q44 12 52 12 L70 12 Q76 12 80 16 L88 25 L100 27 Q105 28 105 33 L105 37 L6 37 Z" fill="#f5c400"/><path d="M42 17 L50 14 L64 14 L64 25 L33 25 Z M67 14 L72 14 Q76 14 79 18 L85 25 L67 25 Z" fill="#1c2b3a"/><rect x="10" y="29" width="92" height="3" fill="#1d4fa0"/><rect x="45" y="6" width="20" height="5" rx="1.5" fill="#fff5cc"/><circle cx="28" cy="38" r="7" fill="#17181b"/><circle cx="84" cy="38" r="7" fill="#17181b"/><circle cx="28" cy="38" r="3" fill="#cfd6de"/><circle cx="84" cy="38" r="3" fill="#cfd6de"/></svg>',
+  bus: '<svg viewBox="0 0 110 48"><path d="M8 38 L8 20 Q8 10 18 10 L92 10 Q102 10 104 20 L104 38 Z" fill="#2a93cc"/><path d="M8 26 L104 26 L104 38 L8 38 Z" fill="#f5c400"/><path d="M14 14 h16 v10 h-16z M34 14 h16 v10 h-16z M54 14 h16 v10 h-16z M74 14 h12 v10 h-12z M90 13 L100 13 L102 24 L90 24 Z" fill="#1c2b3a"/><rect x="58" y="14" width="10" height="24" fill="#111317"/><circle cx="26" cy="39" r="7" fill="#17181b"/><circle cx="88" cy="39" r="7" fill="#17181b"/><circle cx="26" cy="39" r="3" fill="#3a3e44"/><circle cx="88" cy="39" r="3" fill="#3a3e44"/></svg>',
+  moto: '<svg viewBox="0 0 110 48"><circle cx="28" cy="36" r="10" fill="none" stroke="#17181b" stroke-width="4"/><circle cx="84" cy="36" r="10" fill="none" stroke="#17181b" stroke-width="4"/><path d="M28 36 L48 24 L70 24 L84 36 M62 24 L76 12 L82 12" stroke="#9aa0a6" stroke-width="3" fill="none"/><path d="M44 22 Q56 16 68 22 L66 27 L46 27 Z" fill="#b91c1c"/><path d="M50 22 L54 6 L64 6 L66 20 Z" fill="#d6dc24"/><rect x="51" y="11" width="14" height="2.5" fill="#9aa0a6"/><circle cx="59" cy="3" r="5" fill="#1a2a55"/><path d="M52 24 L48 34 L54 34 L58 26 Z" fill="#2f3e57"/></svg>',
+  perso: '<svg viewBox="0 0 110 48"><path d="M6 34 Q6 28 14 27 L28 25 L40 15 Q44 12 52 12 L70 12 Q76 12 80 16 L88 25 L100 27 Q105 28 105 33 L105 37 L6 37 Z" fill="#1e3a8a"/><path d="M42 17 L50 14 L64 14 L64 25 L33 25 Z M67 14 L72 14 Q76 14 79 18 L85 25 L67 25 Z" fill="#1c2b3a"/><rect x="10" y="29" width="92" height="3" fill="#1d4fa0"/><rect x="45" y="6" width="20" height="5" rx="1.5" fill="#fff5cc"/><circle cx="28" cy="38" r="7" fill="#17181b"/><circle cx="84" cy="38" r="7" fill="#17181b"/><circle cx="28" cy="38" r="3" fill="#cfd6de"/><circle cx="84" cy="38" r="3" fill="#cfd6de"/></svg>',
+};
+const statRow = (label, v) => `<span class="vstat">${label}<i style="--v:${Math.round(v * 100)}%"></i></span>`;
+const syncUrl = () => {
+  const url = new URL(location.href);
+  if (IT) {
+    url.searchParams.set('trajet', IT.id);
+    if (IT.variant) url.searchParams.set('var', IT.variant); else url.searchParams.delete('var');
+  }
+  history.replaceState(null, '', url.href);
+};
+const pickRoute = it => {
+  IT = it;
+  if (MODE === 'course') ensureRaceVariant(IT);
+  store('trajet', IT.id);
+  VERSEMENT = VEH.versement;
+  syncUrl();
+  drawMenu();
+};
+$('mode-travail').addEventListener('click', () => { MODE = 'travail'; store('mode', 'travail'); drawMenu(); });
+$('mode-course').addEventListener('click', () => {
+  MODE = 'course'; store('mode', 'course');
+  if (VEH_ID === 'bus' || VEH_ID === 'perso') { store('veh', 'berline'); setVehicle('berline'); }
+  if (IT && !raceOK(IT)) {
+    const it = ITINERAIRES.find(raceOK);
+    pickRoute(it);
+    return;
+  }
+  if (IT) ensureRaceVariant(IT);
+  drawMenu();
+});
+for (const [name, what] of THANKS) {
+  const li = document.createElement('li');
+  li.append(Object.assign(document.createElement('b'), { textContent: name }));
+  if (what) li.append(` · ${what}`);
+  $('thanks').append(li);
+}
+drawMenu();
+await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
 // ---------- Rendu ----------
 const canvas = $('c');
@@ -93,6 +171,7 @@ globalThis.TAXIKIN_KV = !!CURRENT.attachKv && want('kv');   // (world.js : le d�
 globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les entrées « Rocade Sud-Est » laissent la place à la vraie route)
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
 const world = W1.buildWorld(scene);
+await new Promise(r => setTimeout(r, 0));
 const lunettes = new Lunettes(renderer);          // mode lunettes (téléphone glissé dans des lunettes)
 const retro = new Retro(renderer);                // rétroviseur (image de l'arrière en haut de l'écran)
 const rain = new Rain(scene);                     // la pluie (averses dans la journée)
@@ -140,7 +219,7 @@ if (CURRENT.attach && want('30juin')) {
 // été calculé pour que son bout tombe sur le bout du Boulevard du 30 Juin.
 const JOINS = [];                                // raccords : { a, za, b, zb, w (point de la scène), r (décor de l'autre route affiché en deçà) }
 if (JOIN_W) JOINS.push({ a: ROAD1, za: ROAD1.zJoin, b: ROAD2, zb: ROAD2.zJoin, w: JOIN_W, r: 900 });
-if (CURRENT.attachPL && ROAD2 && want('pl')) {
+if (CURRENT.attachPL && want('pl')) {
   ROAD3 = await loadRoad(CURRENT.attachPL.route);
   const { RT: RT3, group } = ROAD3;
   const [jx, jz] = W1.plDiagAt(W1.PL_JOIN_U), [kx, kz] = W1.plDiagAt(W1.PL_JOIN_U + 2);
@@ -153,9 +232,12 @@ if (CURRENT.attachPL && ROAD2 && want('pl')) {
   group.updateMatrixWorld(true);
   // raccord à la Place de la Gare : on change de route en la traversant (world.js PLAZA, au même endroit sur les deux routes)
   ROAD3.zEnd = ROAD3.W.PLAZA.z + 4;
-  ROAD2.zEnd = ROAD2.W.PLAZA.z;
-  const G3 = group.localToWorld(RT3.worldVec(0, 0, ROAD3.zEnd, new THREE.Vector3()));
-  JOINS.push({ a: ROAD1, za: jz, b: ROAD3, zb: 0, w: P.clone(), r: 350 }, { a: ROAD2, za: ROAD2.zEnd, b: ROAD3, zb: ROAD3.zEnd, w: G3, r: 900 });
+  JOINS.push({ a: ROAD1, za: jz, b: ROAD3, zb: 0, w: P.clone(), r: 350 });
+  if (ROAD2) {
+    ROAD2.zEnd = ROAD2.W.PLAZA.z;
+    const G3 = group.localToWorld(RT3.worldVec(0, 0, ROAD3.zEnd, new THREE.Vector3()));
+    JOINS.push({ a: ROAD2, za: ROAD2.zEnd, b: ROAD3, zb: ROAD3.zEnd, w: G3, r: 900 });
+  }
   // Liaisons vers Limete (14e à 17e Rues, Av. de l'Aérodrome) : on passe d'une route à l'autre au point où elles se touchent
   for (const l of ROAD3.W.PL_LINKS) {
     const end = l.pts[l.pts.length - 1], w = group.localToWorld(RT3.worldVec(end[0], 0, end[1], new THREE.Vector3()));
@@ -178,15 +260,18 @@ if (CURRENT.attachUni && want('uni')) {
   JOINS.push({ a: ROAD1, za: q.b[1], b: ROAD4, zb: 0, w: P.clone(), r: 420 });
 }
 // ---------- By Pass (routes.js `attachBp`) : son tracé est déjà dans le repère de la scène (tools/bypass.py) ----------
-if (CURRENT.attachBp && ROAD4 && want('bp')) {
+if (CURRENT.attachBp && want('bp')) {
   ROAD5 = await loadRoad(CURRENT.attachBp.route);
   ROAD5.rho = 0;
   ROAD5.group.position.y = -0.025;
   ROAD5.group.updateMatrixWorld(true);
-  const b = W1.BP_STUB, U = ROAD4.W.UNI_JOIN, B = ROAD5.W.BP_JOIN, V = THREE.Vector3;
+  const b = W1.BP_STUB, B = ROAD5.W.BP_JOIN, V = THREE.Vector3;
   JOINS.push({ a: ROAD1, za: b.b[1], b: ROAD5, zb: 0, w: RT1.worldVec(b.b[0], 0, b.b[1], new V()), r: 420 });
-  JOINS.push({ a: ROAD4, za: U.c[1], b: ROAD5, zb: B.z0, w: ROAD4.group.localToWorld(ROAD4.RT.worldVec(U.c[0], 0, U.c[1], new V())), r: 520 });
-  JOINS.push({ a: ROAD4, za: U.kim[1], b: ROAD5, zb: B.kim[1], w: ROAD4.group.localToWorld(ROAD4.RT.worldVec(U.kim[0], 0, U.kim[1], new V())), r: 420 });
+  if (ROAD4) {
+    const U = ROAD4.W.UNI_JOIN;
+    JOINS.push({ a: ROAD4, za: U.c[1], b: ROAD5, zb: B.z0, w: ROAD4.group.localToWorld(ROAD4.RT.worldVec(U.c[0], 0, U.c[1], new V())), r: 520 });
+    JOINS.push({ a: ROAD4, za: U.kim[1], b: ROAD5, zb: B.kim[1], w: ROAD4.group.localToWorld(ROAD4.RT.worldVec(U.kim[0], 0, U.kim[1], new V())), r: 420 });
+  }
 }
 
 // ---------- Avenue Kasa-Vubu (routes.js `attachKv`, l'auteur, 08/11) : branchée au croisement Sendwe / Triomphal (Pont-Cabu), au milieu de son tracé ----------
@@ -228,7 +313,10 @@ if (CURRENT.attachKv && want('kv')) {
 // l'aérogare (entrées « ROCADE SUD-EST » de routes.js, qui ne sont pas dessinées quand elle est chargée).
 const ROC = {};
 if (CURRENT.attachRoc && want('roc')) {
-  ROAD7 = await loadRoad(CURRENT.attachRoc.route);
+  [ROAD7, ROAD8] = await Promise.all([
+    loadRoad(CURRENT.attachRoc.route),
+    globalThis.TAXIKIN_MM ? loadRoad(CURRENT.attachMm.route) : Promise.resolve(null),
+  ]);
   ROAD7.rho = 0;
   ROAD7.group.position.y = -0.02;
   ROAD7.group.updateMatrixWorld(true);
@@ -245,8 +333,7 @@ if (CURRENT.attachRoc && want('roc')) {
 // Son début est au bord gauche du boulevard Lumumba (entrée « PREMIÈRE ENTRÉE », juste avant le Pont N'djili), son bout au bord droit de la
 // Rocade, juste après Cecomaf (entrée « ROUTE DE NSANDA ») ; ces deux entrées ne sont pas dessinées quand elle est chargée.
 const MM = {};
-if (globalThis.TAXIKIN_MM) {
-  ROAD8 = await loadRoad(CURRENT.attachMm.route);
+if (ROAD8) {
   ROAD8.rho = 0;
   ROAD8.group.position.y = -0.03;
   ROAD8.group.updateMatrixWorld(true);
@@ -255,6 +342,14 @@ if (globalThis.TAXIKIN_MM) {
   JOINS.push({ a: ROAD1, za: MM.z1, b: ROAD8, zb: 0, w: RT1.worldVec(-ROAD_EDGE, 0, MM.z1, new V()), r: 420 });
   JOINS.push({ a: ROAD7, za: MM.z7, b: ROAD8, zb: MM.zEnd8, w: ROAD8.RT.worldVec(0, 0, MM.zEnd8, new V()), r: 420 });
 }
+const loadedRoads = new Set();
+if (ROAD2) loadedRoads.add('30juin');
+if (ROAD3) loadedRoads.add('pl');
+if (ROAD4) loadedRoads.add('uni');
+if (ROAD5) loadedRoads.add('bp');
+if (ROAD6) loadedRoads.add('kv');
+if (ROAD7) loadedRoads.add('roc');
+if (ROAD8) loadedRoads.add('mm');
 const MULTI = !!(ROAD2 || ROAD3 || ROAD4 || ROAD5 || ROAD6 || ROAD7 || ROAD8);   // (plusieurs routes : raccords et décor des autres routes)
 let quality = isTouch ? 'low' : 'high';
 $('sel-quality').value = quality;
@@ -309,8 +404,10 @@ const cycleCam = () => { G.cam = (G.cam + 1) % camModes(); };
 let motoTwo = false;
 function setVehicle(id, two = false) {
   VEH_ID = id; VEH = VEHICULES[id]; MAX_FWD = VEH.max;
-  if (IT) { VERSEMENT = VEH.versement; Object.assign(BOARD, { cap: VEH.places, fare: VEH.fare, groupMax: GROUP_MAX[id] }); }
+  if (IT) VERSEMENT = VEH.versement;
   motoTwo = two;
+  if (!worldReady) return;
+  if (IT) Object.assign(BOARD, { cap: VEH.places, fare: VEH.fare, groupMax: GROUP_MAX[id] });
   const parent = taxiMesh.parent;
   parent?.remove(taxiMesh);
   taxiMesh = makeVehicle(id, two);
@@ -391,10 +488,10 @@ function show(name) {
   $('btn-more').setAttribute('aria-expanded', 'false');
 }
 
-const ROADS = { 1: ROAD1, 2: ROAD2, 4: ROAD4, 5: ROAD5, 6: ROAD6, 7: ROAD7, 8: ROAD8 };
+const ROADS = { 1: ROAD1, 2: ROAD2, 3: ROAD3, 4: ROAD4, 5: ROAD5, 6: ROAD6, 7: ROAD7, 8: ROAD8 };
 /** Un point d'itinéraire : route, z, et le cap (0 : vers -z, chaussée de droite ; π : vers +z, chaussée de gauche) pour la marche `dir`. */
 function itPoint(P, dir) {
-  const road = ROADS[P.road], W = road.W, RT = road.RT;
+  const road = ROADS[P.road] ?? ROAD1, W = road.W, RT = road.RT;
   if (P.at === 'bktf' || P.at === 'siforco') {
     const into = P.at === 'bktf' ? dir < 0 : dir > 0;
     const m = W.masinaPose(P.at, into);
@@ -485,14 +582,27 @@ function finishRace() {
   endShift('course');
 }
 
-/** Conseil de route : de Masina vers le By Pass, l'entrée se prend depuis la chaussée qui revient de Limete (on fait demi-tour juste après l'Échangeur). */
+/** Conseils de route aux embranchements selon la ligne ou la variante choisie (By Pass, Poids Lourds, Première Entrée N'djili). */
 let hintDone = false;
 function itineraryHints() {
-  if (hintDone || !ROAD5 || A !== ROAD1 || SENS !== (IT.A.road === 5 ? 'retour' : 'aller') || Math.cos(taxi.heading) < 0.5) return;
-  const z0 = W1.BP_STUB.pts[0][1];
-  if (taxi.x > 0 && taxi.z < z0 + 450 && taxi.z > z0) {
-    hintDone = true;
-    hud.toast('Pour le By Pass : passe l\'Échangeur, fais demi-tour à la première ouverture (200 m), reviens et tourne à droite.', 7);
+  if (hintDone || !IT) return;
+  if (ROAD5 && A === ROAD1 && SENS === (IT.A.road === 5 ? 'retour' : 'aller') && IT.roads.includes('bp') && Math.cos(taxi.heading) >= 0.5) {
+    const z0 = W1.BP_STUB.pts[0][1];
+    if (taxi.x > 0 && taxi.z < z0 + 450 && taxi.z > z0) {
+      hintDone = true;
+      hud.toast('Pour le By Pass : passe l\'Échangeur, fais demi-tour à la première ouverture (200 m), reviens et tourne à droite.', 7);
+    }
+  } else if (ROAD3 && A === ROAD1 && SENS === 'aller' && IT.variant === 'poidslourds' && Math.cos(taxi.heading) >= 0.5) {
+    const zMat = -RT1.toGame(11800);
+    if (taxi.x > 0 && taxi.z < zMat + 420 && taxi.z > zMat) {
+      hintDone = true;
+      hud.toast('Variante Poids Lourds : reste à droite au Pont Matete pour t\'engager sur la Route Poids Lourds vers la Gare Centrale.', 6.5);
+    }
+  } else if (ROAD8 && A === ROAD7 && SENS === 'aller' && IT.variant === 'quartier1' && Math.cos(taxi.heading) >= 0.5) {
+    if (taxi.x > 0 && taxi.z < MM.z7 + 380 && taxi.z > MM.z7) {
+      hintDone = true;
+      hud.toast('Direction Quartier 1 N\'djili : à Cecomaf, tourne à droite sur la Route de Nsanda (Première Entrée).', 6.5);
+    }
   }
 }
 /** Terminus (l'auteur, 07/11 : « il laisse le client et il prend les autres pour le ramener ») : les clients descendent, le véhicule fait demi-tour
@@ -534,8 +644,9 @@ const termMarker = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 40, 18, 1
   new THREE.MeshBasicMaterial({ color: 0x3ccf6e, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide, fog: false }));
 termMarker.visible = false;
 scene.add(termMarker);
+const resolveTo = to => (to.at === 'plaza' && (A === ROAD2 || A === ROAD3) && ROADS[A === ROAD3 ? 3 : 2] ? { ...to, road: A === ROAD3 ? 3 : 2 } : to);
 function terminusStop(dt) {
-  const L = legs(), p = itPoint(L.to, L.to.dir);
+  const L = legs(), to = resolveTo(L.to), p = itPoint(to, to.dir);
   if (A !== p.road) { termMarker.visible = false; return; }
   const ahead = (taxi.z - p.z) * (L.to.dir > 0 ? 1 : -1);         // > 0 : avant le terminus
   termMarker.visible = ahead < 350 && ahead > -40;
@@ -574,8 +685,8 @@ function finishLeg() {
 }
 /** Arrivé ? (sur la route de l'arrivée, passé son repère dans le sens de la marche) */
 function arrived() {
-  const { to } = legs(), p = itPoint(to, to.dir);
-  return A === p.road && (to.dir > 0 ? taxi.z <= p.z : taxi.z >= p.z);
+  const { to } = legs(), t = resolveTo(to), p = itPoint(t, t.dir);
+  return A === p.road && (t.dir > 0 ? taxi.z <= p.z : taxi.z >= p.z);
 }
 
 // ---------- Le panneau de l'itinéraire, à gauche (l'auteur, 08/11 : « à côté gauche il faut toujours montrer l'itinéraire, la situation des avenues qu'il passe ») ----------
@@ -623,6 +734,20 @@ function updateItin(dt) {
 }
 
 function startShift() {
+  if (IT && (IT.route !== CURRENT.id || IT.roads.some(r => !loadedRoads.has(r)))) {
+    const url = new URL(location.href);
+    url.searchParams.set('route', IT.route);
+    url.searchParams.set('trajet', IT.id);
+    if (IT.variant) url.searchParams.set('var', IT.variant); else url.searchParams.delete('var');
+    url.searchParams.set('sens', SENS);
+    url.searchParams.set('veh', VEH_ID);
+    url.searchParams.set('autostart', '1');
+    for (const k of ['z', 's', 'x', 'start', 'att', 'pl', 'uni', 'bp', 'kv', 'roc', 'mm']) url.searchParams.delete(k);
+    $('btn-start').disabled = true;
+    $('btn-start').textContent = '⏳ Chargement du trajet…';
+    location.href = url.href;
+    return;
+  }
   quality = $('sel-quality').value;
   applyQuality();
   Object.assign(G, {
@@ -659,9 +784,9 @@ function startShift() {
   // Test : ?uni=3000 démarre sur l'avenue de l'Université, à s = 3 000 m de son début
   const uni = Number(new URLSearchParams(location.search).get('uni'));
   if (ROAD4 && uni > 0) switchRoad(ROAD4, ROAD4.W.LANE_R, -ROAD4.RT.toGame(uni), 0);
-  // Test : ?bp=3000 démarre sur le By Pass, à s = 3 000 m de son début
+  // Test : ?bp=3000 démarre sur le By Pass, à s = 3 000 m de son début (?bp=-25 : face à la fourche de Lumumba)
   const bp = Number(new URLSearchParams(location.search).get('bp'));
-  if (ROAD5 && bp > 0) switchRoad(ROAD5, ROAD5.W.LANE_R, -ROAD5.RT.toGame(bp), 0);
+  if (ROAD5 && bp) { const ret = bp < 0 || PARAMS.get('sens') === 'retour'; switchRoad(ROAD5, (ret ? -1 : 1) * ROAD5.W.LANE_R, -ROAD5.RT.toGame(Math.abs(bp)), ret ? Math.PI : 0); }
   // Test : ?kv=3000 démarre sur l'avenue Kasa-Vubu, à s = 3 000 m de Kintambo Magasin
   const kv = Number(new URLSearchParams(location.search).get('kv'));
   if (ROAD6 && kv > 0) switchRoad(ROAD6, ROAD6.W.LANE_R, -ROAD6.RT.toGame(kv), 0);
@@ -775,71 +900,112 @@ function endShift(reason) {
 
 // ---------- Boutons ----------
 $('btn-start').addEventListener('click', startShift);
+worldReady = true;
 $('btn-start').disabled = false;                 // (la ville est construite : voir index.html)
-$('btn-start').textContent = MODE === 'course' ? 'Lancer la course' : 'Commencer la journée';
+$('btn-start').textContent = MODE === 'course' ? '🏁 Lancer la course' : '🚕 Commencer la journée';
 
-// ---------- Menu : véhicule, itinéraire (la page se recharge : seules ses routes sont construites), sens ----------
-const radioGroup = (box, items, isOn, onPick) => {
-  box.innerHTML = '';
-  for (const it of items) {
-    const btn = document.createElement('button');
-    btn.className = 'route-btn';
-    btn.disabled = !!it.disabled;
-    btn.setAttribute('role', 'radio');
-    btn.setAttribute('aria-checked', String(isOn(it)));
-    btn.innerHTML = it.html;
-    btn.addEventListener('click', () => onPick(it));
-    box.append(btn);
-  }
-};
-// Dessins des trois véhicules (vue de côté), pour les cartes du menu
-const VEH_ART = {
-  berline: '<svg viewBox="0 0 110 48"><path d="M6 34 Q6 28 14 27 L28 25 L40 15 Q44 12 52 12 L70 12 Q76 12 80 16 L88 25 L100 27 Q105 28 105 33 L105 37 L6 37 Z" fill="#f5c400"/><path d="M42 17 L50 14 L64 14 L64 25 L33 25 Z M67 14 L72 14 Q76 14 79 18 L85 25 L67 25 Z" fill="#1c2b3a"/><rect x="10" y="29" width="92" height="3" fill="#1d4fa0"/><rect x="45" y="6" width="20" height="5" rx="1.5" fill="#fff5cc"/><circle cx="28" cy="38" r="7" fill="#17181b"/><circle cx="84" cy="38" r="7" fill="#17181b"/><circle cx="28" cy="38" r="3" fill="#cfd6de"/><circle cx="84" cy="38" r="3" fill="#cfd6de"/></svg>',
-  bus: '<svg viewBox="0 0 110 48"><path d="M8 38 L8 20 Q8 10 18 10 L92 10 Q102 10 104 20 L104 38 Z" fill="#2a93cc"/><path d="M8 26 L104 26 L104 38 L8 38 Z" fill="#f5c400"/><path d="M14 14 h16 v10 h-16z M34 14 h16 v10 h-16z M54 14 h16 v10 h-16z M74 14 h12 v10 h-12z M90 13 L100 13 L102 24 L90 24 Z" fill="#1c2b3a"/><rect x="58" y="14" width="10" height="24" fill="#111317"/><circle cx="26" cy="39" r="7" fill="#17181b"/><circle cx="88" cy="39" r="7" fill="#17181b"/><circle cx="26" cy="39" r="3" fill="#3a3e44"/><circle cx="88" cy="39" r="3" fill="#3a3e44"/></svg>',
-  moto: '<svg viewBox="0 0 110 48"><circle cx="28" cy="36" r="10" fill="none" stroke="#17181b" stroke-width="4"/><circle cx="84" cy="36" r="10" fill="none" stroke="#17181b" stroke-width="4"/><path d="M28 36 L48 24 L70 24 L84 36 M62 24 L76 12 L82 12" stroke="#9aa0a6" stroke-width="3" fill="none"/><path d="M44 22 Q56 16 68 22 L66 27 L46 27 Z" fill="#b91c1c"/><path d="M50 22 L54 6 L64 6 L66 20 Z" fill="#d6dc24"/><rect x="51" y="11" width="14" height="2.5" fill="#9aa0a6"/><circle cx="59" cy="3" r="5" fill="#1a2a55"/><path d="M52 24 L48 34 L54 34 L58 26 Z" fill="#2f3e57"/></svg>',
-  perso: '<svg viewBox="0 0 110 48"><path d="M6 34 Q6 28 14 27 L28 25 L40 15 Q44 12 52 12 L70 12 Q76 12 80 16 L88 25 L100 27 Q105 28 105 33 L105 37 L6 37 Z" fill="#1e3a8a"/><path d="M42 17 L50 14 L64 14 L64 25 L33 25 Z M67 14 L72 14 Q76 14 79 18 L85 25 L67 25 Z" fill="#1c2b3a"/><rect x="10" y="29" width="92" height="3" fill="#1d4fa0"/><rect x="45" y="6" width="20" height="5" rx="1.5" fill="#fff5cc"/><circle cx="28" cy="38" r="7" fill="#17181b"/><circle cx="84" cy="38" r="7" fill="#17181b"/><circle cx="28" cy="38" r="3" fill="#cfd6de"/><circle cx="84" cy="38" r="3" fill="#cfd6de"/></svg>',
-};
-const statRow = (label, v) => `<span class="stat">${label}<i style="--v:${Math.round(v * 100)}%"></i></span>`;
+// ---------- Menu : véhicule, itinéraire (sélection instantanée), sens ----------
 function drawMenu() {
-  radioGroup($('vehs'), Object.entries(VEHICULES).map(([id, v]) => ({ id, html: `<span class="veh-art">${VEH_ART[id]}</span><b>${v.name}</b><span class="about">${v.about}</span>${statRow('Places', v.places / 10)}${statRow('Vitesse', (v.max - 12) / 14)}${statRow('Maniable', id === 'moto' ? 0.95 : id === 'bus' ? 0.35 : 0.7)}<span class="price">${v.perso ? 'Balade en ville · pas de versement' : `${fmtFC(v.fare)} par client · versement ${fmtFC(v.versement)}`}</span>` })),
-    it => it.id === VEH_ID, it => { store('veh', it.id); setVehicle(it.id); drawMenu(); });
+  ITINERAIRES.forEach(i => syncVariant(i));
+  radioGroup($('vehs'), Object.entries(VEHICULES).map(([id, v]) => ({
+    id,
+    html: `<div class="veh-top"><span class="veh-art">${VEH_ART[id]}</span><span class="veh-fare-pill">${v.perso ? 'Libre' : `${fmtFC(v.fare)} / client`}</span></div>`
+      + `<b>${v.name}</b><span class="about">${v.about}</span>`
+      + `<div class="vstats">${statRow('Places', v.places / 10)}${statRow('Vitesse', (v.max - 12) / 14)}${statRow('Maniable', id === 'moto' ? 0.95 : id === 'bus' ? 0.35 : 0.7)}</div>`
+      + `<span class="price">${v.perso ? 'Sans versement · Balade' : `Versement : ${fmtFC(v.versement)}`}</span>`,
+  })), it => it.id === VEH_ID, it => { store('veh', it.id); setVehicle(it.id); drawMenu(); });
   if (MODE === 'course') for (const [k, b] of [...$('vehs').children].entries()) if (['bus', 'perso'].includes(Object.keys(VEHICULES)[k])) b.disabled = true;
+
   if (IT) {
-    radioGroup($('routes'), ITINERAIRES.map(i => ({ ...i, disabled: MODE === 'course' && !raceOK(i), html: `<b>${i.title}</b><span>${i.via}</span><span class="km">${i.km.toLocaleString('fr-FR')} KM${MODE === 'course' && !raceOK(i) ? ' · PAS EN COURSE' : ''}</span>` })), it => it.id === IT.id, it => {
-      if (it.id === IT.id) return;
-      store('trajet', it.id);
-      const url = new URL(location.href);
-      url.searchParams.set('trajet', it.id);
-      url.searchParams.set('route', it.route);
-      for (const k of ['z', 's', 'x', 'start', 'att', 'pl', 'uni', 'bp']) url.searchParams.delete(k);
-      $('btn-start').disabled = true;
-      $('btn-start').textContent = 'Chargement du trajet…';
-      location.href = url.href;
-    });
-    const L = { aller: `${IT.A.name} → ${IT.B.name}`, retour: `${IT.B.name} → ${IT.A.name}` };
+    const rBox = $('routes');
+    rBox.innerHTML = '';
+    for (const i of ITINERAIRES) {
+      const disabled = MODE === 'course' && !raceOK(i);
+      const active = i.id === IT.id;
+      const stops = active && SENS === 'retour' && MODE !== 'course' ? [...(i.stops ?? [])].reverse() : (i.stops ?? []);
+      const stopsHtml = stops.length ? `<div class="itin-stops">${stops.map(s => `<span class="itin-stop">${s}</span>`).join('')}</div>` : '';
+      const varsHtml = i.variants ? `<div class="itin-vars">${i.variants.map(v => {
+        const vDis = MODE === 'course' && (v.A ?? i.A).road !== (v.B ?? i.B).road;
+        return `<span class="var-pill${i.variant === v.id ? ' on' : ''}" data-var="${v.id}"${vDis ? ' style="opacity:.35;pointer-events:none"' : ''}>${v.short ?? v.label}</span>`;
+      }).join('')}</div>` : '';
+
+      const btn = document.createElement('button');
+      btn.className = 'route-btn';
+      btn.disabled = disabled;
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', String(active));
+      btn.innerHTML = `<div class="itin-head-row"><div class="itin-badges"><span class="itin-code">${i.code ?? ''}</span><span class="itin-tag">${i.tag ?? ''}</span></div>`
+        + `<span class="km">${i.km.toLocaleString('fr-FR')} KM${disabled ? ' · HORS COURSE' : ''}</span></div>`
+        + `<b class="itin-name">${i.title}</b>`
+        + stopsHtml
+        + varsHtml;
+      btn.addEventListener('click', e => {
+        const vp = e.target.closest('[data-var]');
+        if (vp) {
+          const vid = vp.dataset.var;
+          store(`var.${i.id}`, vid);
+          syncVariant(i, vid);
+          if (i.id === IT.id) { syncUrl(); drawMenu(); return; }
+        }
+        if (i.id === IT.id) return;
+        pickRoute(i);
+      });
+      rBox.append(btn);
+    }
+
+    const varBox = $('sum-var-box');
+    if (varBox) {
+      varBox.hidden = !IT.variants;
+      if (IT.variants) {
+        radioGroup($('sum-vars'), IT.variants.map(v => ({
+          id: v.id,
+          disabled: MODE === 'course' && (v.A ?? IT.A).road !== (v.B ?? IT.B).road,
+          html: `<b>${v.short ?? v.label}</b><span>${v.km.toLocaleString('fr-FR')} km</span>`,
+        })), v => v.id === IT.variant, v => {
+          store(`var.${IT.id}`, v.id);
+          syncVariant(IT, v.id);
+          syncUrl();
+          drawMenu();
+        });
+      }
+    }
+
+    const La = legs('aller'), Lr = legs('retour');
+    const L = { aller: `${La.from.name} → ${La.to.name}`, retour: `${Lr.from.name} → ${Lr.to.name}` };
     radioGroup($('sens'), ['aller', 'retour'].map(k => ({ id: k, html: `<b>${k === 'aller' ? 'Aller' : 'Retour'}</b><span>${L[k]}</span>` })), it => it.id === SENS, it => { SENS = it.id; store('sens', it.id); drawMenu(); });
     const L1 = legs(), L2 = legs(SENS === 'retour' ? 'aller' : 'retour');
-    radioGroup($('trip'), [{ id: 'simple', html: `<b>Aller simple</b><span>Fin de la partie à ${L1.to.name}</span>` }, { id: 'ar', html: `<b>Aller-retour</b><span>Puis retour : fin à ${L2.to.name}</span>` }],
+    radioGroup($('trip'), [{ id: 'simple', html: `<b>Aller simple</b><span>Terminus : ${L1.to.name}</span>` }, { id: 'ar', html: `<b>Aller-retour</b><span>Retour : ${L2.to.name}</span>` }],
       it => it.id === TRIP, it => { TRIP = it.id; store('trip', it.id); drawMenu(); });
   }
   const race = MODE === 'course', C = COURSES[VEH_ID] ?? COURSES.berline;
   $('mode-travail').classList.toggle('on', !race); $('mode-course').classList.toggle('on', race);
-  $('sens-title').lastChild.textContent = race ? ' La course' : ' Le sens';
+  $('sens-title').lastChild.textContent = race ? ' Format de la course' : ' Sens de départ';
   $('trip').hidden = race || !IT;
   if (race && IT) radioGroup($('sens'), [{ id: 'simple', html: `<b>Aller simple</b><span>${IT.A.name} → ${IT.B.name}</span>` }, { id: 'ar', html: `<b>Aller-retour</b><span>${IT.A.name} → ${IT.B.name} → ${IT.A.name}</span>` }],
     it => it.id === (RACE_AR ? 'ar' : 'simple'), it => { RACE_AR = it.id === 'ar'; store('course', it.id); drawMenu(); });
   const mise = race && RACE_AR ? Math.round(C.mise * 1.5) : C.mise, prix = race && RACE_AR ? C.prix * 2 : C.prix;
-  $('sum-title').textContent = race ? 'Ta course' : 'Ta journée';
-  $('sum-l1').textContent = race ? 'Mise pour participer' : 'Versement au patron';
-  $('sum-l2').textContent = race ? 'Prix du gagnant' : 'Horaires';
-  $('sum-v2').textContent = race ? `${fmtFC(prix)} · 3 adversaires` : '06:00 → 18:00';
+  $('sum-title').textContent = race ? 'Feuille de course' : 'Feuille de route';
+  $('sum-l1').textContent = race ? 'Mise de départ' : 'Versement au patron';
+  $('sum-l2').textContent = race ? 'Gain du 1er' : 'Horaires';
+  $('sum-v2').textContent = race ? `${fmtFC(prix)} · 3 rivaux` : '06:00 → 18:00';
   $('rule-versement').textContent = fmtFC(race ? mise : VERSEMENT);
-  $('btn-start').textContent = $('btn-start').disabled ? $('btn-start').textContent : race ? 'Lancer la course' : 'Commencer la journée';
+  $('btn-start').disabled = !worldReady;
+  $('btn-start').textContent = !worldReady ? '⏳ Chargement de la ville…' : race ? '🏁 Lancer la course' : '🚕 Commencer la journée';
   $('sum-veh').textContent = VEH.name;
   if (IT) {
     const L = legs();
-    $('sum-route').textContent = IT.title;
+    $('sum-route').textContent = IT.variantShort ? `${IT.title} (${IT.variantShort})` : IT.title;
     $('sum-sens').textContent = race ? `${IT.A.name} → ${IT.B.name}${RACE_AR ? ` → ${IT.A.name}` : ''}` : `${L.from.name} → ${L.to.name}${TRIP === 'ar' ? ` → ${legs(SENS === 'retour' ? 'aller' : 'retour').to.name}` : ''}`;
+    if ($('sum-code')) $('sum-code').textContent = IT.code ?? 'L1';
+    if ($('sum-km')) $('sum-km').textContent = `${IT.km.toLocaleString('fr-FR')} KM`;
+    if ($('sum-cri')) {
+      const criA = L.to.cri ?? L.to.name, criB = legs(SENS === 'retour' ? 'aller' : 'retour').to.cri ?? L.from.cri;
+      $('sum-cri').textContent = race
+        ? `🏁 Rivaux : ${C.rivals.join(', ')}`
+        : VEH.perso
+        ? `🚗 Conduite libre · ${L.from.cri ?? L.from.name} → ${criA}`
+        : `📢 Receveur : « ${criA} ! ${criA} !${TRIP === 'ar' ? ` — Retour ${criB} !` : ''} »`;
+    }
   }
 }
 $('btn-flee').addEventListener('click', startFight);
@@ -851,28 +1017,8 @@ $('btn-vr').addEventListener('click', async () => {
   hud.toast('Lunettes : penche la tête pour tourner, regarde en bas pour freiner, touche l’écran pour t’arrêter.', 6);
 });
 lunettes.onExit = () => { G.cam = 0; if (G.state === 'play') pause(); };
-$('mode-travail').addEventListener('click', () => { MODE = 'travail'; store('mode', 'travail'); drawMenu(); });
-$('mode-course').addEventListener('click', () => {
-  MODE = 'course'; store('mode', 'course');
-  if (VEH_ID === 'bus' || VEH_ID === 'perso') { store('veh', 'berline'); setVehicle('berline'); }
-  if (IT && !raceOK(IT)) {                           // (itinéraire qui change de route : on charge une course possible)
-    const it = ITINERAIRES.find(raceOK);
-    store('trajet', it.id);
-    const url = new URL(location.href);
-    url.searchParams.set('trajet', it.id); url.searchParams.set('route', it.route);
-    location.href = url.href;
-    return;
-  }
-  drawMenu();
-});
 drawMenu();
 $('rule-versement').textContent = fmtFC(VERSEMENT);
-for (const [name, what] of THANKS) {
-  const li = document.createElement('li');
-  li.append(Object.assign(document.createElement('b'), { textContent: name }));
-  if (what) li.append(` · ${what}`);
-  $('thanks').append(li);
-}
 $('btn-again').addEventListener('click', startShift);
 $('btn-menu').addEventListener('click', toMenu);
 $('btn-quit').addEventListener('click', toMenu);
@@ -1064,8 +1210,8 @@ function cityAudio(dt) {
 const VOIX = ['receveur-gare', 'receveur-limete', 'receveur-pascal-kingasani', 'receveur-ngaba', 'receveur-universite', 'receveur-aeroport', 'receveur-24-isc',
   'receveur-kintambo', 'receveur-moquerie', 'vendeur-mayi', 'vendeur-jus', 'client-attend', 'client-commentaires'];
 /** La voix du receveur pour le terminus de la course (cri de routes.js) ; Sendwe : par le 24 Novembre (ISC). */
-const RECEVEUR_VOIX = { Gare: 'receveur-gare', Limete: 'receveur-limete', Masina: 'receveur-pascal-kingasani', Ngaba: 'receveur-ngaba', UNIKIN: 'receveur-universite',
-  'Aéroport': 'receveur-aeroport', Sendwe: 'receveur-24-isc', Kintambo: 'receveur-kintambo' };
+const RECEVEUR_VOIX = { Gare: 'receveur-gare', Gombe: 'receveur-gare', Limete: 'receveur-limete', Masina: 'receveur-pascal-kingasani', Kingasani: 'receveur-pascal-kingasani', Ngaba: 'receveur-ngaba', UNIKIN: 'receveur-universite',
+  'Aéroport': 'receveur-aeroport', "N'djili": 'receveur-aeroport', Sendwe: 'receveur-24-isc', Kintambo: 'receveur-kintambo' };
 function clientVoices(dt) {
   if (G.race) return;
   // des clients attendent tout près, devant : ils appellent le chauffeur (une fois par arrêt)
@@ -1925,9 +2071,9 @@ function handleAttach() {
   } else if (A === ROAD5) {
     const B = ROAD5.W.BP_JOIN, kx = B.kim[0] - B.kimA[0], kz = B.kim[1] - B.kimA[1];
     if (taxi.z > -0.5 && vz < 0) { to = ROAD1; zHint = W1.BP_STUB.b[1]; name = 'Boulevard Lumumba · Échangeur'; snap = W1.BP_STUB.b; }
-    else if (Math.hypot(taxi.x - B.kim[0], taxi.z - B.kim[1]) < 5 && sh * kx + vz * -kz > 0) { to = ROAD4; zHint = ROAD4.W.UNI_JOIN.kim[1]; name = 'Route de Kimwenza'; snap = ROAD4.W.UNI_JOIN.kim; }
+    else if (ROAD4 && Math.hypot(taxi.x - B.kim[0], taxi.z - B.kim[1]) < 5 && sh * kx + vz * -kz > 0) { to = ROAD4; zHint = ROAD4.W.UNI_JOIN.kim[1]; name = 'Route de Kimwenza'; snap = ROAD4.W.UNI_JOIN.kim; }
     // dans le Rond-Point Ngaba, on passe sur l'avenue de l'Université (avec un client, on traverse tout droit, sur le By Pass)
-    else if (!passengers.ride && taxi.z < B.z0 && taxi.z > B.z1) { to = ROAD4; zHint = ROAD4.W.UNI_JOIN.c[1]; name = 'Rond-Point Ngaba'; }
+    else if (ROAD4 && !passengers.ride && taxi.z < B.z0 && taxi.z > B.z1) { to = ROAD4; zHint = ROAD4.W.UNI_JOIN.c[1]; name = 'Rond-Point Ngaba'; }
   } else if (A === ROAD4 && ROAD5 && (() => {
     const U = ROAD4.W.UNI_JOIN, B = ROAD5.W.BP_JOIN;
     // on ne ressort que dans la vraie direction du By Pass (direction de la scène), jamais en braquant dans le rond-point
@@ -1964,7 +2110,7 @@ function handleAttach() {
     }
     if (to) { /* liaison vers le boulevard Lumumba */ }
     else if (taxi.z > -0.5 && vz < 0) { to = ROAD1; zHint = W1.plDiagAt(W1.PL_JOIN_U)[1]; name = 'Pont Matete'; }
-    else if (taxi.z <= ROAD3.zEnd && vz > 0) { to = ROAD2; zHint = ROAD2.zEnd; name = 'Place de la Gare · Boulevard du 30 Juin'; }
+    else if (ROAD2 && taxi.z <= ROAD3.zEnd && vz > 0) { to = ROAD2; zHint = ROAD2.zEnd; name = 'Place de la Gare · Boulevard du 30 Juin'; }
   }
   if (!to) return;
   if (!IT && passengers.ride) { G.prompt ||= "Dépose d'abord ton client avant de changer de boulevard"; return; }
@@ -2350,6 +2496,12 @@ traffic.reset(taxi);
 life.reset(taxi.z);
 show('menu');
 if (transfer) continueShift(transfer);
+else if (PARAMS.get('autostart') === '1') {
+  const url = new URL(location.href);
+  url.searchParams.delete('autostart');
+  history.replaceState(null, '', url.href);
+  startShift();
+}
 requestAnimationFrame(frame);
 
 // Tests sans écran (?debug=1) : l'état du jeu et quelques fonctions, pour les scripts de test de l'auteur (rien sans ce paramètre)

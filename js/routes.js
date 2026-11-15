@@ -1272,29 +1272,118 @@ export const ATTACHED = new URL(import.meta.url).searchParams.has('route');
 // dir : sens de la marche à ce point pendant l'aller (1 : vers la fin du tracé, chaussée de droite ; -1 : vers son début, chaussée de gauche).
 const ROC_END = 48440;                                    // (tools/rocade.py : s du bout de la Rocade moins 100 m)
 export const ITINERAIRES = [
-  { id: 'kulumba', title: 'Avenue Kulumba · Route Siforco', via: 'Route de BKTF → Avenue Kulumba → Route Siforco → Bd Lumumba', km: 3.1, route: 'lumumba', roads: [],
-    A: { name: 'Entrée Route de BKTF · Kulumba', cri: 'Kulumba', road: 1, at: 'bktf', dir: -1 }, B: { name: 'Sortie Route Siforco · Bd Lumumba', cri: 'Siforco', road: 1, at: 'siforco', dir: -1 } },
-  { id: 'aeroport-limete', title: 'Aéroport ↔ 1re Rue Limete', via: 'Boulevard Lumumba · Masina · Pont Matete', km: 17.2, route: 'lumumba', roads: [],
-    A: { name: "Aéroport de N'djili", cri: 'Aéroport', road: 1, s: 45, dir: 1 }, B: { name: '1re Rue Limete', cri: 'Limete', road: 1, s: 17172, dir: 1 } },
-  { id: 'sendwe-30juin', title: 'Sendwe ↔ Boulevard du 30 Juin', via: 'Triomphal · 24 Novembre · Gare centrale', km: 9.5, route: 'lumumba', roads: ['30juin'],
-    A: { name: 'Fourche Sendwe', cri: 'Sendwe', road: 1, at: 'sendwe', dir: 1 }, B: { name: 'Place de la Gare', cri: 'Gare', road: 2, at: 'plaza', dir: 1 } },
-  { id: 'universite', title: 'Avenue de l\'Université', via: 'Sendwe · Ezo · Rond-Point Ngaba · UNIKIN', km: 9.7, route: 'universite', roads: [],
-    A: { name: 'Boulevard Sendwe', cri: 'Sendwe', road: 1, s: 30, dir: 1 }, B: { name: 'UNIKIN', cri: 'UNIKIN', road: 1, at: 'campus', dir: 1 } },
-  { id: 'bypass-ngaba', title: 'By Pass ↔ Rond-Point Ngaba', via: 'Échangeur · Lemba · Salongo', km: 4.3, route: 'lumumba', roads: ['uni', 'bp'],
-    A: { name: 'By Pass · Échangeur', cri: 'Échangeur', road: 5, at: 'bpStart', dir: 1 }, B: { name: 'Rond-Point Ngaba', cri: 'Ngaba', road: 5, at: 'ngaba', dir: 1 } },
-  { id: 'masina-gare', title: 'Masina ↔ Gare centrale', via: 'Par Sendwe et le 30 Juin, ou par la Route Poids Lourds', km: 27, route: 'lumumba', roads: ['30juin', 'pl'],
-    // (l'auteur, 08/11 : « pour Masina tu dois commencer par l'arrêt Masina Quartier 3 », « pour Kingasani le terminus c'est la maison communale »)
-    // (l'auteur, 13/11 : « au retour le bus doit s'arrêter à la Maison communale de Kimbanseke, côté Kingasani, et tourner à l'Entrée Siforco pour
-    // reprendre des clients ») : terminus à 4 338 m, puis on roule soi-même jusqu'à l'Entrée Siforco (4 128 m), demi-tour, et le retour commence là (turnS)
-    A: { name: 'Masina · Arrêt Quartier 3', cri: 'Masina', road: 1, s: 4910, dir: 1, endS: 4338, endName: 'Maison communale de Kimbanseke', turnS: 4128, turnName: 'Entrée Siforco' }, B: { name: 'Gare centrale', cri: 'Gare', road: 2, at: 'plaza', dir: 1 } },
-  // (l'auteur, 08/11) l'avenue Kasa-Vubu : road 6 ; on y entre au croisement Pont-Cabu
-  { id: 'kasavubu', title: 'Avenue Kasa-Vubu', via: 'Kintambo Magasin · Bandal · Victoire · Pont-Cabu · Gombe', km: 12.6, route: 'lumumba', roads: ['30juin', 'kv'],
-    A: { name: 'Rond-point Kintambo Magasin', cri: 'Kintambo', road: 6, s: 60, dir: 1 }, B: { name: 'Gombe · Bd du 30 Juin', cri: 'Gombe', road: 6, s: 16060, dir: 1 } },
-  // (l'auteur, 09/11) la Rocade Sud-Est : road 7 ; de l'UNIKIN au boulevard Lumumba près de l'aéroport
-  { id: 'rocade', title: 'Rocade Sud-Est', via: 'UNIKIN · Kimwenza · Cecomaf · Buma · Aéroport', km: 34.1, route: 'lumumba', roads: ['roc', 'mm'],
-    A: { name: 'UNIKIN · Route de Kimwenza', cri: 'Kimwenza', road: 7, s: 60, dir: 1 }, B: { name: 'Boulevard Lumumba · Aéroport', cri: 'Aéroport', road: 7, s: ROC_END, dir: 1 } },
-  { id: 'ngaba-masina', title: 'Rond-Point Ngaba ↔ Masina', via: 'By Pass · Échangeur · Boulevard Lumumba', km: 15, route: 'lumumba', roads: ['uni', 'bp'],
-    A: { name: 'Rond-Point Ngaba', cri: 'Ngaba', road: 5, at: 'ngaba', dir: -1 }, B: { name: 'Maison communale de Kimbanseke', cri: 'Masina', road: 1, s: 4338, dir: -1, startS: 4910, startName: 'Masina · Arrêt Quartier 3', turnS: 4128, turnName: 'Entrée Siforco' } },
+  {
+    id: 'aeroport-gare', code: 'L1', tag: 'Traversée Est–Ouest',
+    title: 'Aéroport ↔ Gare Centrale',
+    via: 'Bd Lumumba · Échangeur · Sendwe · 24 Novembre · Bd du 30 Juin',
+    stops: ["Aéroport N'djili", 'Masina', 'Échangeur', '24 Novembre', 'Gare Centrale'],
+    km: 26.8, route: 'lumumba', roads: ['30juin'],
+    A: { name: "Aéroport de N'djili", cri: 'Aéroport', road: 1, s: 45, dir: 1 },
+    B: { name: 'Gare Centrale · Bd du 30 Juin', cri: 'Gare', road: 2, at: 'plaza', dir: 1 },
+    variants: [
+      {
+        id: 'limete-30juin', label: 'Via Limete · 24 Nov · 30 Juin', short: 'Limete · 24 Nov · 30 Juin',
+        via: 'Bd Lumumba · Échangeur · Sendwe · 24 Novembre · Bd du 30 Juin',
+        stops: ["Aéroport N'djili", 'Masina', 'Échangeur', '24 Novembre', 'Gare Centrale'],
+        km: 26.8, roads: ['30juin'],
+        B: { name: 'Gare Centrale · Bd du 30 Juin', cri: 'Gare', road: 2, at: 'plaza', dir: 1 },
+      },
+      {
+        id: 'poidslourds', label: 'Via Route Poids Lourds', short: 'Route Poids Lourds',
+        via: 'Bd Lumumba · Pont Matete · Route Poids Lourds · Kingabwa · Gare Centrale',
+        stops: ["Aéroport N'djili", 'Masina', 'Pont Matete', 'Poids Lourds', 'Gare Centrale'],
+        km: 24.1, roads: ['pl'],
+        B: { name: 'Gare Centrale · Poids Lourds', cri: 'Gare', road: 3, at: 'plaza', dir: 1 },
+      },
+    ],
+  },
+  {
+    id: 'masina-limete', code: 'L2', tag: 'Axe Tshangu · Limete',
+    title: 'Masina Q.3 · Kingasani ↔ 1re Rue',
+    via: 'Masina Quartier 3 · Kingasani · Pont Matete · Échangeur · 1re Rue Limete',
+    stops: ['Masina Q.3', 'Kingasani', "N'djili Q.1", 'Échangeur', '1re Rue Limete'],
+    km: 12.8, route: 'lumumba', roads: [],
+    // (l'auteur, 08/11 & 15/11 : aller Masina Quartier 3 → 1re Rue ; retour 1re Rue → Kingasani Maison communale, puis demi-tour à l'Entrée Siforco)
+    A: { name: 'Masina Q.3 / Kingasani', cri: 'Kingasani', road: 1, s: 4910, dir: 1, startS: 4910, startName: 'Masina · Arrêt Quartier 3', endS: 4338, endName: 'Kingasani · Maison communale', turnS: 4128, turnName: 'Entrée Siforco' },
+    B: { name: '1re Rue Limete', cri: 'Limete', road: 1, s: 17172, dir: 1 },
+  },
+  {
+    id: 'universite', code: 'L3', tag: 'Axe Universitaire',
+    title: "Avenue de l'Université",
+    via: 'Boulevard Sendwe · Rond-Point Ezo · Rond-Point Ngaba · Campus UNIKIN',
+    stops: ['Bd Sendwe', 'Rond-Point Ezo', 'Rond-Point Ngaba', 'Campus UNIKIN'],
+    km: 9.7, route: 'universite', roads: [],
+    A: { name: 'Boulevard Sendwe', cri: 'Sendwe', road: 1, s: 30, dir: 1 },
+    B: { name: 'Campus UNIKIN', cri: 'UNIKIN', road: 1, at: 'campus', dir: 1 },
+    variants: [
+      {
+        id: 'campus', label: 'Rond-Point & Campus UNIKIN', short: 'Campus UNIKIN',
+        via: 'Boulevard Sendwe · Rond-Point Ezo · Rond-Point Ngaba · Campus UNIKIN',
+        stops: ['Bd Sendwe', 'Rond-Point Ezo', 'Rond-Point Ngaba', 'Campus UNIKIN'],
+        km: 9.7, roads: [],
+        B: { name: 'Campus UNIKIN', cri: 'UNIKIN', road: 1, at: 'campus', dir: 1 },
+      },
+      {
+        id: 'ngaba', label: 'Terminus Rond-Point Ngaba', short: 'Rond-Point Ngaba',
+        via: 'Boulevard Sendwe · Kalamu · Rond-Point Ezo · Rond-Point Ngaba',
+        stops: ['Bd Sendwe', 'Kalamu', 'Rond-Point Ezo', 'Rond-Point Ngaba'],
+        km: 6.0, roads: [],
+        B: { name: 'Rond-Point Ngaba', cri: 'Ngaba', road: 1, s: 5900, dir: 1 },
+      },
+    ],
+  },
+  {
+    id: 'kingasani-ngaba', code: 'L4', tag: 'Rocade By Pass',
+    title: 'Kingasani ↔ Rond-Point Ngaba',
+    via: 'Kingasani · Boulevard Lumumba · Échangeur · By Pass · Lemba · Ngaba',
+    stops: ['Kingasani', 'Pont Matete', 'Échangeur', 'By Pass', 'Rond-Point Ngaba'],
+    km: 15.0, route: 'lumumba', roads: ['bp'],
+    A: { name: 'Kingasani', cri: 'Kingasani', road: 1, s: 4910, dir: 1, startS: 4910, startName: 'Kingasani · Arrêt Quartier 3', endS: 4338, endName: 'Kingasani · Maison communale', turnS: 4128, turnName: 'Entrée Siforco' },
+    B: { name: 'Rond-Point Ngaba', cri: 'Ngaba', road: 5, at: 'ngaba', dir: 1 },
+  },
+  {
+    id: 'sendwe-30juin', code: 'L5', tag: 'Centre-Ville · Gombe',
+    title: 'Sendwe ↔ Boulevard du 30 Juin',
+    via: 'Fourche Sendwe · Bd Triomphal · 24 Novembre · Bd du 30 Juin · Gare Centrale',
+    stops: ['Fourche Sendwe', 'Triomphal', '24 Novembre', 'Mandela', 'Gare Centrale'],
+    km: 9.5, route: 'lumumba', roads: ['30juin'],
+    A: { name: 'Fourche Sendwe', cri: 'Sendwe', road: 1, at: 'sendwe', dir: 1 },
+    B: { name: 'Place de la Gare · Bd du 30 Juin', cri: 'Gare', road: 2, at: 'plaza', dir: 1 },
+  },
+  {
+    id: 'rocade', code: 'L6', tag: 'Rocade Sud-Est',
+    title: "Rocade (UNIKIN ↔ Q.1 / Aéroport)",
+    via: "UNIKIN · Kimwenza · Cecomaf · Route Mama Mobutu · Quartier 1 N'djili",
+    stops: ['UNIKIN', 'Kimwenza', 'Cecomaf', 'Mama Mobutu', "Quartier 1 N'djili"],
+    km: 21.8, route: 'lumumba', roads: ['roc', 'mm'],
+    A: { name: 'UNIKIN · Route de Kimwenza', cri: 'UNIKIN', road: 7, s: 60, dir: 1 },
+    B: { name: "Quartier 1 · 1re Entrée N'djili", cri: "N'djili", road: 8, s: 45, dir: -1 },
+    variants: [
+      {
+        id: 'quartier1', label: "Via Quartier 1 N'djili", short: "Quartier 1 N'djili",
+        via: "UNIKIN · Kimwenza · Cecomaf · Route de Nsanda · Mama Mobutu · Quartier 1",
+        stops: ['UNIKIN', 'Kimwenza', 'Cecomaf', 'Mama Mobutu', "Quartier 1 N'djili"],
+        km: 21.8, roads: ['roc', 'mm'],
+        B: { name: "Quartier 1 · 1re Entrée N'djili", cri: "N'djili", road: 8, s: 45, dir: -1 },
+      },
+      {
+        id: 'aeroport', label: "Via Aéroport de N'djili", short: "Aéroport de N'djili",
+        via: "UNIKIN · Kimwenza · Cecomaf · Buma · Boulevard Lumumba (Aéroport)",
+        stops: ['UNIKIN', 'Kimwenza', 'Cecomaf', 'Buma', "Aéroport N'djili"],
+        km: 34.1, roads: ['roc'],
+        B: { name: "Boulevard Lumumba · Aéroport", cri: 'Aéroport', road: 7, s: ROC_END, dir: 1 },
+      },
+    ],
+  },
+  {
+    id: 'kasavubu', code: 'L7', tag: 'Transversale Kasa-Vubu',
+    title: 'Avenue Kasa-Vubu',
+    via: 'Kintambo Magasin · Bandal · Rond-Point Victoire · Pont-Cabu · Gombe',
+    stops: ['Kintambo Magasin', 'Bandal', 'Victoire', 'Pont-Cabu', 'Gombe · 30 Juin'],
+    km: 12.6, route: 'lumumba', roads: ['kv'],
+    A: { name: 'Rond-point Kintambo Magasin', cri: 'Kintambo', road: 6, s: 60, dir: 1 },
+    B: { name: 'Gombe · Bd du 30 Juin', cri: 'Gombe', road: 6, s: 16060, dir: 1 },
+  },
 ];
 /** Les trois véhicules : prix du transport par client (FC), versement dû au patron (FC), places, vitesse (m/s), accélération, taille (m). */
 export const VEHICULES = {

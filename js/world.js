@@ -1009,7 +1009,7 @@ const onPLR1 = (x, z) => PL_R1.some(Q => onRibbon(Q, x, z));
 export const BP_STUB = R.attachBp ? (() => {
   const P = [[-(ROAD_EDGE + 4), ECH.bypass - 20], [-(ROAD_EDGE + 4.5), ECH.bypass], [-(ROAD_EDGE + 30), ECH.bypass + 25], [-(ROAD_EDGE + 58), ECH.bypass + 48]];
   const pts = Array.from({ length: 15 }, (_, i) => bez(P, i / 14)), e = pts[14], c = pts[13], L = Math.hypot(e[0] - c[0], e[1] - c[1]);
-  const P2 = [[-(ROAD_EDGE + 4.5), ECH.bypass + 96], [-(ROAD_EDGE + 10), ECH.bypass + 60], [-(ROAD_EDGE + 44), ECH.bypass + 36], e];
+  const P2 = [[-(ROAD_EDGE + 4.5), ECH.bypass + 96], [-(ROAD_EDGE + 8), ECH.bypass + 64], [-(ROAD_EDGE + 37), ECH.bypass + 30.75], e];
   const pts2 = Array.from({ length: 17 }, (_, i) => bez(P2, i / 16));
   const tail = [e[0] + (e[0] - c[0]) / L * 9, e[1] + (e[1] - c[1]) / L * 9];
   return { a: bez(P, 0.8), a2: bez(P2, 0.8), b: e, P, P2, pts: [[-(ROAD_EDGE - 1), ECH.bypass - 25], ...pts, tail], pts2: [[-(ROAD_EDGE - 1), ECH.bypass + 106], ...pts2, tail] };
@@ -1358,7 +1358,7 @@ export function roadAxisAt(x, z) {
   }
   if (IS_TOWER && ax < TX_IN && onEchMedian(x, z)) return null;
   if (matBand(z) && ax > ROAD_EDGE + 0.5 && ax < MAT_UX + 3) return Math.PI / 2;       // passage sous le 2e pont
-  if (BP_STUB && Math.hypot(x - BP_STUB.b[0], z - BP_STUB.b[1]) < 6) return null;    // (la fourche du By Pass : on choisit sa branche)
+  if (BP_STUB && Math.hypot(x - BP_STUB.b[0], z - BP_STUB.b[1]) < 18) return null;   // (la fourche du By Pass : on choisit sa branche)
   for (const Q of ax > TX_OUT + 0.3 ? [...PL_R1, ...SEC_R, ...PL_LINKS.map(l => l.Q), ...FORK_R, ...(BP_R1 ? [BP_R2, BP_R1] : [])] : []) {   // (l'entrée du By Pass avant sa sortie : venant du By Pass, l'aide suit la branche vers Masina)   // liaisons, rues de Limete, petits boulevards
     if (!onRibbon(Q, x, z)) continue;
     const k = ribbonSeg(Q, x, z), P = Q.pts;
@@ -2760,20 +2760,25 @@ function addInterchange(scene, chunks, details, signs) {
   // ---------- À gauche : le « bypass » (au sol), avant la route en travers ----------
   {
     const bp = [[-(ROAD_EDGE + 4), ECH.bypass - 20], [-(ROAD_EDGE + 4.5), ECH.bypass], [-(ROAD_EDGE + 30), ECH.bypass + 25], [-(ROAD_EDGE + 58), ECH.bypass + 48]];
-    const t0 = tAtGap(bp, PB_W, 2.5);
-    bezierRoad(b, bp, PB_W, 16, { innerFrom: Math.ceil(t0 * 16), innerTo: BP_STUB ? 13 : Infinity });
-    fillToEdge(b, bp, PB_W, -1, 0, t0, { n: 6 });
+    const wBp = BP_STUB ? 7.24 : PB_W, t0 = tAtGap(bp, wBp, 2.5);
+    bezierRoad(b, bp, wBp, 16, { innerFrom: Math.ceil(t0 * 16), innerTo: BP_STUB ? 13 : Infinity, outerTo: BP_STUB ? 15 : Infinity, outerSign: -1 });
+    fillToEdge(b, bp, wBp, -1, 0, t0, { n: 6 });
     if (BP_STUB) {                                   // (l'auteur, 13/11) l'entrée : du By Pass vers l'aéroport, deuxième branche du Y
-      const bp2 = BP_STUB.P2, t2 = tAtGap(bp2, PB_W, 2.5);
-      bezierRoad(b, bp2, PB_W, 16, { innerFrom: Math.ceil(t2 * 16), innerTo: 13, outerTo: 13 });
-      fillToEdge(b, bp2, PB_W, -1, 0, t2, { n: 6 });
-      const [fx, fz] = bez(bp2, 0.86);
-      b.box(0.14, 2.8, 0.14, 0x8e949a, fx - 1.4, 1.4, fz).box(0.14, 2.8, 0.14, 0x8e949a, fx + 1.4, 1.4, fz);
-      signs.add('ech_bp_in', () => signTexture('↗ BD LUMUMBA · MASINA', 'Vers l’aéroport', '#1d4fa0', '#f5c400'), 4.8, 1.3, fx, 2.3, fz + 0.08, Math.PI / 2 + 0.6, true);
+      const bp2 = BP_STUB.P2, t2 = tAtGap(bp2, wBp, 2.5);
+      bezierRoad(b, bp2, wBp, 16, { innerFrom: Math.ceil(t2 * 16), innerTo: 12, outerFrom: Math.ceil(t2 * 16), outerTo: 15, outerSign: 1 });
+      fillToEdge(b, bp2, wBp, -1, 0, t2, { n: 6 });
+      // pointe du Y : les deux bordures intérieures se rejoignent proprement sans empiéter sur la chaussée
+      const z0 = ECH.bypass;
+      b.box(0.3, 0.22, 3.35, CURB_LIGHT, -56.6, 0.11, z0 + 38.75, 0, Math.atan2(-2.6, 2.1), 0)
+        .box(0.3, 0.22, 2.55, CURB_DARK, -56.65, 0.11, z0 + 39.95, 0, Math.atan2(-2.5, -0.3), 0);
+      // panneaux posés dans le terre-plein central du Y (hors du goudron)
+      const fx = -(ROAD_EDGE + 33), fz = z0 + 36.5, fang = Math.PI / 2 + 0.6, fcx = Math.cos(fang), fsz = Math.sin(fang);
+      b.box(0.14, 2.8, 0.14, 0x8e949a, fx - fcx * 1.4, 1.4, fz + fsz * 1.4).box(0.14, 2.8, 0.14, 0x8e949a, fx + fcx * 1.4, 1.4, fz - fsz * 1.4);
+      signs.add('ech_bp_in', () => signTexture('↗ BD LUMUMBA · MASINA', 'Vers l’aéroport', '#1d4fa0', '#f5c400'), 4.8, 1.3, fx, 2.3, fz, fang, true);
       // la branche de gauche (la sortie du boulevard) est en sens interdit quand on vient du By Pass
-      const [gx, gz] = bez(bp, 0.78);
+      const gx = -(ROAD_EDGE + 30), gz = z0 + 26.5;
       b.box(0.14, 2.6, 0.14, 0x8e949a, gx, 1.3, gz);
-      signs.add('ech_bp_sens', () => signTexture('⛔ SENS INTERDIT', 'Sortie du boulevard seulement', '#c8102e', '#ffffff'), 3.6, 1.2, gx, 2.2, gz + 0.08, Math.PI / 2 + 0.6, true);
+      signs.add('ech_bp_sens', () => signTexture('⛔ SENS INTERDIT', 'Sortie du boulevard seulement', '#c8102e', '#ffffff'), 3.6, 1.2, gx, 2.2, gz, fang, true);
     }
     const sx = -(ROAD_EDGE + 1.6), sz = ECH.bypass - 30;
     b.box(0.14, 2.8, 0.14, 0x8e949a, sx - 1.4, 1.4, sz).box(0.14, 2.8, 0.14, 0x8e949a, sx + 1.4, 1.4, sz);
@@ -4526,7 +4531,7 @@ function bez(pts, t) {
  * un remblai à murs de pierre (bretelle qui descend du boulevard). innerFrom : pas de bordure côté boulevard
  * sur les premiers segments (la route n'en est pas encore séparée).
  */
-function bezierRoad(b, pts, w, n, { innerFrom = 0, innerTo = Infinity, innerSkip = null, outerFrom = 0, outerTo = Infinity, outerSkip = null, height = () => 0, dash = true, rail = true } = {}) {
+function bezierRoad(b, pts, w, n, { innerFrom = 0, innerTo = Infinity, innerSkip = null, outerFrom = 0, outerTo = Infinity, outerSkip = null, outerSign = 0, height = () => 0, dash = true, rail = true } = {}) {
   for (let i = 0; i < n; i++) {
     const [ax, az] = bez(pts, i / n), [bx, bz] = bez(pts, (i + 1) / n);
     const ha = height(i / n), hb = height((i + 1) / n), hm = (ha + hb) / 2;
@@ -4537,7 +4542,8 @@ function bezierRoad(b, pts, w, n, { innerFrom = 0, innerTo = Infinity, innerSkip
     b.box(w, 0.05, len + 0.5, ASPHALT_COL, mx, hm + 0.04, mz, rx, ry, 0);
     if (dash && i % 2 === 0) b.box(0.18, 0.02, len * 0.5, 0xf2f2ec, mx, hm + 0.075, mz, rx, ry, 0);
     const curbs = [-1, 1].map(k => [mx + k * px * (w / 2 + 0.15), mz + k * pz * (w / 2 + 0.15)]);
-    curbs.sort((a, c) => Math.abs(c[0]) - Math.abs(a[0]));   // [extérieure, intérieure (côté axe)]
+    if (outerSign) { if (outerSign > 0) curbs.reverse(); }
+    else curbs.sort((a, c) => Math.abs(c[0]) - Math.abs(a[0]));   // [extérieure, intérieure (côté axe)]
     if (i < innerFrom || i >= innerTo || (innerSkip && i >= innerSkip[0] && i < innerSkip[1])) curbs.pop();
     if (i < outerFrom || i >= outerTo || (outerSkip && i >= outerSkip[0] && i < outerSkip[1])) curbs.shift();
     for (const [cx, cz] of curbs) {
