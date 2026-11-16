@@ -1425,6 +1425,7 @@ export const VEHICULES = {
   moto: { name: 'Wewa (moto)', icon: '🏍️', fare: 1500, versement: 30000, places: 1, max: 25, acc: 9, w: 0.8, l: 2.1, about: '1 client · rapide, se faufile' },
   // (l'auteur, 10/11 : « une possibilité pour la voiture personnelle dont l'objectif serait de parcourir la ville, mais il doit choisir son itinéraire »)
   perso: { name: 'Voiture personnelle', icon: '🚗', fare: 0, versement: 0, places: 0, max: 24, acc: 8, w: 1.8, l: 4.4, about: 'Parcourir la ville · sans clients', perso: true },
+  athlete: { name: 'Athlète (à pied)', icon: '🏃', fare: 0, versement: 0, places: 0, max: 9.5, acc: 11, w: 0.65, l: 0.7, about: 'Courir à pied · footing et marathon', perso: true, athlete: true },
 };
 
 /** Mode Course (l'auteur, 07/11 : « course de motos ou de taxi, le trajet est défini en avance et le gagnant a une somme ») : mise pour participer, prix du gagnant ;
@@ -1432,4 +1433,5 @@ export const VEHICULES = {
 export const COURSES = {
   berline: { mise: 10000, prix: 60000, rivals: ['Fiston', 'Gloire', 'Christian'] },
   moto: { mise: 5000, prix: 30000, rivals: ['Papy', 'Junior', 'Djodjo'] },
+  athlete: { mise: 2000, prix: 15000, rivals: ['Lokombe', 'Mbemba', 'Trésor'] },
 };

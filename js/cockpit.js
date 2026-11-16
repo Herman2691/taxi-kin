@@ -10,6 +10,13 @@ const SKIN = 0x5a3a22, SLEEVE = 0xf2f2f2, DASH = 0x2b2d31, DASH2 = 0x3a3d42, ROO
 export function buildCockpit(id) {
   const group = new THREE.Group(), body = new Builder(), wb = new Builder();
   let wheel = new THREE.Group(), eye;
+  if (id === 'athlete') {
+    eye = { x: 0, y: 1.62, z: -0.12 };
+    const spin = new THREE.Group();
+    group.add(spin);
+    group.visible = false;
+    return { group, spin, eye, wipers: null };
+  }
   if (id === 'moto') {
     eye = { x: 0, y: 1.5, z: -0.1 };
     body.box(0.36, 0.2, 0.55, 0xb91c1c, 0, -0.78, -0.55)                       // le réservoir

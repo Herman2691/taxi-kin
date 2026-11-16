@@ -53,6 +53,9 @@ function put(v, yaw) {
   place(v.mesh, xr, v.z, yaw, (up ? flyH(v.z) : 0) + roadH(v.z) + (v.fallen ? 0.18 : 0));
   v.mesh.rotation.x = Math.atan(v.side * ((up ? flySlope(v.z) : 0) + roadSlope(v.z)));
   v.mesh.rotation.z = v.fallen ? (v.fallRoll ?? 1.42) : 0;
+  if (v.mesh.userData.character) {
+    v.mesh.userData.character.pose(v.speed > 0.3 ? 'run' : 'idle', performance.now() * 0.001, Math.max(2.6, v.speed * 0.45));
+  }
   v.mesh.visible = v.z > TRAFFIC_END;
 }
 

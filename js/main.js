@@ -120,6 +120,7 @@ const VEH_ART = {
   bus: '<svg viewBox="0 0 110 48"><path d="M8 38 L8 20 Q8 10 18 10 L92 10 Q102 10 104 20 L104 38 Z" fill="#2a93cc"/><path d="M8 26 L104 26 L104 38 L8 38 Z" fill="#f5c400"/><path d="M14 14 h16 v10 h-16z M34 14 h16 v10 h-16z M54 14 h16 v10 h-16z M74 14 h12 v10 h-12z M90 13 L100 13 L102 24 L90 24 Z" fill="#1c2b3a"/><rect x="58" y="14" width="10" height="24" fill="#111317"/><circle cx="26" cy="39" r="7" fill="#17181b"/><circle cx="88" cy="39" r="7" fill="#17181b"/><circle cx="26" cy="39" r="3" fill="#3a3e44"/><circle cx="88" cy="39" r="3" fill="#3a3e44"/></svg>',
   moto: '<svg viewBox="0 0 110 48"><circle cx="28" cy="36" r="10" fill="none" stroke="#17181b" stroke-width="4"/><circle cx="84" cy="36" r="10" fill="none" stroke="#17181b" stroke-width="4"/><path d="M28 36 L48 24 L70 24 L84 36 M62 24 L76 12 L82 12" stroke="#9aa0a6" stroke-width="3" fill="none"/><path d="M44 22 Q56 16 68 22 L66 27 L46 27 Z" fill="#b91c1c"/><path d="M50 22 L54 6 L64 6 L66 20 Z" fill="#d6dc24"/><rect x="51" y="11" width="14" height="2.5" fill="#9aa0a6"/><circle cx="59" cy="3" r="5" fill="#1a2a55"/><path d="M52 24 L48 34 L54 34 L58 26 Z" fill="#2f3e57"/></svg>',
   perso: '<svg viewBox="0 0 110 48"><path d="M6 34 Q6 28 14 27 L28 25 L40 15 Q44 12 52 12 L70 12 Q76 12 80 16 L88 25 L100 27 Q105 28 105 33 L105 37 L6 37 Z" fill="#1e3a8a"/><path d="M42 17 L50 14 L64 14 L64 25 L33 25 Z M67 14 L72 14 Q76 14 79 18 L85 25 L67 25 Z" fill="#1c2b3a"/><rect x="10" y="29" width="92" height="3" fill="#1d4fa0"/><rect x="45" y="6" width="20" height="5" rx="1.5" fill="#fff5cc"/><circle cx="28" cy="38" r="7" fill="#17181b"/><circle cx="84" cy="38" r="7" fill="#17181b"/><circle cx="28" cy="38" r="3" fill="#cfd6de"/><circle cx="84" cy="38" r="3" fill="#cfd6de"/></svg>',
+  athlete: '<svg viewBox="0 0 110 48"><circle cx="62" cy="9" r="5" fill="#6b4428"/><path d="M58 6 Q63 3 67 7" stroke="#ffffff" stroke-width="2.5" fill="none"/><path d="M52 22 L60 14 L66 16 L58 27 Z" fill="#d62828"/><path d="M48 16 L58 15 L68 20 L74 15" stroke="#6b4428" stroke-width="3.2" stroke-linecap="round" fill="none"/><path d="M52 25 L59 27 L64 33 L56 32 Z" fill="#1a1a1a"/><path d="M59 27 L70 32 L78 41 M54 27 L43 34 L34 31" stroke="#6b4428" stroke-width="3.5" stroke-linecap="round" fill="none"/><rect x="75" y="39" width="7" height="3.5" rx="1.5" fill="#f2f2f2"/><rect x="30" y="29" width="6" height="3.5" rx="1.5" fill="#f2f2f2"/></svg>',
 };
 const statRow = (label, v) => `<span class="vstat">${label}<i style="--v:${Math.round(v * 100)}%"></i></span>`;
 const syncUrl = () => {
@@ -385,6 +386,16 @@ addEventListener('resize', resize);
 // (l'auteur, 08/11 : « une fois que la personne monte, ce n'est plus la même personne ») : la moto du joueur garde sa couleur et le numéro de son conducteur
 let MOTO_LOOK = null;
 const makeVehicle = (id, two = false) => {
+  if (id === 'athlete') {
+    const ch = new Character(outfit('man', {
+      shirt: 0xd62828, pants: 0x1a1a1a, shoes: 0xf2f2f2, cap: 0xffffff,
+      untucked: false, sandals: false, beard: false, height: 1.03, girth: 0.94, stride: 1.2,
+    }));
+    ch.mesh.userData.character = ch;
+    ch.mesh.userData.L = 0.7;
+    ch.mesh.userData.W = 0.65;
+    return ch.mesh;
+  }
   if (id === 'perso') return createCar({ color: 0x1e3a8a, taxi: false });   // (voiture personnelle : berline bleue, sans enseigne)
   if (id !== 'moto') return id === 'bus' ? createMinibus({ top: 0x2a93cc, apprenti: true }) : createCar({ color: 0xf5c400, taxi: true });
   const m = createMoto({ riders: two ? 2 : 1, look: MOTO_LOOK });
@@ -403,7 +414,7 @@ scene.add(beam);
 // La cabine (cabine.js, vue CAM n° 3) : l'intérieur du véhicule, posé comme lui ; les clients à bord y sont assis, le prédicateur debout
 let cabin = buildCabin(VEH_ID);
 scene.add(cabin.group);
-const camModes = () => (VEH_ID === 'moto' ? 2 : 3);     // extérieur, poste de conduite, cabine (pas de cabine sur la moto)
+const camModes = () => (VEH_ID === 'moto' || VEH_ID === 'athlete' ? 2 : 3);     // extérieur, poste de conduite, cabine (pas de cabine sur la moto ni pour l'athlète)
 const cycleCam = () => { G.cam = (G.cam + 1) % camModes(); };
 /** Change de véhicule (menu) : son modèle, sa vitesse, sa taille, le versement. */
 let motoTwo = false;
@@ -452,7 +463,7 @@ const taxi = { ...startCoords(), heading: 0, speed: 0, steer: 0, level: null, y:
 
 const DAY = { urgent: 0 };                       // (partagé par la circulation de toutes les routes)
 // Le chargement du véhicule (taxi collectif) : partagé par les clients de toutes les routes, les clients restent à bord d'une route à l'autre
-const GROUP_MAX = { berline: 2, bus: 4, moto: 1, perso: 1 };
+const GROUP_MAX = { berline: 2, bus: 4, moto: 1, perso: 1, athlete: 1 };
 const BOARD = IT ? newBoard(VEH.places, VEH.fare, GROUP_MAX[VEH_ID]) : newBoard();
 for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
   if (!r) continue;
@@ -524,12 +535,26 @@ function startItinerary() {
 // ---------- Mode Course ----------
 /** Grille de départ : le joueur sur la voie de droite, trois adversaires à côté et derrière ; pas de clients ; la mise est payée. */
 function startRace() {
-  const C = COURSES[VEH_ID], L = legs(), start = itPoint(L.from, 1), fin = itPoint(L.to, 1);
+  const C = COURSES[VEH_ID] ?? COURSES.berline, L = legs(), start = itPoint(L.from, 1), fin = itPoint(L.to, 1);
   for (const c of passengers.clients) { c.state = 'empty'; c.root.visible = false; }
   hud.setClients([]);
   const W = A.W, lanes = W.LANE_X;
   taxi.x = lanes[0];
-  traffic.addRacers(VEH_ID === 'moto' ? 'moto' : 'taxi', C.rivals, taxi.z, VEH.max, () => (VEH_ID === 'moto' ? createMoto({ riders: 1 }) : createCar({ color: 0xf5c400, taxi: true, roof: false })));
+  let rIdx = 0;
+  const rShirts = [0x1d4fa0, 0xe0a100, 0x2b8a3e];
+  traffic.addRacers(VEH_ID === 'moto' || VEH_ID === 'athlete' ? 'moto' : 'taxi', C.rivals, taxi.z, VEH.max, () => {
+    if (VEH_ID === 'athlete') {
+      const ch = new Character(outfit('man', {
+        shirt: rShirts[rIdx++ % rShirts.length], pants: 0x1a1a1a, shoes: 0xf2f2f2,
+        untucked: false, sandals: false, beard: false, height: 1.01, girth: 0.92, stride: 1.18,
+      }));
+      ch.mesh.userData.character = ch;
+      ch.mesh.userData.L = 0.7;
+      ch.mesh.userData.W = 0.65;
+      return ch.mesh;
+    }
+    return VEH_ID === 'moto' ? createMoto({ riders: 1 }) : createCar({ color: 0xf5c400, taxi: true, roof: false });
+  });
   for (const v of traffic.list) if (!v.racer && v.side === 1 && v.z < taxi.z && v.z > taxi.z - 120) v.z -= 150;   // (la ligne de départ est dégagée)
   for (const v of traffic.list) if (!v.racer) traffic.unstack(v, taxi);                                              // (l'auteur, 13/11 : jamais l'un sur l'autre)
   // aller-retour : demi-tour au bout, arrivée au point de départ ; deux fois plus long, la mise et le prix montent
@@ -889,7 +914,7 @@ function endShift(reason) {
   ];
   $('end-bill').innerHTML = rows.map(([l, v]) => `<tr class="${v < 0 ? 'neg' : ''}"><td>${l}</td><td>${v < 0 ? '−' : ''}${fmtFC(Math.abs(v))}</td></tr>`).join('')
     + `<tr class="total"><td>Il te reste</td><td>${net < 0 ? '−' : ''}${fmtFC(Math.abs(net))}</td></tr>`;
-  if (VEH_ID === 'perso') $('end-sub').textContent = `${(G.km ?? 0).toFixed(1).replace('.', ',')} km parcourus en ville`;
+  if (VEH.perso) $('end-sub').textContent = `${(G.km ?? 0).toFixed(1).replace('.', ',')} km parcourus ${VEH_ID === 'athlete' ? 'en courant' : 'en ville'}`;
   if (race) $('end-sub').textContent = race.board.map((r, i) => `${i + 1}. ${r.name}${r.time ? ` (${Math.floor(r.time / 60)}:${String(Math.floor(r.time % 60)).padStart(2, '0')})` : ''}`).join(' · ');
   if (reason === 'arret' && G.caughtRun) $('end-sub').textContent = G.caughtRun === 'bagarre' ? 'Bagarre avec la police' : 'Délit de fuite après un accident';
   $('end-verdict').textContent = race ? (race.rank === 1 ? `Bravo ! Tu remportes ${fmtFC(race.prix)}.` : race.rank === 2 ? 'Deuxième : tu récupères ta mise.' : 'Perdu : la mise est pour le gagnant. Revanche ?')
@@ -914,10 +939,10 @@ function drawMenu() {
   ITINERAIRES.forEach(i => syncVariant(i));
   radioGroup($('vehs'), Object.entries(VEHICULES).map(([id, v]) => ({
     id,
-    html: `<div class="veh-top"><span class="veh-art">${VEH_ART[id]}</span><span class="veh-fare-pill">${v.perso ? 'Libre' : `${fmtFC(v.fare)} / client`}</span></div>`
+    html: `<div class="veh-top"><span class="veh-art">${VEH_ART[id]}</span><span class="veh-fare-pill">${v.athlete ? '🏃 Sport' : v.perso ? 'Libre' : `${fmtFC(v.fare)} / client`}</span></div>`
       + `<b>${v.name}</b><span class="about">${v.about}</span>`
-      + `<div class="vstats">${statRow('Places', v.places / 10)}${statRow('Vitesse', (v.max - 12) / 14)}${statRow('Maniable', id === 'moto' ? 0.95 : id === 'bus' ? 0.35 : 0.7)}</div>`
-      + `<span class="price">${v.perso ? 'Sans versement · Balade' : `Versement : ${fmtFC(v.versement)}`}</span>`,
+      + `<div class="vstats">${statRow(v.athlete ? 'Endurance' : 'Places', v.athlete ? 0.95 : v.places / 10)}${statRow('Vitesse', v.athlete ? 0.55 : (v.max - 12) / 14)}${statRow('Maniable', id === 'moto' || id === 'athlete' ? 0.98 : id === 'bus' ? 0.35 : 0.7)}</div>`
+      + `<span class="price">${v.athlete ? 'Footing libre ou Marathon' : v.perso ? 'Sans versement · Balade' : `Versement : ${fmtFC(v.versement)}`}</span>`,
   })), it => it.id === VEH_ID, it => { store('veh', it.id); setVehicle(it.id); drawMenu(); });
   if (MODE === 'course') for (const [k, b] of [...$('vehs').children].entries()) if (['bus', 'perso'].includes(Object.keys(VEHICULES)[k])) b.disabled = true;
 
@@ -1527,9 +1552,9 @@ function drive(dt) {
 
   // Direction : tour complet possible (demi-tour, routes secondaires), plus douce à haute vitesse. Sans action sur le
   // volant, le taxi se remet dans l'axe de la route où il roule s'il en est proche (il ne lutte pas contre un demi-tour)
-  const sp = Math.abs(taxi.speed);
-  const power = 1.2 * Math.min(1, sp / 5) * (1 - 0.4 * sp / MAX_FWD) * (1 - 0.25 * rain.wet);   // (route mouillée : la direction répond moins)
-  taxi.heading += taxi.steer * power * Math.sign(taxi.speed || 1) * dt;
+  const sp = Math.abs(taxi.speed), isAth = VEH_ID === 'athlete';
+  const power = isAth ? 2.4 : 1.2 * Math.min(1, sp / 5) * (1 - 0.4 * sp / MAX_FWD) * (1 - 0.25 * rain.wet);   // (route mouillée : la direction répond moins ; athlète : tourne même à l'arrêt)
+  taxi.heading += taxi.steer * power * (isAth ? 1 : Math.sign(taxi.speed || 1)) * dt;
   if (Math.abs(inp.steer) < 0.1) {
     const axis = roadAxisAt(taxi.x, taxi.z);
     // (l'auteur, 10/11 : « les véhicules bloquent trop sur des traces ») : près d'une entrée d'avenue ou de station, d'un passage du terre-plein ou de la
@@ -1549,15 +1574,16 @@ function drive(dt) {
 
   // Déplacement ; contre un obstacle (terre-plein, trottoir, rampe, bout de route), on glisse le long, choc si on arrive vite.
   // (dans le terre-plein élargi de l'Échangeur, un mètre de x route vaut plusieurs mètres réels : stretchX)
+  const rawBlock = (x, z, l) => { const w = blockedAt(x, z, l); return isAth && (w === 'curb' || w === 'median') ? null : w; };
   const x0 = taxi.x, z0 = taxi.z, k = stretchX(taxi.x, taxi.z);
   const nx = taxi.x + Math.sin(taxi.heading) * taxi.speed * dt / k, nz = taxi.z - Math.cos(taxi.heading) * taxi.speed * dt;
   const lvl = nextLevel(taxi.level, taxi.x, taxi.z, nx, nz);
-  const why = blockedAt(nx, nz, lvl) ?? (lvl ? null : solidAround(nx, nz, taxi.heading));
-  if (!why || blockedAt(taxi.x, taxi.z, taxi.level) || ((why === 'obstacle' || why === 'gens' || why === 'vehicule') && solidAround(taxi.x, taxi.z, taxi.heading))) { taxi.x = nx; taxi.z = nz; taxi.level = lvl; }   // (déjà dedans : on peut en sortir)
+  const why = rawBlock(nx, nz, lvl) ?? (lvl ? null : solidAround(nx, nz, taxi.heading));
+  if (!why || rawBlock(taxi.x, taxi.z, taxi.level) || ((why === 'obstacle' || why === 'gens' || why === 'vehicule') && solidAround(taxi.x, taxi.z, taxi.heading))) { taxi.x = nx; taxi.z = nz; taxi.level = lvl; }   // (déjà dedans : on peut en sortir)
   else {
     // (on ne glisse que dans un sens où le taxi avançait vraiment : de face contre un obstacle, il s'arrête)
     // (l'auteur, 13/11 : rien ne passe à travers) : on ne glisse que là où ni bordure ni obstacle du décor ni personne ne bloque
-    const free = (x, z) => !blockedAt(x, z, taxi.level) && (taxi.level || !solidAround(x, z, taxi.heading));
+    const free = (x, z) => !rawBlock(x, z, taxi.level) && (taxi.level || !solidAround(x, z, taxi.heading));
     const axis = roadAxisAt(taxi.x, taxi.z);
     const diag = axis !== null && Math.abs(axis) > 0.05 ? (Math.cos(taxi.heading - axis) >= 0 ? axis : wrapA(axis + Math.PI)) : null;
     const step = taxi.speed * dt * Math.max(0.4, diag !== null ? Math.cos(taxi.heading - diag) : 1);
@@ -1582,18 +1608,20 @@ function drive(dt) {
     if (along !== null) taxi.heading = wrapA(taxi.heading + wrapA(along - taxi.heading) * 0.7);
     else taxi.speed *= 0.3;
   }
-  taxi.y = surfaceH(taxi.x, taxi.z, taxi.level);   // rampe, remblai du Pont Matete, pont de l'Échangeur
+  taxi.y = Math.max(surfaceH(taxi.x, taxi.z, taxi.level), isAth && !taxi.level ? (A.W.pedHeight?.(taxi.x, taxi.z) ?? 0) : 0);   // rampe, remblai, ou trottoir pour l'athlète
   // (l'auteur, 10/11) sur l'accotement de terre : au pas, ça secoue, et les clients n'aiment pas
-  if (!taxi.level && A.W.onDirt?.(taxi.x, taxi.z)) {
+  if (!isAth && !taxi.level && A.W.onDirt?.(taxi.x, taxi.z)) {
     if (sp > 6) taxi.speed *= 1 - Math.min(1, dt * 1.6);
     if (sp > 2) { G.shake = Math.max(G.shake ?? 0, 0.25); if ((G.dirtT = (G.dirtT ?? 0) + dt) > 1.5) { G.dirtT = 0; const l = passengers.jolt(3); if (l) say(l, 'client'); } }
     if (!G.dirtWarned) { G.dirtWarned = true; hud.toast('Tu roules sur la terre : doucement, ça secoue !', 2.5); }
   }
 
-  // Carburant
-  G.fuel = Math.max(0, G.fuel - sp * dt * (0.0125 + inp.throttle * 0.006));
-  if (G.fuel < 15 && !G.fuelWarned) { G.fuelWarned = true; hud.toast('Réservoir presque vide ! Passe à la station.', 3); }
-  if (G.fuel > 25) G.fuelWarned = false;
+  // Carburant (pas pour l'athlète)
+  if (!isAth) {
+    G.fuel = Math.max(0, G.fuel - sp * dt * (0.0125 + inp.throttle * 0.006));
+    if (G.fuel < 15 && !G.fuelWarned) { G.fuelWarned = true; hud.toast('Réservoir presque vide ! Passe à la station.', 3); }
+    if (G.fuel > 25) G.fuelWarned = false;
+  } else G.fuel = 100;
 
   return inp;
 }
@@ -2402,7 +2430,7 @@ function update(dt) {
   pedestrians();
   A.world.tick(dt, G.time, taxi);
   if (G.race) { updateRace(dt); G.prompt = ''; }
-  else if (VEH_ID === 'perso') G.prompt = '';         // (voiture personnelle : on parcourt la ville, pas de clients)
+  else if (VEH.perso) G.prompt = '';         // (voiture personnelle ou athlète : on parcourt la ville, pas de clients)
   else {
     passengers.update(dt, taxi, G.time, callbacks);
     G.prompt = passengers.prompt;
@@ -2410,10 +2438,10 @@ function update(dt) {
     overloadCheck();
   }
   if (!(Math.abs(taxi.x) > MEDIAN && Math.abs(taxi.x) < ROAD_EDGE && Math.abs(taxi.speed) > 3 && (taxi.x > 0 ? Math.cos(taxi.heading) * taxi.speed < -2 : Math.cos(taxi.heading) * taxi.speed > 2))) G.wrongT = 0;
-  handleStations(dt, inp);
+  if (VEH_ID !== 'athlete') handleStations(dt, inp);
   worksHint();
-  handleSignals(zBefore);
-  handleWrongWay();
+  if (VEH_ID !== 'athlete') handleSignals(zBefore);
+  if (VEH_ID !== 'athlete') handleWrongWay();
   handleHitRun(dt);
   handlePolice(dt);
   dismountScene(dt);
@@ -2428,7 +2456,7 @@ function update(dt) {
   handleAttach();
   if (IT) itineraryHints();
 
-  sound.engine(taxi.speed, inp.throttle, true);
+  sound.engine(VEH_ID === 'athlete' ? 0 : taxi.speed, VEH_ID === 'athlete' ? 0 : inp.throttle, VEH_ID !== 'athlete');
   cityAudio(dt);
   updateTrain(dt);
   mandelaTurners(dt);
@@ -2442,7 +2470,7 @@ function update(dt) {
 
   if (G.state !== 'play') return;              // (liaison prise : la page se recharge)
   if (G.race) { if (raceOver()) finishRace(); }
-  else if (IT && VEH_ID !== 'perso') { terminusStop(dt); departHint(); }
+  else if (IT && !VEH.perso) { terminusStop(dt); departHint(); }
   else if (!IT && taxi.z <= -FINISH_LEN && !ROAD3 && !(A === ROAD1 && ROAD2)) endShift('arrive');   // (trajets attachés : la route continue)
   // (l'auteur, 09/11 : on n'arrête plus le jeu à la nuit : les lampes du boulevard s'allument et on continue)
   nightTick();
@@ -2488,13 +2516,14 @@ function nightTick() {
 const TAXI_GLOW = { mesh: null, len: 0, wid: 0 };
 function nightFrame() {
   if (nightK <= 0.04) return;
+  beam.visible = VEH_ID !== 'athlete';
   if (beam.parent !== taxiMesh.parent) { beam.parent?.remove(beam); taxiMesh.parent.add(beam); }
   place(beam, taxi.x, taxi.z, taxi.heading, taxi.y);
   beam.rotation.x = taxiMesh.rotation.x;
   TAXI_GLOW.mesh = taxiMesh; TAXI_GLOW.len = VEH.l; TAXI_GLOW.wid = VEH.w;
   for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
     if (!r?.glow) continue;
-    r.glow.update(r === A ? [TAXI_GLOW, ...r.traffic.list, ...r.traffic.crossing] : [...r.traffic.list, ...r.traffic.crossing], nightK);
+    r.glow.update(r === A && VEH_ID !== 'athlete' ? [TAXI_GLOW, ...r.traffic.list, ...r.traffic.crossing] : [...r.traffic.list, ...r.traffic.crossing], nightK);
   }
 }
 
@@ -2609,9 +2638,10 @@ function updateCamera(dt, snap = false) {
     ahead(-6.5, 2.9 + Math.max(aheadH(-6.5), taxi.y), tmpPos);
     ahead(1.2, 0.7 + taxi.y, tmpLook);
   } else if (G.cam === 0) {
-    const back = VEH_ID === 'bus' ? -9 : -7.5, up = VEH_ID === 'bus' ? 4.1 : 3.3;
+    const back = VEH_ID === 'bus' ? -9 : VEH_ID === 'athlete' ? -4.2 : -7.5;
+    const up = VEH_ID === 'bus' ? 4.1 : VEH_ID === 'athlete' ? 2.15 : 3.3;
     ahead(back, up + Math.max(aheadH(back), taxi.y), tmpPos);
-    ahead(6, 1.1 + aheadH(6), tmpLook);
+    ahead(VEH_ID === 'athlete' ? 4 : 6, (VEH_ID === 'athlete' ? 1.25 : 1.1) + aheadH(VEH_ID === 'athlete' ? 4 : 6), tmpLook);
   } else if (G.cam === 2 && cabin.eye) {
     // la cabine : du fond du véhicule vers l'avant (les passagers, le prédicateur, la route par le pare-brise)
     const e = cabin.eye, l = cabin.look, sp = Math.abs(taxi.speed);
@@ -2673,6 +2703,11 @@ function frame(now) {
   place(taxiMesh, taxi.x, taxi.z, taxi.heading, taxi.y + (G.wewaFall ? Math.abs(G.wewaFall.curRoll ?? 0) * 0.14 : 0));
   taxiMesh.rotation.x = Math.atan(aheadH(0.5) - aheadH(-0.5));   // pente selon le sens (rampes, remblai, pont de l'Échangeur)
   taxiMesh.rotation.z = G.wewaFall ? (G.wewaFall.curRoll ?? 0) : 0;
+  if (taxiMesh.userData.character) {
+    const sp = G.state === 'menu' ? 3.8 : Math.abs(taxi.speed);
+    const tPose = G.state === 'menu' ? menuT : G.time;
+    taxiMesh.userData.character.pose(sp < 0.25 ? 'idle' : sp < 2.4 ? 'walk' : 'run', tPose, Math.max(1.2, sp * 0.52));
+  }
   taxiMesh.visible = G.cam === 0 || G.state === 'menu' || !!G.accident || !!G.wewaFall;
   nightFrame();
   cabinFrame();
