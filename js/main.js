@@ -1013,14 +1013,23 @@ function drawMenu() {
   $('trip').hidden = race || !IT;
   if (race && IT) radioGroup($('sens'), [{ id: 'simple', html: `<b>Aller simple</b><span>${IT.A.name} → ${IT.B.name}</span>` }, { id: 'ar', html: `<b>Aller-retour</b><span>${IT.A.name} → ${IT.B.name} → ${IT.A.name}</span>` }],
     it => it.id === (RACE_AR ? 'ar' : 'simple'), it => { RACE_AR = it.id === 'ar'; store('course', it.id); drawMenu(); });
+  const isAth = VEH_ID === 'athlete', isPerso = VEH_ID === 'perso';
   const mise = race && RACE_AR ? Math.round(C.mise * 1.5) : C.mise, prix = race && RACE_AR ? C.prix * 2 : C.prix;
-  $('sum-title').textContent = race ? 'Feuille de course' : 'Feuille de route';
-  $('sum-l1').textContent = race ? 'Mise de départ' : 'Versement au patron';
+  $('sum-title').textContent = race ? 'Feuille de course' : isAth ? 'Parcours sportif' : isPerso ? 'Itinéraire libre' : 'Feuille de route';
+  $('sum-l1').textContent = race ? 'Mise de départ' : isAth ? 'Objectif' : isPerso ? 'Mode' : 'Versement au patron';
   $('sum-l2').textContent = race ? 'Gain du 1er' : 'Horaires';
   $('sum-v2').textContent = race ? `${fmtFC(prix)} · 3 rivaux` : '06:00 → 18:00';
-  $('rule-versement').textContent = fmtFC(race ? mise : VERSEMENT);
+  $('rule-versement').textContent = race ? fmtFC(mise) : isAth ? 'Footing libre' : isPerso ? 'Balade libre' : fmtFC(VERSEMENT);
   $('btn-start').disabled = !worldReady;
-  $('btn-start').textContent = !worldReady ? '⏳ Chargement de la ville…' : race ? '🏁 Lancer la course' : '🚕 Commencer la journée';
+  $('btn-start').textContent = !worldReady
+    ? '⏳ Chargement de la ville…'
+    : race
+    ? '🏁 Lancer la course'
+    : isAth
+    ? '🏃 Commencer le footing'
+    : isPerso
+    ? '🚗 Partir en balade'
+    : '🚕 Commencer la journée';
   $('sum-veh').textContent = VEH.name;
   if (IT) {
     const L = legs();
@@ -1032,6 +1041,8 @@ function drawMenu() {
       const criA = L.to.cri ?? L.to.name, criB = legs(SENS === 'retour' ? 'aller' : 'retour').to.cri ?? L.from.cri;
       $('sum-cri').textContent = race
         ? `🏁 Rivaux : ${C.rivals.join(', ')}`
+        : isAth
+        ? `🏃 Course à pied · ${L.from.cri ?? L.from.name} → ${criA} (${IT.km.toLocaleString('fr-FR')} km)`
         : VEH.perso
         ? `🚗 Conduite libre · ${L.from.cri ?? L.from.name} → ${criA}`
         : `📢 Receveur : « ${criA} ! ${criA} !${TRIP === 'ar' ? ` — Retour ${criB} !` : ''} »`;
