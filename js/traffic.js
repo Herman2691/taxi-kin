@@ -50,8 +50,9 @@ function put(v, yaw) {
   // (Rond-point Victoire : le véhicule contourne la place, et se tourne dans le sens de sa courbe)
   const xr = ringShift(v.x, v.z);
   if (xr !== v.x) { const sl = (ringShift(v.x, v.z - 0.5) - ringShift(v.x, v.z + 0.5)); yaw += Math.atan(sl); }
-  place(v.mesh, xr, v.z, yaw, (up ? flyH(v.z) : 0) + roadH(v.z));
+  place(v.mesh, xr, v.z, yaw, (up ? flyH(v.z) : 0) + roadH(v.z) + (v.fallen ? 0.18 : 0));
   v.mesh.rotation.x = Math.atan(v.side * ((up ? flySlope(v.z) : 0) + roadSlope(v.z)));
+  v.mesh.rotation.z = v.fallen ? (v.fallRoll ?? 1.42) : 0;
   v.mesh.visible = v.z > TRAFFIC_END;
 }
 
@@ -275,6 +276,12 @@ export class Traffic {
   place(v, zFrom, span, taxi) {
     // (une jeep recyclée : les personnes arrêtées qu'elle emmenait, assises à l'arrière, s'en vont avec elle ; incidents.js seat)
     if (v.cargo?.length) { for (const m of v.cargo) { v.mesh.remove(m); m.geometry.dispose(); } v.cargo = []; }
+    if (v.fallen) {
+      v.fallen = false;
+      v.fallRoll = 0;
+      v.mesh.rotation.z = 0;
+      v.mesh.traverse(m => { if (m.userData.rider) m.visible = true; });
+    }
     const sign = v.side;
     // Les taxis-bus et camions roulent plutôt à droite, les voitures à gauche
     const preferRight = v.kind === 'bus' || v.kind === 'van' || v.kind === 'truck' || v.kind === 'city' || v.kind === 'keke';

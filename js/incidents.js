@@ -26,6 +26,8 @@ export class Incidents {
     this.cur = null;                               // la scène en cours
     this.next = 75 + Math.random() * 60;           // (secondes avant le prochain accident ou blocage)
     this.disputeCd = 0; this.theftCd = 60; this.theftT = 0; this.inZoneT = 0;
+    this.fallenMotos = [];                         // wewas renversés avec leurs clients sur la chaussée
+    this.wewaNext = 28 + Math.random() * 25;       // accident spontané véhicule contre wewa devant le joueur
   }
   get active() { return !!this.cur; }
   /** La sirène de la police de la scène ({ kind, near }) ou null (main.js la joue). */
@@ -51,11 +53,12 @@ export class Incidents {
     if (a.path) {
       const [from, to, t0, t1] = a.path, k = clamp((t - t0) / (t1 - t0), 0, 1);
       [a.x, a.z] = lerp2(from, to, k);
-      if (k > 0 && k < 1) { a.yaw = Math.atan2(-(to[0] - from[0]), (to[1] - from[1])) + Math.PI; a.ch.pose('walk', time, a.spd); }
-      else a.ch.pose(a.mode, time + (a.phase ?? 0));
+      if (k > 0 && k < 1 && !a.down) { a.yaw = Math.atan2(-(to[0] - from[0]), (to[1] - from[1])) + Math.PI; a.ch.pose('walk', time, a.spd); }
+      else a.ch.pose(a.down ? 'idle' : a.mode, a.down ? 0 : time + (a.phase ?? 0));
       if (k >= 1 && a.then) { const f = a.then; a.then = null; a.path = null; f(); }
-    } else a.ch.pose(a.mode, time + (a.phase ?? 0));
-    this.c.place(a.ch.mesh, a.x, a.z, a.yaw, this.c.W().pedHeight?.(a.x, a.z) ?? 0);   // (sur le terre-plein, il est dessus)
+    } else a.ch.pose(a.down ? 'idle' : a.mode, a.down ? 0 : time + (a.phase ?? 0));
+    this.c.place(a.ch.mesh, a.x, a.z, a.yaw, (this.c.W().pedHeight?.(a.x, a.z) ?? 0) + (a.down ? 0.25 : 0));   // (sur le terre-plein, il est dessus ; à terre : +0.25)
+    a.ch.mesh.rotation.x = a.down ? -Math.PI / 2 : 0;
   }
   face(a, b) { a.yaw = Math.atan2(-(b.x - a.x), (b.z - a.z)) + Math.PI; }
   /** Un véhicule (circulation de la route, ou celui du joueur) occupe-t-il le point (x, z), à m mètres près ? */
@@ -202,7 +205,99 @@ export class Incidents {
     }));
   }
   holdCar(v, x, z, yaw) { v.held = true; v.heldYaw = yaw; v.x = v.targetX = x; v.z = z; v.speed = 0; v.stop = 0; v.chase = null; v.flee = 0; }
-  releaseCar(v) { v.held = false; v.heldYaw = undefined; v.speed = Math.max(2, v.cruise * 0.6); v.stop = 0; }
+  knockMoto(v, roll = 1.42) {
+    v.fallen = true;
+    v.fallRoll = roll;
+    v.mesh.traverse(m => { if (m.userData.rider) m.visible = false; });
+  }
+  rightMoto(v) {
+    v.fallen = false;
+    v.fallRoll = 0;
+    v.mesh.rotation.z = 0;
+    v.mesh.traverse(m => { if (m.userData.rider) m.visible = true; });
+  }
+  releaseCar(v) {
+    v.held = false; v.heldYaw = undefined; v.speed = Math.max(2, v.cruise * 0.6); v.stop = 0;
+    if (v.fallen) this.rightMoto(v);
+  }
+  /** Lorsqu'un véhicule tamponne un wewa (moto-taxi), la moto tombe sur le flanc avec son conducteur et ses clients sur la chaussée. */
+  knockWewa(v, byCar = null) {
+    if (!v || v.kind !== 'moto' || v.fallen || v.held) return;
+    const taxi = this.c.taxi, W = this.c.W(), T = this.c.traffic(), group = this.c.group();
+    const impactSide = byCar ? (v.x >= byCar.x ? 1 : -1) : (taxi.x <= v.x ? 1 : -1);
+    const baseYaw = v.side > 0 ? 0 : Math.PI;
+    this.knockMoto(v, impactSide * 1.42);
+    this.holdCar(v, v.x, v.z, baseYaw + impactSide * 0.28);
+    if (byCar && byCar !== taxi) { byCar.stop = Math.max(byCar.stop ?? 0, 7.5); byCar.speed = 0; }
+    const mk = (o, x0, z0, x1, z1, yaw, down = true) => {
+      const ch = new Character(o);
+      group.add(ch.mesh);
+      const a = { ch, x: x0, z: z0, yaw, path: [[x0, z0], [x1, z1], 0, 0.45], spd: 2.2, mode: 'idle', down, active: true, fallen: false, ignore: v };
+      this.c.place(ch.mesh, x0, z0, yaw, (W.pedHeight?.(x0, z0) ?? 0) + (down ? 0.25 : 0));
+      if (down) ch.mesh.rotation.x = -Math.PI / 2;
+      return a;
+    };
+    const driver = mk(outfit('man', { shirt: 0xd6dc24, cap: 0x1a2a55, idle: 1 }), v.x, v.z - 0.15, v.x + impactSide * 1.05, v.z - 0.55, baseYaw + 0.4, true);
+    const client1 = mk(outfit('woman'), v.x, v.z + 0.35, v.x + impactSide * 1.55, v.z + 0.25, baseYaw - 0.5, true);
+    const client2 = mk(outfit('man'), v.x, v.z + 0.65, v.x + impactSide * 0.85, v.z + 0.95, baseYaw + 1.1, true);
+    const side = v.x >= 0 ? 1 : -1, edgeX = side * (W.ROAD_EDGE + 2.2);
+    const h1 = mk(outfit('man'), edgeX, v.z - 2.5, v.x + impactSide * 1.85, v.z - 0.3, 0, false);
+    const h2 = mk(outfit('woman'), edgeX, v.z + 2.5, v.x + impactSide * 1.85, v.z + 0.8, 0, false);
+    h1.path = [[edgeX, v.z - 2.5], [v.x + impactSide * 1.85, v.z - 0.3], 0.9, 3.2];
+    h2.path = [[edgeX, v.z + 2.5], [v.x + impactSide * 1.85, v.z + 0.8], 1.2, 3.5];
+    const F = { t: 0, v, byAi: !!byCar, impactSide, side, edgeX, group, W, T, driver, client1, client2, helpers: [h1, h2], actors: [driver, client1, client2, h1, h2] };
+    this.fallenMotos.push(F);
+    this.c.sound.crash(0.55);
+    this.c.sound.voice('Aïe ! Wewa akweyi !', { pitch: 1.05, rate: 1.15 });
+    this.c.say('Aïe ! Wewa akweyi na ba clients na ye ! — Le wewa est tombé avec ses clients !', 'client', 4);
+    this.c.toast(byCar ? 'Accident devant : un véhicule a tamponné un wewa, il est tombé avec ses clients !' : 'Accident ! Tu as tamponné un wewa : il est tombé avec ses clients !', 4);
+    T.sendAmbulance(taxi);
+  }
+  updateFallenMotos(dt, taxi) {
+    if (!this.fallenMotos.length) return;
+    const time = this.c.time(), curGroup = this.c.group();
+    for (let i = this.fallenMotos.length - 1; i >= 0; i--) {
+      const F = this.fallenMotos[i];
+      F.t += dt;
+      const t = F.t, v = F.v;
+      if (F.group !== curGroup || t > 12.2) {
+        for (const a of F.actors) { F.group.remove(a.ch.mesh); a.ch.mesh.traverse(o => { if (o.isSkinnedMesh) o.geometry.dispose(); }); }
+        this.releaseCar(v);
+        this.fallenMotos.splice(i, 1);
+        continue;
+      }
+      if (t > 3.4 && !F.driverUp) {
+        F.driverUp = true;
+        F.driver.down = false;
+        F.driver.mode = 'fight';
+        this.face(F.driver, F.byAi ? { x: v.x, z: v.z + v.side * 4 } : taxi);
+      }
+      if (t > 4.4 && !F.clientsUp) {
+        F.clientsUp = true;
+        F.client1.down = false;
+        F.client2.down = false;
+        F.client1.mode = 'idle';
+        F.client2.mode = 'idle';
+        if (!F.byAi && Math.hypot(taxi.x - v.x, taxi.z - v.z) < 18) {
+          this.c.say('Obeti wewa na ngai ! Ba clients bakweyi na goudron ! — Tu as tamponné mon wewa ! Mes clients sont tombés !', 'client', 3.8);
+        }
+      }
+      if (t > 9.2 && !F.remount) {
+        F.remount = true;
+        F.driver.mode = 'idle';
+        F.driver.path = [[F.driver.x, F.driver.z], [v.x + F.impactSide * 0.4, v.z - 0.15], t, t + 1.4];
+        F.client1.path = [[F.client1.x, F.client1.z], [v.x + F.impactSide * 0.4, v.z + 0.35], t + 0.25, t + 1.7];
+        F.client2.path = [[F.client2.x, F.client2.z], [v.x + F.impactSide * 0.4, v.z + 0.65], t + 0.4, t + 1.9];
+        F.helpers.forEach((h, k) => { h.path = [[h.x, h.z], [F.edgeX, v.z + (k ? 3 : -3)], t + 0.3, t + 2.6]; });
+      }
+      if (t > 11.0 && !F.righted) {
+        F.righted = true;
+        this.rightMoto(v);
+        F.driver.ch.mesh.visible = F.client1.ch.mesh.visible = F.client2.ch.mesh.visible = false;
+      }
+      for (const a of F.actors) if (a.ch.mesh.visible) this.move(a, t, time);
+    }
+  }
   finish() {
     const S = this.cur;
     if (!S) return;
@@ -219,17 +314,32 @@ export class Incidents {
 
   // ---------- chaque image ----------
   update(dt, taxi) {
+    this.updateFallenMotos(dt, taxi);
+    const fallenActors = this.fallenMotos.flatMap(f => f.actors).filter(a => a.ch.mesh.visible);
     const S = this.cur;
     if (S) {
       S.t += dt;
       for (const a of S.actors) { a.active = a.ch.mesh.visible; a.fallen = false; }   // (traffic.js : les voitures freinent pour eux)
-      this.c.traffic().extraPeds = S.actors;
+      this.c.traffic().extraPeds = S.actors.concat(fallenActors);
       this[S.kind](S, dt, taxi);
       return;
     }
+    this.c.traffic().extraPeds = fallenActors.length ? fallenActors : null;
     this.disputeCd -= dt;
     this.theftCd -= dt;
     this.maybeTheft(dt, taxi);
+    // Accident spontané devant le joueur : un véhicule de la circulation tamponne un wewa, qui tombe avec ses clients
+    if ((this.wewaNext -= dt) <= 0 && Math.abs(taxi.speed) > 2 && this.fallenMotos.length === 0) {
+      this.wewaNext = 45 + Math.random() * 45;
+      const T = this.c.traffic(), dir = Math.cos(taxi.heading) >= 0 ? 1 : -1;
+      const m = T.list.find(v => v.kind === 'moto' && !v.fallen && !v.held && v.mesh.visible && (taxi.z - v.z) * dir > 20 && (taxi.z - v.z) * dir < 52);
+      const c = m && T.list.find(v => v !== m && v.side === m.side && HELD_KINDS.has(v.kind) && !v.held && !v.racer && Math.abs(v.z - m.z) < 28);
+      if (m && c) {
+        c.x = c.targetX = m.x + (Math.random() < 0.5 ? 0.3 : -0.3);
+        c.z = m.z + m.side * (m.len / 2 + c.len / 2 + 0.35);
+        this.knockWewa(m, c);
+      }
+    }
     if ((this.next -= dt) > 0 || !this.c.isMain()) return;
     this.next = 150 + Math.random() * 120;
     // accident ou Kuluna devant le joueur, sur sa chaussée (la chaussée de droite, en roulant vers Limete)
@@ -243,42 +353,55 @@ export class Incidents {
   /** Les gens d'une scène sont solides : le véhicule du joueur s'arrête contre eux (sans les renverser). */
   blockVehicle(taxi) {
     const S = this.cur;
-    if (!S) return;
-    const solids = S.actors.filter(a => a.ch.mesh.visible).map(a => ({ x: a.x, z: a.z, w: 0, l: 0 }));
-    if (S.pc?.visible && S.pcX !== undefined) solids.push({ x: S.pcX, z: S.pcZ, w: S.pc.userData.W ?? 2, l: S.pc.userData.L ?? 5.2 });
+    const actors = (S ? S.actors : []).concat(this.fallenMotos.flatMap(f => f.actors));
+    if (!actors.length && !S) return;
+    const solids = actors.filter(a => a.ch.mesh.visible).map(a => ({ x: a.x, z: a.z, w: 0, l: 0 }));
+    if (S?.pc?.visible && S.pcX !== undefined) solids.push({ x: S.pcX, z: S.pcZ, w: S.pc.userData.W ?? 2, l: S.pc.userData.L ?? 5.2 });
     for (const a of solids) {
       const dx = taxi.x - a.x, dz = taxi.z - a.z;
       if (Math.abs(dx) < taxi.bw / 2 + 0.5 + a.w / 2 && Math.abs(dz) < taxi.bl / 2 + 0.5 + a.l / 2) {
         taxi.speed *= 0.2;
         const pz = taxi.bl / 2 + 0.55 + a.l / 2 - Math.abs(dz), px = taxi.bw / 2 + 0.55 + a.w / 2 - Math.abs(dx);
         if (pz < px) taxi.z += Math.sign(dz || 1) * pz; else taxi.x += Math.sign(dx || 1) * px;
-        if (!S.warned) { S.warned = true; this.c.toast('Attention aux gens sur la route !', 2); }
+        if (S && !S.warned) { S.warned = true; this.c.toast('Attention aux gens sur la route !', 2); }
       }
     }
   }
 
-  // ---------- l'accident entre deux voitures ----------
+  // ---------- l'accident entre deux véhicules (souvent une voiture qui a tamponné un wewa et ses clients) ----------
   startAccident(zI) {
     const W = this.c.W(), T = this.c.traffic(), taxi = this.c.taxi;
-    const far = v => v.side === 1 && HELD_KINDS.has(v.kind) && !v.racer && !v.chase && !v.held && !v.urgent && (Math.abs(v.z - taxi.z) > 260 || !v.mesh.visible);
-    const cars = T.list.filter(far).slice(0, 2);
+    const farCar = v => v.side === 1 && HELD_KINDS.has(v.kind) && !v.racer && !v.chase && !v.held && !v.urgent && (Math.abs(v.z - taxi.z) > 260 || !v.mesh.visible);
+    const farMoto = v => v.side === 1 && v.kind === 'moto' && !v.fallen && !v.held && (Math.abs(v.z - taxi.z) > 260 || !v.mesh.visible);
+    const carsOnly = T.list.filter(farCar);
+    const motoVictim = Math.random() < 0.7 ? T.list.find(farMoto) : null;
+    const cars = motoVictim && carsOnly.length >= 1 ? [carsOnly[0], motoVictim] : carsOnly.slice(0, 2);
     if (cars.length < 2) { this.next = 30; return; }
-    const [a, b] = cars, X = W.LANE_X;
+    const [a, b] = cars, isMoto = b.kind === 'moto', X = W.LANE_X;
     // (l'auteur, 13/11 : jamais sur une autre voiture) : l'endroit doit être libre dans les deux voies
     const zOk = [0, -15, -30, 15].map(d => zI + d).find(z => T.laneFree(X[1], z, a, null, 12, 1) && T.laneFree(X[2], z + 3.2, b, null, 12, 1));
     if (zOk === undefined) { this.next = 25; return; }
     zI = zOk;
-    this.cur = { kind: 'accident', t: 0, zI, actors: [], props: [], cars, block: { z: zI + 9, side: 1 }, police: null };
+    this.cur = { kind: 'accident', t: 0, zI, isMoto, actors: [], props: [], cars, block: { z: zI + 9, side: 1 }, police: null };
     this.holdCar(a, X[1], zI, 0.1);
     this.holdCar(b, X[2], zI + 3.2, -0.3);
+    if (isMoto) this.knockMoto(b, 1.42);
     T.blocks.push(this.cur.block);
     const S = this.cur;
     S.d1 = this.actor(outfit('man', { shirt: 0xf2f2f2 }), X[1] + a.wid / 2 + 0.25, zI + 0.5); S.d1.ch.mesh.visible = false; S.d1.ignore = a;   // (portière du côté de l'autre voiture)
-    S.d2 = this.actor(outfit('man', { shirt: 0x1d4fa0 }), X[2] - b.wid / 2 - 0.25, zI + 3.5); S.d2.ch.mesh.visible = false; S.d2.ignore = b;
+    S.d2 = this.actor(outfit('man', { shirt: isMoto ? 0xd6dc24 : 0x1d4fa0, cap: isMoto ? 0x1a2a55 : null }), X[2] - b.wid / 2 - 0.25, zI + 3.5); S.d2.ch.mesh.visible = isMoto; S.d2.ignore = b;
+    if (isMoto) {
+      S.d2.down = true;
+      S.wClients = [
+        this.actor(outfit('woman'), X[2] + 0.95, zI + 3.0, -0.4),
+        this.actor(outfit('man'), X[2] + 0.55, zI + 4.1, 0.8),
+      ];
+      for (const wc of S.wClients) { wc.down = true; wc.ignore = b; }
+    }
     S.door1 = [S.d1.x, S.d1.z]; S.door2 = [S.d2.x, S.d2.z];
     const mid = [(X[1] + X[2]) / 2, zI + 1.6];
     S.d1.path = [[S.d1.x, S.d1.z], [mid[0] - 0.55, mid[1]], 1.0, 2.6]; S.d1.mode = 'fight'; S.d1.phase = 0;
-    S.d2.path = [[S.d2.x, S.d2.z], [mid[0] + 0.55, mid[1]], 1.2, 2.8]; S.d2.mode = 'fight'; S.d2.phase = 0.45;
+    S.d2.path = [[S.d2.x, S.d2.z], [mid[0] + 0.55, mid[1]], isMoto ? 2.2 : 1.2, isMoto ? 3.6 : 2.8]; S.d2.mode = 'fight'; S.d2.phase = 0.45;
     S.crowd = Array.from({ length: 5 }, (_, k) => {
       const c = this.actor(outfit(['man', 'woman', 'student', 'man', 'woman'][k]), W.ROAD_EDGE + 2.5 + Math.random() * 3, zI - 6 + k * 3.5);
       const ang = -0.9 + k * 0.45;
@@ -288,14 +411,15 @@ export class Incidents {
     });
     S.officers = [this.actor(outfit('police'), W.MEDIAN + 0.25, zI + 40), this.actor(outfit('police'), W.MEDIAN + 0.25, zI + 41)];
     for (const o of S.officers) o.ch.mesh.visible = false;
-    for (const o of S.officers) o.ch.mesh.visible = false;
-    this.c.toast('Accident devant : deux chauffeurs se battent, la route est bloquée !', 4.5);
-    this.c.say('Eh ! Babeti bango ! Bakobunda ! — Ils se sont cognés ! Ils se battent !', 'client', 4);
+    this.c.toast(isMoto ? 'Accident devant : une voiture a tamponné un wewa, tombé avec ses clients !' : 'Accident devant : deux chauffeurs se battent, la route est bloquée !', 4.5);
+    this.c.say(isMoto ? 'Eh ! Babeti wewa ! Akweyi na ba clients na ye ! — Ils ont tamponné un wewa ! Il est tombé avec ses clients !' : 'Eh ! Babeti bango ! Bakobunda ! — Ils se sont cognés ! Ils se battent !', 'client', 4);
     this.c.sound.crash(0.35);
   }
   accident(S, dt, taxi) {
     const t = S.t, time = this.c.time(), W = this.c.W(), X = W.LANE_X;
     if (t > 0.8 && !S.out) { S.out = true; S.d1.ch.mesh.visible = S.d2.ch.mesh.visible = true; }
+    if (S.isMoto && t > 2.0 && S.d2.down) S.d2.down = false;
+    if (S.wClients && t > 5.2 && S.wClients[0].down) { for (const wc of S.wClients) wc.down = false; }
     if (t > 12 && !S.units) this.callPolice(S, [S.officers]);              // (quelqu'un a appelé la police : une jeep, deux policiers)
     // les policiers vont se mettre de part et d'autre des deux chauffeurs
     const mx = (X[1] + X[2]) / 2, zI = S.zI;
@@ -304,7 +428,8 @@ export class Incidents {
     if (S.calmT && t > S.calmT + 8 && !S.back) {
       S.back = true;
       S.d1.path = [[S.d1.x, S.d1.z], S.door1, t, t + 2]; S.d1.then = () => { S.d1.ch.mesh.visible = false; };
-      S.d2.path = [[S.d2.x, S.d2.z], S.door2, t, t + 2]; S.d2.then = () => { S.d2.ch.mesh.visible = false; };
+      S.d2.path = [[S.d2.x, S.d2.z], S.door2, t, t + 2]; S.d2.then = () => { S.d2.ch.mesh.visible = false; if (S.isMoto && S.cars?.[1]) this.rightMoto(S.cars[1]); };
+      if (S.wClients) S.wClients.forEach((wc, i) => { wc.path = [[wc.x, wc.z], S.door2, t + 0.3 * i, t + 2]; wc.then = () => { wc.ch.mesh.visible = false; }; });
       S.crowd.forEach((c, i) => { c.path = [[c.x, c.z], [W.ROAD_EDGE + 2.5 + i, S.zI - 6 + i * 3.5], t + 1 + i * 0.3, t + 5 + i * 0.3]; });
       this.policeBack(S, t + 0.5, S.officers);
       this.c.toast('La police les a séparés : la route se libère.', 3.5);
@@ -389,6 +514,7 @@ export class Incidents {
   // ---------- le chauffeur cogné te barre la route ----------
   /** Appelé par main.js après un choc avec un véhicule de la circulation (hit : l'objet de traffic.js). */
   onCrash(hit, strength, force = false) {
+    if (hit?.kind === 'moto') { this.knockWewa(hit, null); return; }
     if (this.cur || this.disputeCd > 0 || strength < 4 || !hit || hit.side !== 1 || !HELD_KINDS.has(hit.kind) || hit.racer || hit.chase || (!force && Math.random() > 0.4)) return;
     const taxi = this.c.taxi, W = this.c.W();
     if (Math.cos(taxi.heading) < 0.5 || taxi.x <= 0 || taxi.level) return;

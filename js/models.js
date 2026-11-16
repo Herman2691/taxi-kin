@@ -567,7 +567,7 @@ function wewaNumber(n = pick(WEWA_NUMS)) {
 /** Moto-taxi « wewa » (photo du dossier Acteurs) : moto type Boxer, réservoir galbé, selle longue, porte-bagages, pare-carter, rétroviseurs. Conducteur en gilet jaune et casque, parfois un passager. */
 // look : { tank, num } pour garder la même moto et le même conducteur (la moto du joueur, quand le client monte ou descend)
 export function createMoto({ riders: only = null, look = null } = {}) {   // only : nombre de personnes imposé (la moto du joueur part seule)
-  const L = 2.05, W = 0.82, tank = look?.tank ?? pick([0xb91c1c, 0x17181b, 0x1e3a8a, 0x17181b]), riders = only ?? 1 + Math.floor(Math.random() * 2), helmet = pick([0x1a2a55, 0x2a2d33, 0xd8d8d8]), shirt = pick([0xd9480f, 0xffffff, 0x2b8a3e, 0x1d4fa0, 0x7b2cbf]);
+  const L = 2.05, W = 0.82, tank = look?.tank ?? pick([0xb91c1c, 0x17181b, 0x1e3a8a, 0x17181b]), riders = only ?? 2, helmet = pick([0x1a2a55, 0x2a2d33, 0xd8d8d8]), shirt = pick([0xd9480f, 0xffffff, 0x2b8a3e, 0x1d4fa0, 0x7b2cbf]);
   const m = vehicle(`moto|${tank}|${WEWA ? 0 : `${riders}|${helmet}|${shirt}`}`, L, W, (b, low) => {
     const seg = low ? 8 : 16, black = 0x17181b;
     for (const z of [-0.7, 0.7]) {

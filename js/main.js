@@ -1657,7 +1657,9 @@ function handleTraffic(dt) {
     taxi.speed *= 0.9;
     strength = 4;
   }
-  if (G.crashCd <= 0 && strength > 2.5) { crash(strength); incidents.onCrash(hit, strength); }
+  if (hit.kind === 'moto' && !hit.fallen) strength = Math.max(strength, 3.2);
+  if (VEH_ID === 'moto' && !G.wewaFall && strength > 1.8) { crash(strength); startWewaFall(hit); return; }
+  if ((G.crashCd <= 0 || hit.kind === 'moto') && strength > 2.5) { crash(strength); incidents.onCrash(hit, strength); }
 }
 
 function handleStations(dt, inp) {
@@ -1757,6 +1759,80 @@ function dismountEnd() {
 }
 $('btn-descendre').addEventListener('click', dismountToggle);
 addEventListener('keydown', e => { if (e.code === 'KeyE' && G.state === 'play') dismountToggle(); });
+
+// ---------- Chute du wewa du joueur avec ses clients lorsqu'un véhicule le tamponne ----------
+function startWewaFall(hit) {
+  if (G.wewaFall || G.accident || G.police?.control > 0) return;
+  if (G.off) dismountEnd();
+  taxi.speed = 0;
+  if (hit && hit.stop !== undefined) hit.stop = Math.max(hit.stop ?? 0, 5.5);
+  if (hit && hit.speed !== undefined) hit.speed = 0;
+  const side = taxi.x >= (hit?.x ?? taxi.x) ? 1 : -1, roll = side * 1.42;
+  taxiMesh.traverse(m => { if (m.userData.rider) m.visible = false; });
+  for (const r of BOARD.riders) if (r.ch?.mesh) r.ch.mesh.visible = false;
+  const mk = (o, x0, z0, x1, z1, yaw) => {
+    const ch = new Character(o);
+    A.group.add(ch.mesh);
+    place(ch.mesh, x0, z0, yaw, surfaceH(x0, z0, taxi.level) + 0.25);
+    ch.mesh.rotation.x = -Math.PI / 2;
+    return { ch, x0, z0, x1, z1, x: x0, z: z0, yaw, down: true, walking: false };
+  };
+  const driver = mk(outfit('man', { shirt: 0xd6dc24, cap: 0x1a2a55, idle: 1 }), taxi.x, taxi.z - 0.1, taxi.x + side * 1.05, taxi.z - 0.55, taxi.heading + 0.35);
+  const riderOutfits = BOARD.riders.map(r => r.ch?.outfit).filter(Boolean);
+  if (riderOutfits.length === 0) riderOutfits.push(outfit('woman'), outfit('man'));
+  else if (riderOutfits.length === 1) riderOutfits.push(outfit('woman'));
+  const clients = riderOutfits.slice(0, 2).map((o, i) =>
+    mk(o, taxi.x, taxi.z + 0.35 + i * 0.3, taxi.x + side * (1.5 - i * 0.55), taxi.z + 0.25 + i * 0.65, taxi.heading + (i ? 0.9 : -0.5))
+  );
+  G.wewaFall = { t: 0, side, roll, curRoll: 0, road: A, driver, clients, actors: [driver, ...clients] };
+  say('Aïe ! Wewa akweyi na ba clients na ye ! — Le wewa est tombé avec ses clients !', 'client', 4);
+  sound.voice('Aïe ! Wewa akweyi !', { pitch: 1.05, rate: 1.15 });
+  hud.toast('Accident ! Ton wewa est tombé avec ses clients !', 3.8);
+}
+function wewaFallScene(dt) {
+  const S = G.wewaFall;
+  if (!S) return;
+  const t = (S.t += dt);
+  taxi.speed = 0;
+  G.prompt = 'Chute à moto… le wewa et ses clients se relèvent';
+  if (t < 0.35) S.curRoll = S.roll * smooth(t / 0.35);
+  else if (t < 3.4) S.curRoll = S.roll;
+  else if (t < 4.2) S.curRoll = S.roll * (1 - smooth((t - 3.4) / 0.8));
+  else S.curRoll = 0;
+  for (let i = 0; i < S.actors.length; i++) {
+    const a = S.actors[i], isDriver = i === 0;
+    if (t < 0.45) {
+      const k = smooth(t / 0.45);
+      a.x = a.x0 + (a.x1 - a.x0) * k;
+      a.z = a.z0 + (a.z1 - a.z0) * k;
+    } else if (isDriver && t > 2.4 && t < 3.5) {
+      a.down = false;
+      const k = smooth((t - 2.6) / 0.8);
+      a.walking = k > 0 && k < 1;
+      a.x = a.x1 + (taxi.x + S.side * 0.45 - a.x1) * k;
+      a.z = a.z1 + (taxi.z - 0.1 - a.z1) * k;
+    } else if (!isDriver && t > 2.9 && t < 4.2) {
+      a.down = false;
+      const k = smooth((t - 3.2) / 0.9);
+      a.walking = k > 0 && k < 1;
+      a.x = a.x1 + (taxi.x + S.side * 0.3 - a.x1) * k;
+      a.z = a.z1 + (taxi.z + 0.4 - a.z1) * k;
+    } else {
+      a.walking = false;
+    }
+    a.ch.pose(a.down ? 'idle' : a.walking ? 'walk' : 'idle', a.down ? 0 : G.time, 1.8);
+    place(a.ch.mesh, a.x, a.z, a.yaw, surfaceH(a.x, a.z, taxi.level) + (a.down ? 0.25 : 0));
+    a.ch.mesh.rotation.x = a.down ? -Math.PI / 2 : 0;
+  }
+  if (t >= 4.4) {
+    for (const a of S.actors) S.road.group.remove(a.ch.mesh);
+    taxiMesh.traverse(m => { if (m.userData.rider) m.visible = true; });
+    for (const r of BOARD.riders) if (r.ch?.mesh) r.ch.mesh.visible = true;
+    taxiMesh.rotation.z = 0;
+    G.wewaFall = null;
+    G.crashCd = 1.5;
+  }
+}
 
 // La bagarre (l'auteur, 08/11 : « le chauffeur doit se bagarrer aussi avec les policiers et fuir ») : pendant le contrôle, le joueur peut
 // appuyer sur « S'enfuir » (ou F) ; le chauffeur et le policier se battent, le chauffeur court à son véhicule et démarre, la police le poursuit.
@@ -2307,6 +2383,13 @@ function update(dt) {
   G.wallCd -= dt;
 
   if (G.accident) { accidentScene(dt); return; }
+  if (G.wewaFall) {
+    wewaFallScene(dt);
+    traffic.update(dt, taxi, G.time);
+    incidents.update(dt, taxi);
+    sound.engine(0, 0, false);
+    return;
+  }
   const zBefore = taxi.z;
   const inp = drive(dt);
   if (G.race && G.race.t < 0) taxi.speed = 0;
@@ -2522,6 +2605,9 @@ function updateCamera(dt, snap = false) {
     const S = G.accident, cx = (S.tx + S.p.x) / 2, cz = (S.tz + S.p.z) / 2, a = S.cam + S.t * 0.12;
     worldVec(cx + Math.sin(a) * 15, 8.5, cz + Math.cos(a) * 15, tmpPos);
     worldVec(cx, 1, cz, tmpLook);
+  } else if (G.wewaFall) {
+    ahead(-6.5, 2.9 + Math.max(aheadH(-6.5), taxi.y), tmpPos);
+    ahead(1.2, 0.7 + taxi.y, tmpLook);
   } else if (G.cam === 0) {
     const back = VEH_ID === 'bus' ? -9 : -7.5, up = VEH_ID === 'bus' ? 4.1 : 3.3;
     ahead(back, up + Math.max(aheadH(back), taxi.y), tmpPos);
@@ -2546,11 +2632,11 @@ function updateCamera(dt, snap = false) {
   }
   A.group.localToWorld(tmpPos);
   A.group.localToWorld(tmpLook);
-  const inside = G.cam === 1 && G.state !== 'menu' && !G.accident;
+  const inside = G.cam === 1 && G.state !== 'menu' && !G.accident && !G.wewaFall;
   cockpit.group.visible = inside;
   if (inside) cockpit.spin.rotation.z = -taxi.steer * (VEH_ID === 'moto' ? 0.5 : 2.2);
   // (le plan proche : 0,3 m seulement pour la vue intérieure ; plus loin dehors, la profondeur est plus précise et les surfaces lointaines ne scintillent plus sur téléphone)
-  const cab = G.cam === 2 && !!cabin.eye && G.state !== 'menu' && !G.accident;
+  const cab = G.cam === 2 && !!cabin.eye && G.state !== 'menu' && !G.accident && !G.wewaFall;
   const fov = inside ? 74 : cab ? 84 : innerWidth / innerHeight < 1.3 ? 72 : 62, near = inside ? 0.3 : cab ? 0.15 : 1.2;
   if (camera.fov !== fov || camera.near !== near) { camera.fov = fov; camera.near = near; camera.updateProjectionMatrix(); }
   const k = snap ? 1 : 1 - Math.exp(-dt * (G.cam === 0 ? 6 : 30));
@@ -2584,9 +2670,10 @@ function frame(now) {
     else update(dt);
   }
 
-  place(taxiMesh, taxi.x, taxi.z, taxi.heading, taxi.y);
+  place(taxiMesh, taxi.x, taxi.z, taxi.heading, taxi.y + (G.wewaFall ? Math.abs(G.wewaFall.curRoll ?? 0) * 0.14 : 0));
   taxiMesh.rotation.x = Math.atan(aheadH(0.5) - aheadH(-0.5));   // pente selon le sens (rampes, remblai, pont de l'Échangeur)
-  taxiMesh.visible = G.cam === 0 || G.state === 'menu' || !!G.accident;
+  taxiMesh.rotation.z = G.wewaFall ? (G.wewaFall.curRoll ?? 0) : 0;
+  taxiMesh.visible = G.cam === 0 || G.state === 'menu' || !!G.accident || !!G.wewaFall;
   nightFrame();
   cabinFrame();
   followRoads();
