@@ -318,6 +318,26 @@ function applyPose(b, mode, t, speed, o) {
     b['upperArm.R'].rotation.set(s * 0.4 * st, 0, 0.1);
     b['foreArm.L'].rotation.x = 0.22 + Math.max(0, -s) * 0.45;   // le coude se plie quand le bras passe devant
     b['foreArm.R'].rotation.x = 0.22 + Math.max(0, s) * 0.45;
+  } else if (mode === 'run') {
+    // Course d'athlète / footing : foulée ample, genoux hauts, rebond vertical, buste penché en avant et coudes pliés à 90°
+    const w = t * speed * 3.8, s = Math.sin(w), c = Math.cos(w);
+    const amp = 0.68 * st;
+    b['thigh.L'].rotation.x = s * amp + 0.14;
+    b['thigh.R'].rotation.x = -s * amp + 0.14;
+    b['shin.L'].rotation.x = -(0.28 + Math.max(0, c) * 1.22 * st);
+    b['shin.R'].rotation.x = -(0.28 + Math.max(0, -c) * 1.22 * st);
+    b.hips.position.y = 0.90 + Math.abs(s) * 0.068;
+    b.hips.position.x = c * 0.025;
+    b.hips.rotation.y = s * 0.18 * st;
+    b.hips.rotation.z = -c * 0.05;
+    b.spine.rotation.x = 0.18;
+    b.chest.rotation.y = -s * 0.28 * st;
+    b.head.rotation.y = s * 0.08;
+    b.head.rotation.x = -0.08;
+    b['upperArm.L'].rotation.set(-s * 0.78 * st + 0.1, 0, -0.14);
+    b['upperArm.R'].rotation.set(s * 0.78 * st + 0.1, 0, 0.14);
+    b['foreArm.L'].rotation.x = 1.28 + Math.max(0, -s) * 0.35;
+    b['foreArm.R'].rotation.x = 1.28 + Math.max(0, s) * 0.35;
   } else if (mode === 'fight') {
     // bagarre (contrôle de police qui tourne mal) : jambes écartées, genoux pliés, les bras poussent et frappent tour à tour
     const w = t * 7, pL = Math.max(0, Math.sin(w)), pR = Math.max(0, Math.sin(w + Math.PI));

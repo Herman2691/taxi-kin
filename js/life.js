@@ -38,16 +38,28 @@ export class StreetLife {
       return { ch, fb: null, path: null, i: 0, pos: null, dir: [0, -1], wait: 0, speed: 1.05 + Math.random() * 0.3 };
     }) : [];
     this.stops = [...BUS_STOPS, ...BUS_STOPS_L];
-    // Les athlètes (l'auteur, 10/11 : « ajouter la course des athlètes, des personnes qui courent ») : le matin, un groupe de sportifs en
-    // maillots court en file sur l'accotement du boulevard ; il revient régulièrement devant le joueur (updateRunners)
-    const MAILLOTS = [0xd62828, 0x1d4fa0, 0xffffff, 0xe0a100, 0x2b8a3e, 0x1a1a1a, 0x7b2cbf];
-    this.runners = Array.from({ length: 7 }, (_, i) => {
-      const ch = new Character(outfit('man', { shirt: MAILLOTS[i % MAILLOTS.length], pants: i % 3 ? 0x1a1a1a : 0x1d3557, cap: i % 4 === 0 ? 0xffffff : null, untucked: false, sandals: false, beard: false, height: 0.97 + Math.random() * 0.07, girth: 0.9 + Math.random() * 0.1, stride: 1.1 }));
+    // Les athlètes (l'auteur, 10/11 & 16/11 : « ajouter la course des athlètes, des personnes qui courent ») : deux pelotons de sportifs
+    // (hommes et femmes en maillots et survêtements) courent sur les accotements de part et d'autre du boulevard et reviennent régulièrement devant le joueur
+    const MAILLOTS = [0xd62828, 0x1d4fa0, 0xffffff, 0xe0a100, 0x2b8a3e, 0x1a1a1a, 0x7b2cbf, 0xff6b00];
+    this.runners = Array.from({ length: 14 }, (_, i) => {
+      const fem = i % 4 === 1;
+      const ch = new Character(outfit(fem ? 'woman' : 'man', {
+        dress: false, pagneTop: false, headwrap: null, basin: null, bag: null,
+        shirt: MAILLOTS[i % MAILLOTS.length],
+        pants: i % 2 ? 0x1a1a1a : 0x1d3557,
+        shoes: 0xf2f2f2,
+        cap: i % 5 === 0 ? 0xffffff : null,
+        untucked: false, sandals: false, beard: false,
+        height: 0.96 + Math.random() * 0.08, girth: 0.88 + Math.random() * 0.1, stride: 1.15,
+      }));
       ch.mesh.visible = false;
       scene.add(ch.mesh);
-      return { ch };
+      return { ch, group: i < 8 ? 0 : 1 };
     });
-    this.run = { z: null, side: 1, dir: -1, speed: 3 };
+    this.runGroups = [
+      { z: null, side: 1, dir: -1, speed: 3.6 },
+      { z: null, side: -1, dir: 1, speed: 3.8 },
+    ];
     // Les ouvriers des chantiers (l'auteur, 13/11 : « ajouter des travaux dans le boulevard ») : gilet orange, casque jaune ; trois creusent la
     // tranchée, un fait signe aux voitures avec le panneau rouge et vert, deux vont et viennent. Ils travaillent au chantier le plus proche.
     this.workers = WORKS.length ? Array.from({ length: 6 }, (_, i) => {
@@ -95,29 +107,41 @@ export class StreetLife {
     }
   }
 
-  /** Le groupe d'athlètes : seulement le matin ; posé à 220 m devant le joueur, il court vers lui ou s'éloigne, et revient ailleurs quand on l'a perdu. */
+  /** Les pelotons d'athlètes : posés entre 55 m et 135 m devant le joueur sur les deux accotements, ils courent en rythme (pose 'run') et reviennent devant dès qu'on les dépasse. */
   updateRunners(dt, z, time, morning, back) {
-    const R = this.run;
-    if (!morning) { if (R.z !== null) { R.z = null; for (const r of this.runners) r.ch.mesh.visible = false; } return; }
-    if (R.z === null || Math.abs(R.z - z) > 330) {
-      R.side = Math.random() < 0.5 ? 1 : -1; R.dir = Math.random() < 0.5 ? -1 : 1; R.speed = 2.8 + Math.random() * 0.6;
-      R.z = z + (back ? 1 : -1) * 220;
-      if (R.z < WALK_END + 80 || R.z > 120) { R.z = null; for (const r of this.runners) r.ch.mesh.visible = false; return; }
-    }
-    R.z += R.dir * R.speed * dt;
-    if (R.z < WALK_END + 20) R.dir = 1;
-    if (inRiver(R.z, 3)) R.z += R.dir * 8;
-    this.runners.forEach((r, k) => {
-      const col = k % 2, row = Math.floor(k / 2);
-      const x0 = R.side * (ROAD_EDGE + 1.4 + col * 0.9), zz = R.z - R.dir * (row * 1.7 + (col ? 0.5 : 0));
-      // (l'auteur, 13/11 : rien ne passe à travers) : un obstacle devant lui : il s'écarte vers l'extérieur le temps de le passer
-      const want = [0, 0.7, 1.4, 2.1].find(d => !obstacleAt(x0 + R.side * d, zz + R.dir * 0.8, 0.3) && !obstacleAt(x0 + R.side * d, zz, 0.3)) ?? 0;
-      r.dx = (r.dx ?? 0) + (want - (r.dx ?? 0)) * Math.min(1, dt * 3);
-      const x = x0 + R.side * r.dx;
-      r.x = x; r.z = zz;
-      const near = Math.abs(zz - z) < 210 && !inRaised(zz, 2) && !inFlyover(zz, 4) && !onRoad(x, zz);
-      r.ch.mesh.visible = near;
-      if (near) { r.ch.pose('walk', time + k * 0.37, R.speed * 1.3); place(r.ch.mesh, x, zz, R.dir < 0 ? 0 : Math.PI, 0); }
+    const fwd = back ? 1 : -1;
+    this.runGroups.forEach((R, gi) => {
+      const groupRunners = this.runners.filter(r => r.group === gi);
+      const behind = (R.z !== null) ? (R.z - z) * (-fwd) : Infinity;
+      if (R.z === null || behind > 45 || Math.abs(R.z - z) > 210) {
+        R.side = gi === 0 ? 1 : -1;
+        R.dir = gi === 0 ? fwd : -fwd;
+        R.speed = 3.5 + Math.random() * 0.7;
+        R.z = z + fwd * (60 + gi * 45 + Math.random() * 35);
+        if (R.z < WALK_END + 60 || R.z > 130) {
+          R.z = null;
+          for (const r of groupRunners) r.ch.mesh.visible = false;
+          return;
+        }
+      }
+      R.z += R.dir * R.speed * dt;
+      if (R.z < WALK_END + 20) R.dir = 1;
+      if (inRiver(R.z, 3)) R.z += R.dir * 8;
+      groupRunners.forEach((r, k) => {
+        const col = k % 2, row = Math.floor(k / 2);
+        const x0 = R.side * (ROAD_EDGE + 1.45 + col * 0.9), zz = R.z - R.dir * (row * 1.65 + (col ? 0.45 : 0));
+        // (l'auteur, 13/11 : rien ne passe à travers) : un obstacle devant lui : il s'écarte vers l'extérieur le temps de le passer
+        const want = [0, 0.7, 1.4, 2.1].find(d => !obstacleAt(x0 + R.side * d, zz + R.dir * 0.8, 0.3) && !obstacleAt(x0 + R.side * d, zz, 0.3)) ?? 0;
+        r.dx = (r.dx ?? 0) + (want - (r.dx ?? 0)) * Math.min(1, dt * 3);
+        const x = x0 + R.side * r.dx;
+        r.x = x; r.z = zz;
+        const near = Math.abs(zz - z) < 210 && !inRaised(zz, 2) && !inFlyover(zz, 4) && !onRoad(x, zz);
+        r.ch.mesh.visible = near;
+        if (near) {
+          r.ch.pose('run', time + k * 0.31 + gi * 1.1, R.speed);
+          place(r.ch.mesh, x, zz, R.dir < 0 ? 0 : Math.PI, pedHeight(x, zz));
+        }
+      });
     });
   }
 
@@ -292,7 +316,7 @@ export class StreetLife {
     for (const w of this.workers ?? []) w.ch.mesh.visible = false;
     this.site = null;
     for (const r of this.runners ?? []) r.ch.mesh.visible = false;
-    this.run.z = null;
+    for (const g of this.runGroups ?? []) g.z = null;
     for (const p of this.crossers ?? []) { p.active = false; p.ch.mesh.visible = false; }
     for (const p of this.people) p.ch.mesh.visible = false;
     for (const b of this.bridgers ?? []) { b.ch.mesh.visible = false; b.fb = null; }
