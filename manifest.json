@@ -1,0 +1,29 @@
+{
+  "name": "Taxi Kin — Kinshasa VR Adventure",
+  "short_name": "Taxi Kin",
+  "description": "Simulateur de conduite de taxi, 207 et wewa à travers Kinshasa (avec mode VR).",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0e1014",
+  "theme_color": "#f5c400",
+  "icons": [
+    {
+      "src": "data/logo/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "data/logo/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data/logo/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

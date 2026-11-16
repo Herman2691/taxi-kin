@@ -2448,6 +2448,39 @@ function addAirportFence(chunks, details, z0, z1) {
   }
 }
 
+/** Grands panneaux publicitaires TAXI-KIN VR (affiche officielle du dossier LogoApplication) le long du boulevard. */
+function addPromoBillboards(scene, chunks) {
+  const tex = new THREE.TextureLoader().load('data/logo/poster.jpg');
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const posterMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x1a1d24 });
+  const goldMat = new THREE.MeshBasicMaterial({ color: 0xf5c400 });
+  const spots = [
+    [-ROAD_EDGE - 6.5, -135, 0.22],
+    [ROAD_EDGE + 7.5, g(4140), -0.22],
+    [-ROAD_EDGE - 6.5, g(6100), 0.2],
+    [ROAD_EDGE + 7.5, g(12450), -0.2],
+  ];
+  for (const [x, z, yaw] of spots) {
+    if (z < Z_END) continue;
+    const grp = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 6.2, 10), frameMat);
+    pole.position.y = 3.1;
+    const box = new THREE.Mesh(new THREE.BoxGeometry(4.6, 7.6, 0.28), frameMat);
+    box.position.y = 9.2;
+    const border = new THREE.Mesh(new THREE.BoxGeometry(4.76, 7.76, 0.22), goldMat);
+    border.position.y = 9.2;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(4.3, 7.3), posterMat);
+    face.position.set(0, 9.2, 0.16);
+    const backFace = new THREE.Mesh(new THREE.PlaneGeometry(4.3, 7.3), posterMat);
+    backFace.position.set(0, 9.2, -0.16);
+    backFace.rotation.y = Math.PI;
+    grp.add(pole, border, box, face, backFace);
+    place(grp, x, z, yaw, 0);
+    scene.add(grp);
+  }
+}
+
 /** Polygone plat convexe (x, z) à la hauteur y, face vers le haut. */
 function flatPoly(b, pts, y, color) {
   const [a, c] = [pts[1], pts[2]].map(p => [p[0] - pts[0][0], p[1] - pts[0][1]]);
@@ -11388,6 +11421,7 @@ export function buildWorld(scene, opts = {}) {
     addAirport(chunks.at(0), signs);
     // Clôture continue à droite : de 10 m avant le parvis de l'aéroport (z = -58) jusqu'à 20 m avant la Station Cobil de Siforco (g(4064) + 35)
     addAirportFence(chunks, details, -58, g(4064) + 35);
+    addPromoBillboards(scene, chunks);
   }
   else if (!START_ATTACHED) addCrossStreet(chunks.at(24), details, signs, 24, R.landmarks[0][0], 'crossStart');
   if (R.end.kind === 'tower') addInterchange(scene, chunks, details, signs);

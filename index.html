@@ -7,15 +7,17 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="description" content="Taxi Kin — une journée de taxi de course, de l'aéroport de N'djili au boulevard Sendwe (Limete).">
-<title>Taxi Kin</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='12' width='28' height='12' rx='3' fill='%23f5c400'/%3E%3Crect x='8' y='6' width='16' height='8' rx='2' fill='%23f5c400'/%3E%3Ccircle cx='9' cy='25' r='3' fill='%23222'/%3E%3Ccircle cx='23' cy='25' r='3' fill='%23222'/%3E%3C/svg%3E">
+<title>Taxi Kin — Kinshasa VR Adventure</title>
+<link rel="icon" type="image/png" href="data/logo/icon-128.png">
+<link rel="apple-touch-icon" href="data/logo/icon-192.png">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/style.css">
 <!-- scopes : autres copies des modules pour les trajets « Boulevard du 30 Juin » (?route=30juin) et « Route Poids Lourds »
      (?route=poidslourds), « Avenue de l'Université » (?route=universite) et « By Pass » (?route=bypass), construits dans la même scène que le trajet principal et attachés à lui (routes.js `attach`, `attachPL`, main.js) -->
 <script type="importmap">
 { "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/addons/"
 },
   "scopes": {
     "./js/route.js?route=30juin": { "./js/routes.js": "./js/routes.js?route=30juin" },
@@ -146,16 +148,22 @@
 <div id="menu" class="screen pro">
   <div class="menu-wrap">
     <header class="menu-head">
-      <div class="brand">
-        <div class="brand-badge">KINSHASA · TRANSPORT URBAIN</div>
-        <div class="brand-row">
-          <div class="logo">TAXI <span>KIN</span></div>
-          <p class="menu-tag">Mbote chauffeur ! Choisis ton véhicule et ta ligne à travers Kinshasa, de 06h00 à 18h00.</p>
+      <div class="brand-left">
+        <img src="data/logo/icon-128.png" alt="Logo Taxi-Kin" class="brand-logo-img" onclick="document.getElementById('promo-modal').hidden=false">
+        <div class="brand">
+          <div class="brand-badge">KINSHASA VR ADVENTURE · TRANSPORT URBAIN</div>
+          <div class="brand-row">
+            <div class="logo">TAXI <span>KIN</span></div>
+            <p class="menu-tag">Mbote chauffeur ! Choisis ton véhicule et ta ligne à travers Kinshasa, de 06h00 à 18h00.</p>
+          </div>
         </div>
       </div>
-      <div class="seg mode-switch" role="radiogroup" aria-label="Mode de jeu">
-        <button class="seg-btn on" id="mode-travail" aria-checked="true">🚕 Journée de travail</button>
-        <button class="seg-btn" id="mode-course" aria-checked="false">🏁 Mode Course</button>
+      <div class="head-actions">
+        <button type="button" class="promo-btn" onclick="document.getElementById('promo-modal').hidden=false">🎬 Affiche & Vidéo</button>
+        <div class="seg mode-switch" role="radiogroup" aria-label="Mode de jeu">
+          <button class="seg-btn on" id="mode-travail" aria-checked="true">🚕 Journée de travail</button>
+          <button class="seg-btn" id="mode-course" aria-checked="false">🏁 Mode Course</button>
+        </div>
       </div>
     </header>
     <div class="menu-main">
@@ -266,6 +274,21 @@
     <p id="end-verdict" class="verdict"></p>
     <button id="btn-again" class="big">Nouvelle journée</button>
     <button id="btn-menu" class="ghost">Menu</button>
+  </div>
+</div>
+
+<div id="promo-modal" class="promo-modal" hidden onclick="if(event.target===this){this.hidden=true;const v=document.getElementById('promo-vid');if(v)v.pause();}">
+  <div class="promo-card">
+    <div class="promo-head">
+      <b>🚕 TAXI-KIN · KINSHASA VR ADVENTURE</b>
+      <button type="button" class="promo-close" onclick="document.getElementById('promo-modal').hidden=true;const v=document.getElementById('promo-vid');if(v)v.pause();">✕</button>
+    </div>
+    <div class="promo-grid">
+      <img src="data/logo/poster.jpg" alt="Affiche Taxi-Kin VR Adventure" class="promo-poster">
+      <div class="promo-vid-wrap">
+        <video id="promo-vid" controls playsinline preload="metadata" poster="data/logo/poster.jpg" src="LogoApplication/IMG_9994.MP4"></video>
+      </div>
+    </div>
   </div>
 </div>
 

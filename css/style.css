@@ -273,6 +273,34 @@ h3.step { margin: 12px 0 6px; font-size: 14px; color: var(--yellow); letter-spac
   background: rgba(16, 20, 27, 0.72); border: 1px solid rgba(255,255,255,.09);
   border-radius: 14px; padding: 10px 16px; box-shadow: 0 8px 24px rgba(0,0,0,.28);
 }
+.brand-left { display: flex; align-items: center; gap: 14px; }
+.brand-logo-img {
+  width: 54px; height: 54px; border-radius: 12px; object-fit: cover; cursor: pointer;
+  border: 2px solid var(--yellow); box-shadow: 0 4px 14px rgba(245,196,0,.3); transition: transform .15s;
+}
+.brand-logo-img:hover { transform: scale(1.05); }
+.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.promo-btn {
+  border: 1px solid rgba(245,196,0,.45); background: rgba(245,196,0,.14); color: var(--yellow);
+  border-radius: 10px; padding: 8px 13px; font-size: 12.5px; font-weight: 800; cursor: pointer;
+  transition: background .15s, transform .15s;
+}
+.promo-btn:hover { background: rgba(245,196,0,.26); transform: translateY(-1px); }
+.promo-modal {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 18px;
+  background: rgba(6, 8, 12, 0.85); backdrop-filter: blur(6px);
+}
+.promo-modal[hidden] { display: none; }
+.promo-card {
+  width: min(860px, 100%); max-height: 90vh; overflow-y: auto;
+  background: #12151c; border: 2px solid var(--yellow); border-radius: 16px; padding: 14px 16px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.75);
+}
+.promo-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; color: var(--yellow); font-size: 15px; }
+.promo-close { border: 0; background: rgba(255,255,255,.1); color: #fff; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-weight: 800; }
+.promo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: center; }
+.promo-poster, .promo-vid-wrap video { width: 100%; max-height: 72vh; object-fit: contain; border-radius: 10px; background: #090b0f; }
+@media (max-width: 720px) { .promo-grid { grid-template-columns: 1fr; } }
 .brand { display: flex; flex-direction: column; gap: 2px; }
 .brand-badge {
   display: inline-flex; align-items: center; gap: 6px; width: fit-content;
