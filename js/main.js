@@ -2789,7 +2789,6 @@ if (PARAMS.get('debug')) {
     solid: (x, z, h) => solidAround(x, z, h), get qlife() { return A.qlife; }, aerial: (p, l) => { G.dbgCam = p ? { p, l } : null; }, scene, worldVec, roads: () => ({ ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8 }), get road() { return A; }, switchRoad: (to, x, z, h) => { switchRoad(to, x, z, h, true); Object.assign(taxi, { x, z, heading: h, speed: 0, level: null }); traffic.reset(taxi); life.reset(taxi.z); }, THREE, RT1,
   };
 }
-// ===== MENU EN 4 ÉTAPES (wizard) =====
 let STEP = 1;
 function goStep(n) {
   STEP = n;
@@ -2798,8 +2797,28 @@ function goStep(n) {
   const w = document.querySelector('.menu-wizard');
   if (w) w.scrollTop = 0;
 }
-document.querySelectorAll('[data-next]').forEach(b => b.addEventListener('click', () => goStep(+b.dataset.next)));
-document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => goStep(+b.dataset.back)));
 goStep(1);
 
+// Boutons "Suivant" et "Retour"
+document.querySelectorAll('[data-next]').forEach(b => b.addEventListener('click', () => goStep(+b.dataset.next)));
+document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => goStep(+b.dataset.back)));
+
+// Après clic sur un mode → passer à l'étape 2 (véhicules)
+document.getElementById('mode-travail')?.addEventListener('click', () => setTimeout(() => goStep(2), 80));
+document.getElementById('mode-course')?.addEventListener('click', () => setTimeout(() => goStep(2), 80));
+
+// Après clic sur un véhicule ou une ligne → passer à l'étape suivante
+// (on utilise la delegation car drawMenu() reconstruit les boutons à chaque fois)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#vehs .route-btn')) {
+    setTimeout(() => {
+      if (document.querySelector('#vehs .route-btn[aria-checked="true"]')) goStep(3);
+    }, 200);
+  }
+  if (e.target.closest('#routes .route-btn')) {
+    setTimeout(() => {
+      if (document.querySelector('#routes .route-btn[aria-checked="true"]')) goStep(4);
+    }, 200);
+  }
+});
 
