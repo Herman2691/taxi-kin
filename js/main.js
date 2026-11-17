@@ -2789,3 +2789,17 @@ if (PARAMS.get('debug')) {
     solid: (x, z, h) => solidAround(x, z, h), get qlife() { return A.qlife; }, aerial: (p, l) => { G.dbgCam = p ? { p, l } : null; }, scene, worldVec, roads: () => ({ ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8 }), get road() { return A; }, switchRoad: (to, x, z, h) => { switchRoad(to, x, z, h, true); Object.assign(taxi, { x, z, heading: h, speed: 0, level: null }); traffic.reset(taxi); life.reset(taxi.z); }, THREE, RT1,
   };
 }
+// ===== MENU EN 4 ÉTAPES (wizard) =====
+let STEP = 1;
+function goStep(n) {
+  STEP = n;
+  document.querySelectorAll('.menu-step').forEach(s => s.classList.toggle('active', +s.dataset.step === n));
+  document.querySelectorAll('.wizard-progress span').forEach((d, i) => d.classList.toggle('on', i < n));
+  const w = document.querySelector('.menu-wizard');
+  if (w) w.scrollTop = 0;
+}
+document.querySelectorAll('[data-next]').forEach(b => b.addEventListener('click', () => goStep(+b.dataset.next)));
+document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => goStep(+b.dataset.back)));
+goStep(1);
+
+
