@@ -139,7 +139,7 @@ const pickRoute = it => {
   syncUrl();
   drawMenu();
 };
-$('mode-travail').addEventListener('click', () => { MODE = 'travail'; store('mode', 'travail'); drawMenu(); });
+$('mode-travail').addEventListener('click', () => { MODE = 'travail'; store('mode', 'travail'); drawMenu(); goStep(2); });
 $('mode-course').addEventListener('click', () => {
   MODE = 'course'; store('mode', 'course');
   if (VEH_ID === 'bus' || VEH_ID === 'perso') { store('veh', 'berline'); setVehicle('berline'); }
@@ -149,7 +149,7 @@ $('mode-course').addEventListener('click', () => {
     return;
   }
   if (IT) ensureRaceVariant(IT);
-  drawMenu();
+  drawMenu(); goStep(2);
 });
 for (const [name, what] of THANKS) {
   const li = document.createElement('li');
@@ -876,7 +876,7 @@ function resume() {
   show('play');
 }
 function toMenu() {
-  G.state = 'menu';
+ G.state = 'menu'; goStep(1);
   dismountEnd();
   preacher.leave(true);
   incidents.finish();
@@ -943,7 +943,7 @@ function drawMenu() {
       + `<b>${v.name}</b><span class="about">${v.about}</span>`
       + `<div class="vstats">${statRow(v.athlete ? 'Endurance' : 'Places', v.athlete ? 0.95 : v.places / 10)}${statRow('Vitesse', v.athlete ? 0.55 : (v.max - 12) / 14)}${statRow('Maniable', id === 'moto' || id === 'athlete' ? 0.98 : id === 'bus' ? 0.35 : 0.7)}</div>`
       + `<span class="price">${v.athlete ? 'Footing libre ou Marathon' : v.perso ? 'Sans versement · Balade' : `Versement : ${fmtFC(v.versement)}`}</span>`,
-  })), it => it.id === VEH_ID, it => { store('veh', it.id); setVehicle(it.id); drawMenu(); });
+  })), it => it.id === VEH_ID, it => { store('veh', it.id); setVehicle(it.id); drawMenu(); goStep(3); });
   if (MODE === 'course') for (const [k, b] of [...$('vehs').children].entries()) if (['bus', 'perso'].includes(Object.keys(VEHICULES)[k])) b.disabled = true;
 
   if (IT) {
@@ -978,7 +978,7 @@ function drawMenu() {
           if (i.id === IT.id) { syncUrl(); drawMenu(); return; }
         }
         if (i.id === IT.id) return;
-        pickRoute(i);
+       pickRoute(i); goStep(4);
       });
       rBox.append(btn);
     }
