@@ -1,7 +1,7 @@
 // Circulation sur 2 × 4 voies : beaucoup de taxis et taxis-bus jaunes, des motos qui se faufilent,
 // des camions de marchandises. Suivi de distance, arrêts des taxis-bus, réaction au klaxon.
-import { createCar, createMinibus, createCityBus, createTruck, createMoto, createTricycle, createHatchback, createVan, createSUV, createPolicePickup, createPoliceVan, createAmbulance, createEspritDeVie, createTranscoMidi, createTanker, createCitadine, createCrossover, createYango } from './models.js';
-import { LANE_X, LANE_W, RAMP_X, ROAD_EDGE, flyH, flySlope, inFlyover, roadH, roadSlope, TRAFFIC_END, SIGNALS, signalState, ONEWAY_IN, TRAFFIC_MIX, TRAFFIC_START, jamSpeed, ringShift, WORKS, closedLanesAt } from './world.js';
+import { createCar, createMinibus, createCityBus, createTruck, createMoto, createTricycle, createHatchback, createVan, createSUV, createPolicePickup, createPoliceVan, createAmbulance, createEspritDeVie, createTranscoMidi, createTanker, createCitadine, createCrossover, createYango, createTipperTruck, createContainerTruck, createCraneTruck, createFlatbedTruck, createReeferTruck, createCurtainTruck } from './models.js';
+import { LANE_X, LANE_W, RAMP_X, ROAD_EDGE, flyH, flySlope, inFlyover, roadH, roadSlope, TRAFFIC_END, SIGNALS, signalState, ONEWAY_IN, TRAFFIC_MIX, TRAFFIC_START, jamSpeed, ringShift, WORKS, closedLanesAt, JAMS } from './world.js';
 import { place } from './route.js';
 
 const CAR_COLORS = [0xf2f2f2, 0xb8bec4, 0x1e3a8a, 0x7a1f1f, 0x1f1f1f, 0x2f6f3e, 0x9aa5b1];
@@ -23,6 +23,10 @@ const MIX_OUR = ['taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'bus', 
 // (l'auteur, 08/11 : « dans le chemin de retour il n'y a pas assez de bus ») : autant de bus et de taxis que dans notre sens
 const MIX_ONC = ['taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'amb', 'bus', 'bus', 'bus', 'bus', 'bus', 'van', 'edv', 'car', 'car', 'car', 'police', 'truck', 'city', 'moto', 'moto', 'moto', 'keke', 'keke'];
 
+// Embouteillages graves (routes.js `jams`, force supérieure à 1 ; l'auteur, 20/11 : de Pascal au Quartier 1, beaucoup de véhicules) : une flotte de plus, cachée loin
+// de la route, qui se range pare-chocs contre pare-chocs autour du taxi quand il arrive dans la zone, et disparaît quand il en sort
+const JAM_FLEET = 44;
+const JAM_MIX = ['taxi', 'bus', 'car', 'truck', 'bus', 'keke', 'car', 'taxi', 'truck', 'van', 'car', 'moto', 'bus', 'truck', 'city', 'taxi', 'car', 'edv', 'truck', 'car', 'bus', 'moto', 'taxi', 'truck', 'car', 'keke'];
 const CRUISE = { taxi: [11, 16], bus: [9, 13], van: [10, 14], car: [11, 17], truck: [7, 10], city: [8, 11], moto: [13, 18], keke: [7, 11], police: [11, 16], edv: [8, 12], amb: [13, 18] };
 
 function makeMesh(kind) {
@@ -34,7 +38,11 @@ function makeMesh(kind) {
     case 'edv': return createEspritDeVie();
     case 'amb': return createAmbulance();
     case 'city': return Math.random() < 0.4 ? createTranscoMidi() : createCityBus();
-    case 'truck': return Math.random() < 0.3 ? createTanker() : createTruck();
+    case 'truck': {                                        // (l'auteur, 20/11 : les autres formes de camions du dossier Herman)
+      const r = Math.random();
+      return r < 0.1 ? createTanker() : r < 0.2 ? createTruck() : r < 0.36 ? createTipperTruck() : r < 0.5 ? createContainerTruck() : r < 0.62 ? createCraneTruck()
+        : r < 0.74 ? createFlatbedTruck() : r < 0.87 ? createReeferTruck() : createCurtainTruck();
+    }
     case 'moto': return createMoto();
     case 'keke': return createTricycle();
     default: {                                             // voitures personnelles, de plusieurs modèles
@@ -152,6 +160,8 @@ export class Traffic {
     this.blocks = [];                                // (incidents.js) { z, side } : la circulation de ce côté s'arrête avant z
     for (const k of TRAFFIC_MIX?.our ?? MIX_OUR) this.add(scene, 1, k);
     for (const k of TRAFFIC_MIX?.onc ?? MIX_ONC) this.add(scene, -1, k);
+    this.jamActive = false;
+    if (JAMS.some(j => j.lvl > 1)) for (let i = 0; i < JAM_FLEET; i++) for (const side of [1, -1]) { const v = this.add(scene, side, JAM_MIX[i % JAM_MIX.length]); v.jam = true; this.hideJam(v); }
     // Carrefours à feux : des voitures sortent de la rue et traversent le boulevard pendant le vert de la rue.
     // dir -1 : de la droite vers la gauche, dir +1 : de la gauche vers la droite (seulement s'il y a une rue de ce côté)
     this.crossing = [];
@@ -268,7 +278,20 @@ export class Traffic {
     const mesh = makeMesh(kind);
     mesh.rotation.order = 'YXZ';      // cap puis tangage (rampes)
     scene.add(mesh);
-    this.list.push({ mesh, side, kind, len: mesh.userData.L, wid: mesh.userData.W, x: 0, targetX: 0, z: 0, speed: 0, cruise: 0, stop: 0, stuck: 0, weave: 0 });
+    const v = { mesh, side, kind, len: mesh.userData.L, wid: mesh.userData.W, x: 0, targetX: 0, z: 0, speed: 0, cruise: 0, stop: 0, stuck: 0, weave: 0 };
+    this.list.push(v);
+    return v;
+  }
+
+  /** Les véhicules de l'embouteillage grave : cachés très loin tant que le taxi n'est pas dans la zone. */
+  hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.mesh.visible = false; }
+  startJam(taxi) {
+    this.jamActive = true;
+    for (const v of this.list) if (v.jam) { this.place(v, taxi.z, 0, taxi); put(v, v.side === 1 ? 0 : Math.PI); }
+  }
+  stopJam() {
+    this.jamActive = false;
+    for (const v of this.list) if (v.jam) this.hideJam(v);
   }
 
   laneFree(x, z, self, taxi, margin = 10, side = 1) {
@@ -284,6 +307,11 @@ export class Traffic {
       v.fallRoll = 0;
       v.mesh.rotation.z = 0;
       v.mesh.traverse(m => { if (m.userData.rider) m.visible = true; });
+    }
+    if (v.jam && taxi) {                                                    // (embouteillage grave : juste devant le taxi, et dans la zone de l'embouteillage)
+      const J = JAMS.find(j => j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
+      zFrom = taxi.z + 25; span = 125;
+      if (J) zFrom = Math.min(J.z0 - 20, Math.max(J.z1 + 20 + span, zFrom));
     }
     const sign = v.side;
     // Les taxis-bus et camions roulent plutôt à droite, les voitures à gauche
@@ -319,11 +347,13 @@ export class Traffic {
   }
 
   reset(taxi) {
-    const our = this.list.filter(v => v.side === 1 && !v.racer);
-    const onc = this.list.filter(v => v.side === -1 && !v.racer);
+    if (this.jamActive) this.stopJam();
+    const our = this.list.filter(v => v.side === 1 && !v.racer && !v.jam);
+    const onc = this.list.filter(v => v.side === -1 && !v.racer && !v.jam);
+    for (const v of this.list) if (v.jam) this.hideJam(v);
     our.forEach((v, i) => this.place(v, taxi.z - 40 - i * (AHEAD / our.length), 10, taxi));
     onc.forEach((v, i) => this.place(v, taxi.z + 60 - i * ((AHEAD + 40) / onc.length), 14, taxi));
-    for (const v of this.list) put(v, v.side === 1 ? 0 : Math.PI);
+    for (const v of this.list) if (!v.jam) put(v, v.side === 1 ? 0 : Math.PI);
     this.resetCrossing();
   }
 
@@ -544,7 +574,12 @@ export class Traffic {
     // Le taxi revient vers l'aéroport (+z) : on renouvelle les voitures devant lui dans ce sens (sans dépasser le début de la route)
     const back = Math.cos(taxi.heading ?? 0) < -0.35, zMax = Math.min(140, TRAFFIC_START - 30);
     const peds = this.extraPeds?.length ? (this.peds ?? []).concat(this.extraPeds) : (this.peds ?? []);   // (incidents.js : les gens sur la chaussée)
+    if (this.jamActive !== undefined && !taxi.fixed) {
+      const J = JAMS.find(j => j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
+      if (J && !this.jamActive) this.startJam(taxi); else if (!J && this.jamActive) this.stopJam();
+    }
     for (const v of this.list) {
+      if (v.jam && !this.jamActive) continue;
       if (v.held) { put(v, v.heldYaw ?? (v.side > 0 ? 0 : Math.PI)); continue; }   // (incidents.js : voiture arrêtée dans une scène)
       if (v.side === -1) {
         if (v.racer?.done) { v.mesh.visible = false; continue; }

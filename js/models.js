@@ -500,6 +500,91 @@ export function createTruck() {
     b.box(0.46, 0.11, 0.02, PLATE_W, 0, 0.72, L / 2 + 0.02);
   });
 }
+// ---------- Camions lourds (photos du dossier Herman : Howo benne chargée de sacs, Howo camion-grue, semi-remorque AMICONGO, DAF plateau / frigorifique / bâché) ----------
+/** Châssis commun : la cabine du camion de base (peinte à la couleur voulue), l'avant, les roues ; `body(b, low, g)` dessine la caisse derrière la cabine. */
+function heavy(key, L, W, cab, rear, body, extra = []) {
+  const CL = 2.6, z0 = -L / 2 + CL / 2, wf = -L / 2 + 0.95;
+  const sp = { L: CL, W, z0, sill: 0.78, axle: 0.5, R: 0.58, wheelZ: [wf], mirrorY: 2.0, mirrorZ: wf - 0.45, mirrorColor: 0x1e2229, tumble: 0.05, tyre: 0.3, shield: [0.26, 0.42], pillars: [[0.24, 0.3], [0.72, 1]], lamp: 0.06, tail: 0, hw: HW_BOX,
+    top: [[0, 0.95], [0.012, 1.25], [0.05, 1.5], [0.18, 1.6], [0.26, 1.8], [0.42, 2.72], [0.58, 2.9], [0.96, 2.85], [1, 1.1]], belt: [[0, 0.9], [0.26, 1.62], [1, 1.72]] };
+  return vehicle(key, L, W, (b, low) => {
+    b.box(W * 0.78, 0.32, L * 0.94, 0x26292e, 0, 0.78, 0.1);
+    loftBody(b, sp, cab, low);
+    realWheels(b, sp, low);
+    realWheels(b, { ...sp, wheelZ: rear }, low);
+    b.box(W * 0.56, 0.62, 0.08, CHROME, 0, 1.28, -L / 2 + 0.04).box(W * 0.5, 0.54, 0.09, GRILLE, 0, 1.28, -L / 2 + 0.03).box(W * 1.02, 0.3, 0.26, 0x2b2f36, 0, 0.66, -L / 2 + 0.12);
+    body(b, low, { L, W, CL, z0: -L / 2 + CL + 0.12, z1: L / 2 - 0.08 });
+    for (const sx of [-0.8, 0.8]) b.box(0.42, 0.14, 0.05, 0xb3131a, sx, 0.9, L / 2 + 0.02);
+    b.box(0.46, 0.11, 0.02, PLATE_W, 0, 0.72, L / 2 + 0.02);
+  }, extra);
+}
+/** Howo à benne orange chargée de sacs blancs sous une bâche bleue, un homme assis sur le chargement (photo vehicule111). */
+export function createTipperTruck() {
+  const L = 9.4, W = 2.5, orange = 0xe2601a;
+  return heavy('tipper', L, W, orange, [L / 2 - 1.15, L / 2 - 2.45], (b, low, g) => {
+    const len = g.z1 - g.z0, zc = (g.z0 + g.z1) / 2;
+    b.box(W, 0.22, len, 0x383c42, 0, 1.0, zc).box(W * 0.98, 1.45, len, orange, 0, 1.85, zc).box(W * 0.98, 0.7, 0.16, orange, 0, 2.95, g.z0 + 0.1);   // benne et tête de benne
+    if (!low) for (let z = g.z0 + 0.5; z < g.z1 - 0.2; z += 0.75) for (const sx of [-1, 1]) b.box(0.05, 1.4, 0.08, 0xb44a12, sx * (W * 0.49 + 0.02), 1.86, z);
+    // sacs blancs empilés en tas, bâche bleue à l'avant
+    const rows = low ? 3 : 7;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < 3; c++) b.box(0.78, 0.46 + (r % 2) * 0.05, 0.62, r % 3 === 1 ? 0xe6e0d0 : 0xf3f1ea, (c - 1) * 0.78, 2.78 + (c === 1 ? 0.42 : 0), g.z1 - 0.5 - r * 0.62);
+    b.box(W * 0.9, 0.22, len * 0.42, 0x2f7bd8, 0, 3.55, g.z0 + len * 0.28, 0.12).box(0.5, 0.5, 1.2, 0x2f7bd8, -0.5, 3.35, g.z0 + len * 0.05);
+    if (!low) b.add(new THREE.CapsuleGeometry(0.17, 0.4, 2, 6).scale(1.05, 1, 0.8), 0xc9b38a, 0.25, 3.78, g.z0 + len * 0.55, 0.25).ball(0.13, SKIN[1], 0.25, 4.2, g.z0 + len * 0.5);
+  });
+}
+/** Semi-remorque AMICONGO : tracteur blanc, conteneur bleu de 40 pieds, AMICONGO en blanc sur le flanc (photo vehicule222). */
+export function createContainerTruck() {
+  const L = 14.2, W = 2.5, blue = 0x24508c;
+  return heavy('container_ami', L, W, 0xf3f4f6, [L / 2 - 1.2, L / 2 - 2.5, L / 2 - 3.8], (b, low, g) => {
+    const len = g.z1 - g.z0, zc = (g.z0 + g.z1) / 2;
+    b.box(W * 0.4, 0.3, len, 0x2a2d32, 0, 1.0, zc);
+    b.box(W, 0.2, len + 0.3, 0x2a2d32, 0, 1.08, zc + 0.7).box(W * 0.98, 2.75, len - 0.5, blue, 0, 2.55, zc + 0.55);
+    b.box(W * 0.2, 0.25, 0.6, 0x1c1f24, 0, 1.0, g.z0 + 0.5);                                    // sellette
+    if (!low) for (let z = g.z0 + 0.9; z < g.z1 - 0.4; z += 0.55) for (const sx of [-1, 1]) b.box(0.04, 2.7, 0.06, 0x1d4274, sx * (W * 0.49 + 0.015), 2.55, z);   // nervures
+  }, [decalMesh(decalMat('AMICONGO', '#24508c', '#f4f6f8'), [...onSides(5.2, 0.8, 2.5, 2.9, 1.2)]), decalMesh(decalMat('AMICONGO', '#f3f4f6', '#1d4fa0'), [[1.4, 0.26, 0, 1.0, -14.2 / 2 - 0.03, Math.PI]])]);
+}
+/** Howo camion-grue : cabine rouge, plateau rouge à ridelles, grue jaune repliée vers l'avant au-dessus de la cabine (photo vehicule333). */
+export function createCraneTruck() {
+  const L = 10.2, W = 2.5, red = 0xc12a1e, yellow = 0xf2b400;
+  return heavy('crane', L, W, red, [L / 2 - 1.1, L / 2 - 2.35, L / 2 - 3.6], (b, low, g) => {
+    const len = g.z1 - g.z0, zc = (g.z0 + g.z1) / 2;
+    b.box(W, 0.22, len, 0x383c42, 0, 1.0, zc).box(W * 0.98, 0.1, len * 0.52, 0xa82218, 0, 1.18, g.z1 - len * 0.26).box(W * 0.98, 0.62, len * 0.52, red, 0, 1.5, g.z1 - len * 0.26);   // plateau à ridelles
+    b.box(1.5, 0.9, 1.3, yellow, 0, 1.6, g.z0 + 0.8).box(0.5, 1.5, 0.5, 0x3a3e44, 0, 2.0, g.z0 + 0.8);                                          // socle de la grue
+    for (const sx of [-1, 1]) b.box(0.18, 0.18, 1.8, yellow, sx * 1.2, 1.1, g.z0 + 0.8).box(0.6, 0.12, 0.6, 0x2a2c30, sx * 1.9, 0.93, g.z0 + 0.8);   // stabilisateurs
+    // flèche télescopique : trois éléments, de la base vers l'avant, au-dessus de la cabine
+    b.box(0.5, 0.6, 3.0, yellow, 0, 3.0, g.z0 - 0.5, -0.05).box(0.38, 0.46, 2.6, 0xe0a200, 0, 3.15, g.z0 - 2.4, -0.1).box(0.28, 0.34, 1.8, yellow, 0, 3.25, g.z0 - 3.9, -0.12);
+    b.box(0.07, 0.07, 1.0, 0x2a2c30, 0, 2.85, g.z0 - 4.6).box(0.3, 0.2, 0.2, 0x2a2c30, 0, 2.3, g.z0 - 4.6);
+    for (const sx of [-0.45, 0.45]) b.box(0.25, 0.25, 0.25, 0xf28c00, sx, 3.05, g.z0 - 0.6);                                                  // gyrophares orange
+  });
+}
+/** DAF à plateau (photos de l'annonce) : cabine blanche ou bleue, plateau bas à ridelles basses, chargement de blocs ou de palettes. */
+export function createFlatbedTruck() {
+  const L = 9.0, W = 2.5, cab = pick([0xf2f3f4, 0x1f55c2, 0x1f55c2]);
+  return heavy(`flat|${cab}`, L, W, cab, [L / 2 - 1.2, L / 2 - 2.5], (b, low, g) => {
+    const len = g.z1 - g.z0, zc = (g.z0 + g.z1) / 2;
+    b.box(W, 0.22, len, 0x383c42, 0, 1.0, zc).box(W * 0.98, 0.12, len, 0x7a6a52, 0, 1.2, zc);
+    for (const sx of [-1, 1]) b.box(0.06, 0.34, len, cab === 0xf2f3f4 ? 0xdcdfe3 : 0x1b3f8a, sx * (W * 0.49), 1.43, zc);
+    b.box(W * 0.98, 0.85, 0.12, 0x2b2f36, 0, 1.6, g.z0 + 0.06);
+    for (let i = 0; i < (low ? 2 : 6); i++) b.box(0.9, 0.5, 0.9, [0xa8a49a, 0x8d8a82, 0xb38a5a][i % 3], ((i % 2) - 0.5) * 1.0, 1.6 + Math.floor(i / 4) * 0.5, g.z0 + 1.0 + (i >> 1) * 1.1);
+  });
+}
+/** DAF frigorifique : caisse blanche isotherme, groupe de froid au-dessus de la cabine, portes arrière à joints (photo de l'annonce). */
+export function createReeferTruck() {
+  const L = 9.6, W = 2.5;
+  return heavy('reefer', L, W, 0xf3f4f6, [L / 2 - 1.2, L / 2 - 2.5], (b, low, g) => {
+    const len = g.z1 - g.z0, zc = (g.z0 + g.z1) / 2;
+    b.box(W, 0.22, len, 0x383c42, 0, 1.0, zc).box(W * 0.98, 2.65, len - 0.1, 0xf6f7f8, 0, 2.5, zc + 0.05).box(1.6, 0.62, 0.4, 0x9aa1a8, 0, 4.0, g.z0 + 0.35);
+    if (!low) { b.box(0.03, 2.55, 0.05, 0xc9ced3, -0.62, 2.5, g.z1).box(0.03, 2.55, 0.05, 0xc9ced3, 0.62, 2.5, g.z1); b.box(W * 0.98, 0.08, len - 0.1, 0xdfe3e6, 0, 3.86, zc + 0.05); }
+  });
+}
+/** DAF bâché : plateau avec ridelles et rideau bleu tendu sur des arceaux (photo de l'annonce). */
+export function createCurtainTruck() {
+  const L = 10.2, W = 2.5, curtain = pick([0x2a54a8, 0x2a54a8, 0x2f6b45]);
+  return heavy(`curtain|${curtain}`, L, W, 0xf2f3f4, [L / 2 - 1.2, L / 2 - 2.5, L / 2 - 3.8], (b, low, g) => {
+    const len = g.z1 - g.z0, zc = (g.z0 + g.z1) / 2;
+    b.box(W, 0.22, len, 0x383c42, 0, 1.0, zc).box(W * 0.98, 2.55, len - 0.1, curtain, 0, 2.45, zc + 0.05).box(W * 0.98, 0.1, len - 0.1, 0xcfd6dc, 0, 3.78, zc + 0.05);
+    if (!low) for (let z = g.z0 + 0.4; z < g.z1 - 0.2; z += 0.62) for (const sx of [-1, 1]) b.box(0.05, 2.5, 0.06, 0xdfe4e8, sx * (W * 0.49 + 0.02), 2.45, z);
+  });
+}
 /** Camion-citerne SEP Congo (photo « sep ») : cabine blanche à bas gris foncé, calandre noire, citerne blanche à liseré rouge, SEP en rouge. */
 export function createTanker() {
   const L = 9.2, W = 2.45, CL = 2.5, z0 = -L / 2 + CL / 2, wf = -L / 2 + 1.0, white = 0xf2f3f4, dark = 0x3a3e44;

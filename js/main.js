@@ -2813,6 +2813,27 @@ if (PARAMS.get('debug')) {
     solid: (x, z, h) => solidAround(x, z, h), get qlife() { return A.qlife; }, aerial: (p, l) => { G.dbgCam = p ? { p, l } : null; }, scene, worldVec, roads: () => ({ ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8 }), get road() { return A; }, switchRoad: (to, x, z, h) => { switchRoad(to, x, z, h, true); Object.assign(taxi, { x, z, heading: h, speed: 0, level: null }); traffic.reset(taxi); life.reset(taxi.z); }, THREE, RT1,
   };
 }
+// Essai de l'embouteillage grave (?essai=bouchon&debug=1) : le taxi est posé au milieu de la zone, la circulation tourne 40 s, puis le compte est écrit dans la console
+if (PARAMS.get('essai') === 'bouchon') {
+  const stat = z => {
+    const near = traffic.list.filter(v => v.mesh.visible && Math.abs(v.z - z) < 100), jam = traffic.list.filter(v => v.jam && v.mesh.visible);
+    let overlaps = 0;
+    for (const a of near) for (const b of near) if (a !== b && a.side === b.side && Math.abs(a.x - b.x) < 1.4 && a.z < b.z && b.z - a.z < (a.len + b.len) / 2 - 0.3) overlaps++;
+    const sp = near.reduce((n, v) => n + v.speed, 0) / Math.max(1, near.length);
+    const kinds = {};
+    for (const v of near) kinds[v.kind] = (kinds[v.kind] ?? 0) + 1;
+    return `visibles ±100 m : ${near.length} (dont embouteillage ${jam.length}), vitesse moyenne ${sp.toFixed(1)} m/s, chevauchements ${overlaps}, types ${JSON.stringify(kinds)}`;
+  };
+  startShift();
+  const z0 = -A.RT.toGame(7000);
+  Object.assign(taxi, { x: W1.LANE_R ?? 4, z: z0, speed: 0 });
+  traffic.reset(taxi);
+  console.log(`BOUCHON début : taxi z ${z0.toFixed(0)}, ${traffic.list.length} véhicules dans la liste, dont ${traffic.list.filter(v => v.jam).length} de l'embouteillage`);
+  for (let i = 0; i < 800; i++) { traffic.update(0.05, taxi, G.time + i * 0.05); if (i === 20) console.log('BOUCHON 1 s : ' + stat(z0)); if (i === 399) console.log('BOUCHON 20 s : ' + stat(z0)); }
+  console.log('BOUCHON 40 s : ' + stat(z0));
+  taxi.z = -A.RT.toGame(2500); traffic.update(0.05, taxi, 0);
+  console.log('BOUCHON hors zone (taxi à 2,5 km) : actif ' + traffic.jamActive + ', visibles de l\'embouteillage ' + traffic.list.filter(v => v.jam && v.mesh.visible).length);
+}
 // ===== MENU WIZARD 4 ÉTAPES (version corrigée) =====
 let STEP = 1;
 
