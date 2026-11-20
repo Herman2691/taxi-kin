@@ -229,7 +229,8 @@ function go(sansDepart = false) {
   store('radioOn', $('sel-radio').value);
   $('btn-start').disabled = true;
   $('btn-start').textContent = '⏳ Chargement de la ville…';
-  location.href = url.href;
+  document.documentElement.classList.add('boot');          // (le cercle qui tourne, tout de suite)
+  setTimeout(() => { location.href = url.href; }, 60);
 }
 $('btn-start').addEventListener('click', () => go());
 $('btn-vr').addEventListener('click', () => go(true));

@@ -70,7 +70,12 @@ export const inFlyover = (z, margin = 0) => FLYOVERS.some(f => z < f.z0 + margin
 export const FOOTBRIDGES = R.footbridges.map(g);
 export const TRAFFIC_MIX = R.traffic ?? R.pl?.traffic ?? null;    // (véhicules propres au trajet : voir traffic.js)
 /** Embouteillages (routes.js `jams`) : zones où la circulation roule au pas, en accordéon. */
-export const JAMS = (R.jams ?? []).map(([a, b, lvl = 1]) => ({ z0: g(a), z1: g(b), lvl }));
+export const JAMS = (R.jams ?? []).map(([a, b, lvl = 1, prob = 1]) => ({ z0: g(a), z1: g(b), lvl, prob, on: true }));   // prob : chance qu'il y en ait un dans la journée (l'auteur, 20/11 : 8 sur 10)
+/** Tire au sort les embouteillages de la journée (à chaque début de journée ou de course) ; renvoie ceux qui ont lieu. */
+export function randomizeJams() {
+  for (const j of JAMS) j.on = Math.random() < j.prob;
+  return JAMS.filter(j => j.on);
+}
 // ---------- Les travaux (l'auteur, 13/11 : « ajouter aussi des travaux dans le boulevard ») : routes.js `works`. Les voies fermées sont entourées de
 // barrières, précédées d'un biseau de cônes et d'un panneau « TRAVAUX » ; dedans : tranchée, tas de sable et de gravier, pelleteuse, rouleau, camion.
 // Les ouvriers sont animés par life.js ; la circulation se rabat sur les voies ouvertes (traffic.js) ; le véhicule du joueur s'arrête aux barrières.
@@ -113,11 +118,11 @@ export function closedLanesAt(side, z) {
   return null;
 }
 
-export const inJam = (z, m = 0) => JAMS.some(j => z < j.z0 + m && z > j.z1 - m);
+export const inJam = (z, m = 0) => JAMS.some(j => j.on && z < j.z0 + m && z > j.z1 - m);
 /** Vitesse permise (m/s) en z au temps t : Infinity hors embouteillage ; entrée et sortie progressives ; des vagues qui avancent et s'arrêtent. */
 export function jamSpeed(z, t) {
   for (const j of JAMS) {
-    if (z > j.z0 + 60 || z < j.z1 - 60) continue;
+    if (!j.on || z > j.z0 + 60 || z < j.z1 - 60) continue;
     const edge = Math.min(1, (j.z0 + 60 - z) / 120, (z - j.z1 + 60) / 120);
     const wave = Math.max(0, Math.sin(z * 0.045 + t * 0.55));
     return 14 - edge * (14 - (0.8 + 6.5 * wave) / j.lvl);

@@ -25,7 +25,7 @@ const MIX_ONC = ['taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'amb', 'bus', '
 
 // Embouteillages graves (routes.js `jams`, force supérieure à 1 ; l'auteur, 20/11 : de Pascal au Quartier 1, beaucoup de véhicules) : une flotte de plus, cachée loin
 // de la route, qui se range pare-chocs contre pare-chocs autour du taxi quand il arrive dans la zone, et disparaît quand il en sort
-const JAM_FLEET = 44;
+const JAM_FLEET = { 1: 100, '-1': 55 };       // (l'auteur, 20/11, image fondvoiture : toutes les voies pleines, pare-chocs contre pare-chocs, la file jusqu'à l'horizon)
 const JAM_MIX = ['taxi', 'bus', 'car', 'truck', 'bus', 'keke', 'car', 'taxi', 'truck', 'van', 'car', 'moto', 'bus', 'truck', 'city', 'taxi', 'car', 'edv', 'truck', 'car', 'bus', 'moto', 'taxi', 'truck', 'car', 'keke'];
 const CRUISE = { taxi: [11, 16], bus: [9, 13], van: [10, 14], car: [11, 17], truck: [7, 10], city: [8, 11], moto: [13, 18], keke: [7, 11], police: [11, 16], edv: [8, 12], amb: [13, 18] };
 
@@ -161,7 +161,7 @@ export class Traffic {
     for (const k of TRAFFIC_MIX?.our ?? MIX_OUR) this.add(scene, 1, k);
     for (const k of TRAFFIC_MIX?.onc ?? MIX_ONC) this.add(scene, -1, k);
     this.jamActive = false;
-    if (JAMS.some(j => j.lvl > 1)) for (let i = 0; i < JAM_FLEET; i++) for (const side of [1, -1]) { const v = this.add(scene, side, JAM_MIX[i % JAM_MIX.length]); v.jam = true; this.hideJam(v); }
+    if (JAMS.some(j => j.lvl > 1)) for (const side of [1, -1]) for (let i = 0; i < JAM_FLEET[side]; i++) { const v = this.add(scene, side, JAM_MIX[(i * 7 + (side > 0 ? 0 : 3)) % JAM_MIX.length]); v.jam = true; this.hideJam(v); }
     // Carrefours à feux : des voitures sortent de la rue et traversent le boulevard pendant le vert de la rue.
     // dir -1 : de la droite vers la gauche, dir +1 : de la gauche vers la droite (seulement s'il y a une rue de ce côté)
     this.crossing = [];
@@ -284,6 +284,7 @@ export class Traffic {
   }
 
   /** Les véhicules de l'embouteillage grave : cachés très loin tant que le taxi n'est pas dans la zone. */
+  inJamNow(z) { return this.jamActive && JAMS.some(j => j.on && j.lvl > 1 && z < j.z0 && z > j.z1); }
   hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.mesh.visible = false; }
   startJam(taxi) {
     this.jamActive = true;
@@ -309,8 +310,8 @@ export class Traffic {
       v.mesh.traverse(m => { if (m.userData.rider) m.visible = true; });
     }
     if (v.jam && taxi) {                                                    // (embouteillage grave : juste devant le taxi, et dans la zone de l'embouteillage)
-      const J = JAMS.find(j => j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
-      zFrom = taxi.z + 25; span = 125;
+      const J = JAMS.find(j => j.on && j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
+      zFrom = taxi.z + 25; span = v.side > 0 ? 240 : 200;
       if (J) zFrom = Math.min(J.z0 - 20, Math.max(J.z1 + 20 + span, zFrom));
     }
     const sign = v.side;
@@ -323,13 +324,13 @@ export class Traffic {
       x = sign * LANE_X[lane];
       z = clearOfSignals(z, v.side, v.len);
       if (this.laneClosedNear(v.side, lane, z, 60)) continue;               // (l'auteur, 13/11 : pas dans les voies fermées d'un chantier)
-      if (this.laneFree(x, z, v, taxi, 14, v.side)) { free = true; break; }   // (l'auteur, 13/11 : « les véhicules se passent transparents » : jamais posé sur un autre)
+      if (this.laneFree(x, z, v, taxi, v.jam ? 5 + v.len / 2 : 14, v.side)) { free = true; break; }   // (l'auteur, 13/11 : « les véhicules se passent transparents » : jamais posé sur un autre)
     }
     if (!free) {
       // (aucune place en 12 essais : une voie ouverte, jamais une voie fermée par un chantier ; puis plus loin jusqu'à une place libre)
       const away = taxi ? (z <= taxi.z ? -1 : 1) : -1;
       if (this.laneClosedNear(v.side, laneOf(x), z, 60)) { const l = LANE_X.map((_, i) => i).find(i => !this.laneClosedNear(v.side, i, z, 60)); if (l !== undefined) x = sign * LANE_X[l]; }
-      for (let k = 0; k < 40 && (!this.laneFree(x, z, v, taxi, 14, v.side) || this.laneClosedNear(v.side, laneOf(x), z, 60)); k++) z += away * 7;
+      for (let k = 0; k < 40 && (!this.laneFree(x, z, v, taxi, v.jam ? 5 + v.len / 2 : 14, v.side) || this.laneClosedNear(v.side, laneOf(x), z, 60)); k++) z += away * (v.jam ? 4 : 7);
     }
     v.x = v.targetX = x;
     v.z = z;
@@ -575,7 +576,7 @@ export class Traffic {
     const back = Math.cos(taxi.heading ?? 0) < -0.35, zMax = Math.min(140, TRAFFIC_START - 30);
     const peds = this.extraPeds?.length ? (this.peds ?? []).concat(this.extraPeds) : (this.peds ?? []);   // (incidents.js : les gens sur la chaussée)
     if (this.jamActive !== undefined && !taxi.fixed) {
-      const J = JAMS.find(j => j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
+      const J = JAMS.find(j => j.on && j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
       if (J && !this.jamActive) this.startJam(taxi); else if (!J && this.jamActive) this.stopJam();
     }
     for (const v of this.list) {
@@ -594,7 +595,7 @@ export class Traffic {
           if (o === v || o.side !== -1 || o.z <= v.z || Math.abs(o.x - v.x) > (o.wid + v.wid) / 2 + 0.2) continue;
           const g = o.z - v.z - (o.len + v.len) / 2;
           if (g < lg) { lg = g; lo = o; }
-          if (g < 18) target = Math.min(target, Math.max(0, o.speed + (g - 4) * 0.6));
+          if (g < 18) target = Math.min(target, Math.max(0, o.speed + (g - (this.inJamNow(v.z) ? 1.9 : 4)) * 0.6));
         }
         const taxiAhead = taxi.z > v.z && sameLevel(taxi, v) && Math.abs(taxi.x - v.x) < (tw(taxi) + v.wid) / 2 + 0.1;
         for (const q of peds) {                                             // piéton devant elle (elle roule vers +z)
@@ -666,7 +667,7 @@ export class Traffic {
         const g = v.z - q.z - v.len / 2 - 1.5;
         if (g < gap) { gap = g; lead = 0; }
       }
-      const safe = v.kind === 'moto' ? 3 : 6;
+      const safe = v.kind === 'moto' ? 3 : this.inJamNow(v.z) ? 1.9 : 6;
       if (gap < safe + 10) target = Math.min(target, Math.max(0, lead + (gap - safe) * 0.6));
       for (const bk of this.blocks) if (bk.side === 1) { const g = v.z - v.len / 2 - bk.z; if (g > -8 && g < 90) target = Math.min(target, Math.sqrt(2 * 6 * Math.max(0, g - 3))); }   // (incidents.js : route bloquée ; freinage selon la distance d'arrêt, même pour la police)
       target = Math.min(target, this.signalLimit(v, st, 1));                // feu rouge devant : arrêt à la ligne

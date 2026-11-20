@@ -163,7 +163,7 @@ export const ROUTES = {
     // Foule (l'auteur, 07/11) : beaucoup de piétons, des gens qui traversent le boulevard, des clients qui se précipitent vers les taxis [début, fin (m), nom]
     crowds: [[4000, 7000, 'Siforco · Kingasani · Masina · Pascal · BKTF'], [7300, 8300, 'Bitabe · Liberté'], [8650, 9320, 'Quartier 1']],
     // Embouteillages (l'auteur, 08/11 & 16/11 : Pascal, Bitabe → Quartier 1 ; 20/11 : de Pascal au Quartier 1 d'un seul tenant, grave : force 1,5 (2,5 était trop lent à jouer) = vitesse de 0,5 à 5 m/s et flotte de véhicules en plus, traffic.js ; Limete 13e & 12e Rues et 7e Rue, Av. de la Libération → Mandela) [début, fin (m réels), force]
-    jams: [[5780, 9050, 1.5], [14300, 15050, 1], [15560, 15860, 1], [21089, 24185, 1]],
+    jams: [[5780, 9050, 1.5, 0.8], [14300, 15050, 1], [15560, 15860, 1], [21089, 24185, 1]],
     // (l'auteur, 10/11) bagarres de Kuluna qui bloquent la route : Masina Quartier 3 et Kingasani ya Suka ; vols à moto : Pascal (et la Place Victoire, Kasa-Vubu)
     kuluna: [[4250, 5150]],
     thefts: [[5850, 6450]],

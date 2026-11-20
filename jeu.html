@@ -14,6 +14,11 @@
 <link rel="stylesheet" href="css/style.css">
 <style>
   #boot { display: none; }
+  /* indicateur de chargement : ne tourne que par transform, donc continue même quand la page calcule */
+  .spin { width: 54px; height: 54px; margin: 0 auto 16px; border-radius: 50%; border: 6px solid rgba(255,255,255,.18); border-top-color: #f5c400; animation: tkspin .9s linear infinite; will-change: transform; }
+  @keyframes tkspin { to { transform: rotate(360deg); } }
+  #btn-start:disabled::before { content: ''; display: inline-block; width: 14px; height: 14px; margin-right: 8px; border-radius: 50%; border: 3px solid rgba(0,0,0,.25); border-top-color: #000; animation: tkspin .9s linear infinite; vertical-align: -2px; }
+
   .boot #boot { display: flex; position: fixed; inset: 0; z-index: 99; background: #10151c; color: #fff; align-items: center; justify-content: center; text-align: center; font: 600 18px/1.5 system-ui, sans-serif; }
   .boot #boot a { color: #f5c400; font-size: 14px; }
   .boot #menu { display: none !important; }
@@ -304,7 +309,7 @@
   </div>
 </div>
 
-<div id="boot"><div><p id="boot-msg">🚕 Construction de la ville…<br><small>Quelques secondes, le jeu démarre tout seul.</small></p><a href="index.html">← Retour au menu</a></div></div>
+<div id="boot"><div><div class="spin"></div><p id="boot-msg">🚕 Construction de la ville…<br><small>Quelques secondes, le jeu démarre tout seul.</small></p><a href="index.html">← Retour au menu</a></div></div>
 
 <div id="rotate"><div><div class="phone"></div><p>Tourne ton téléphone<br>pour conduire</p></div></div>
 

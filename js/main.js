@@ -804,6 +804,11 @@ function startShift() {
   $('choice').hidden = true;
   rain.planDay(SHIFT_SECONDS);
   // (l'auteur, 14/11 : « le chantier ne doit pas être à chaque course, c'est aléatoire ») : le tirage des chantiers de la journée (test : ?travaux=1)
+  // (l'auteur, 20/11 : l'embouteillage de Pascal au Quartier 1 n'a pas lieu à chaque course : 8 fois sur 10)
+  let bouchon = false;
+  for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeJams) bouchon = r.W.randomizeJams().some(j => j.lvl > 1) || bouchon;
+  if (PARAMS.get('bouchon')) for (const r of [ROAD1]) r.W.JAMS.forEach(j => { j.on = PARAMS.get('bouchon') !== '0'; });
+  if (bouchon) setTimeout(() => { if (G.state === 'play') hud.toast('📻 Embouteillage signalé de Pascal au Quartier 1 aujourd’hui', 5); }, 4000);
   for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeWorks) { r.W.randomizeWorks(); if (PARAMS.get('travaux')) r.W.WORKS.forEach(Wk => { Wk.on = true; for (const m of Wk.meshes) m.visible = true; }); }
   worksWarned.clear();
   if (PARAMS.get('pluie')) rain.startNow(Number(PARAMS.get('pluie')) || 400);   // (test : ?pluie=1)
@@ -2816,13 +2821,13 @@ if (PARAMS.get('debug')) {
 // Essai de l'embouteillage grave (?essai=bouchon&debug=1) : le taxi est posé au milieu de la zone, la circulation tourne 40 s, puis le compte est écrit dans la console
 if (PARAMS.get('essai') === 'bouchon') {
   const stat = z => {
-    const near = traffic.list.filter(v => v.mesh.visible && Math.abs(v.z - z) < 100), jam = traffic.list.filter(v => v.jam && v.mesh.visible);
+    const near = traffic.list.filter(v => v.mesh.visible && Math.abs(v.z - z) < 120), jam = traffic.list.filter(v => v.jam && v.mesh.visible);
     let overlaps = 0;
     for (const a of near) for (const b of near) if (a !== b && a.side === b.side && Math.abs(a.x - b.x) < 1.4 && a.z < b.z && b.z - a.z < (a.len + b.len) / 2 - 0.3) overlaps++;
     const sp = near.reduce((n, v) => n + v.speed, 0) / Math.max(1, near.length);
     const kinds = {};
     for (const v of near) kinds[v.kind] = (kinds[v.kind] ?? 0) + 1;
-    return `visibles ±100 m : ${near.length} (dont embouteillage ${jam.length}), vitesse moyenne ${sp.toFixed(1)} m/s, chevauchements ${overlaps}, types ${JSON.stringify(kinds)}`;
+    return `visibles ±120 m : ${near.length} (dont embouteillage ${jam.length}), vitesse moyenne ${sp.toFixed(1)} m/s, chevauchements ${overlaps}, types ${JSON.stringify(kinds)}`;
   };
   startShift();
   const z0 = -A.RT.toGame(7000);
