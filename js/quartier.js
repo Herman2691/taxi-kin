@@ -30,7 +30,7 @@ export class QuartierLife {
     for (let i = 0; i < (paths.length ? COUNT : 0); i++) {
       const kind = ['woman', 'man', 'woman', 'student', 'man', 'woman'][i % 6];
       const o = kind === 'student' && i % 4 === 1
-        ? outfit('woman', { shirt: 0xffffff, pagne: 0x1d3557, pagne2: 0x1d3557, dress: true, pagneTop: false, headwrap: null, bag: 0x2b2b2b, basin: null })
+        ? outfit('student', { model: 'fille', female: true, dress: true, pagne: 0x1d3557, pagne2: 0x1d3557, pagneTop: false, shirt: 0xdfe9f7, shoes: 0x2b2b2b, headwrap: null, basin: null, bag: 0x2b2b2b })
         : outfit(kind, { basin: kind === 'woman' && Math.random() < 0.35 ? BASINS[i % BASINS.length] : null });
       const ch = new Character(o);
       ch.mesh.visible = false;

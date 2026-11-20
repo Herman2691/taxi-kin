@@ -3,6 +3,43 @@
 // et des animations procédurales : marche, attente, signe de la main, assis, bassine sur la tête.
 // Le même modèle peut être « figé » dans une pose et fusionné dans le décor (vendeurs assis).
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
+
+// ---------- Modèles MakeHuman (tools/personnages_mh.py → data/personnages/*.glb) ----------
+// Un fichier par modèle : un squelette de 13 os (mêmes noms que ci-dessous), un maillage détaillé (lod0) et un très allégé (lod1), une texture atlas
+// et, par sommet, une « zone » (peau, haut, bas, chaussures, cheveux...) qui sert à donner ses couleurs à chaque personnage. Si un fichier manque,
+// le personnage retombe sur l'ancien corps dessiné par le code.
+const MODEL_FILES = ['homme', 'femme', 'policier', 'policiere', 'garcon', 'fille', 'femme_nue'];
+const MODELS = {};
+const ZONE_SKIN = 0, ZONE_TOP = 1, ZONE_BOTTOM = 2, ZONE_SHOES = 3, ZONE_HAIR = 4, ZONE_EYES = 5, ZONE_CLOTH = 6, ZONE_BELT = 7;
+// teinte des cheveux : les textures de MakeHuman sont des bruns clairs, les cheveux d'ici sont presque noirs
+const HAIR_TINT = { homme: 0x6a625a, femme: 0x4a4440, policier: 0x555048, policiere: 0xffffff, garcon: 0x6a625a, fille: 0xffffff, femme_nue: 0xffffff };
+function readModel(name, g) {
+  const byName = {};
+  const lods = [];
+  g.scene.traverse(o => {
+    if (o.isBone) byName[o.name.replace(/([LR])$/, '.$1')] = o;       // (le chargeur retire le point : upperArm.L → upperArmL)
+    if (o.isSkinnedMesh) lods[+o.name.slice(-1)] = o;
+  });
+  const offsets = BONES.map(([n]) => byName[n].position.toArray());
+  const rest = [];
+  BONES.forEach(([, parent], i) => { const p = parent ? rest[BI[parent]] : [0, 0, 0]; rest[i] = [p[0] + offsets[i][0], p[1] + offsets[i][1], p[2] + offsets[i][2]]; });
+  const map = lods[0].material.map;
+  const material = new THREE.MeshLambertMaterial({ map, vertexColors: true, alphaTest: 0.4 });
+  // accessoires : où poser béret, foulard, bassine, gilet... sur ce corps (le code les a dessinés pour l'ancien corps : tête de 0,25 m, buste de 0,17 m de demi-largeur)
+  const ex = g.scene.userData || {};
+  const hs = (ex.headTop - ex.headMinY) / 0.25;
+  const headJ = rest[BI.head], chestJ = rest[BI.chest];
+  const csx = ex.chestHalfX / 0.17, csz = ex.chestHalfZ / 0.12;
+  const fit = {
+    head: { s: hs, y0: 0.11, y1: (ex.headTop + ex.headMinY) / 2 - headJ[1], dz: ex.headZ - headJ[2] },
+    chest: { sx: csx, sz: csz, dz: ex.chestZ - chestJ[2] },
+    hips: { sx: csx * 0.95, sz: csz * 0.95, dz: 0 },
+    'foreArm.L': { dy: -0.07 }, 'foreArm.R': { dy: -0.07 },
+  };
+  return { name, offsets, rest, geos: lods.map(m => m.geometry), material, fit, hair: HAIR_TINT[name] ?? 0xffffff };
+}
 
 // ---------- Squelette (pose de référence, mètres, face vers -Z, droite = +X) ----------
 const BONES = [
@@ -28,6 +65,15 @@ BONES.forEach(([, parent, off], i) => {
   const p = parent ? REST[BI[parent]] : [0, 0, 0];
   REST[i] = [p[0] + off[0], p[1] + off[1], p[2] + off[2]];
 });
+
+__mark('personnages : début du chargement des modèles');
+await Promise.all(MODEL_FILES.map(async name => {
+  try {
+    const g = await new GLTFLoader().loadAsync(new URL(`../data/personnages/${name}.glb`, import.meta.url).href);
+    MODELS[name] = readModel(name, g);
+  } catch (e) { console.warn('personnage', name, 'absent, ancien corps gardé', e); }
+}));
+__mark('personnages : modèles chargés');
 
 // ---------- Palettes ----------
 const SKIN = [0x4a2e1a, 0x5a3a22, 0x6b4428, 0x3d2614];
@@ -56,11 +102,20 @@ function colored(geo, color, bone) {
 }
 
 /** Description des pièces d'un personnage : chaque pièce est rattachée à un os (coordonnées locales à l'os). */
-function parts(o, low = false) {
+function parts(o, low = false, legacy = false) {
   const P = [];
+  // avec un modèle MakeHuman, le corps, le visage, les cheveux, les bras et les jambes viennent du fichier : ici, seulement ce qui s'ajoute
+  // (béret, foulard, bassine, gilet, sac, pagne...), posé selon les mesures du modèle
+  const M = legacy ? null : MODELS[o.model];
   const add = (bone, geo, color, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1, rx = 0) => {
     geo.scale(sx, sy, sz);
     if (rx) geo.rotateX(rx);
+    const f = M && M.fit[bone];
+    if (f) {
+      const fx = f.s ?? f.sx ?? 1, fy = f.s ?? 1, fz = f.s ?? f.sz ?? 1;
+      geo.scale(fx, fy, fz);
+      x = x * fx; y = (y - (f.y0 ?? 0)) * fy + (f.y1 ?? 0) + (f.dy ?? 0); z = z * fz + (f.dz ?? 0);
+    }
     geo.translate(x, y, z);
     P.push({ bone: BI[bone], geo, color });
   };
@@ -73,6 +128,7 @@ function parts(o, low = false) {
   // pour que les épaules puissent tourner à contre-temps des hanches
   const belly = (o.girth - 1) * 0.06, waist = o.female ? 0.118 : 0.126;
   const lathe = (pts, seg) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), low ? 6 : seg);
+  if (!M) {
   const hipW = o.female ? 0.162 : 0.15;
   add('hips', lathe([[0.001, -0.2], [0.11, -0.19], [hipW, -0.1], [hipW, -0.02], [0.13, 0.05], [0.118, 0.08]], 12),
     o.dress ? o.pagne : o.pants, 0, 0, 0, gx, 1, gz * 1.04);
@@ -102,7 +158,15 @@ function parts(o, low = false) {
     }
     if (o.beard) add('head', new THREE.SphereGeometry(0.075, 7, 4, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55), HAIR, 0, 0.065, -0.035, 1.1, 0.9, 1.05);
   }
-  if (o.beret) {                                               // le béret noir de la police
+  }
+  if (o.helmet && o.helmetFull) {                              // casque de motard : calotte arrondie et visière sombre relevée
+    add('head', new THREE.SphereGeometry(0.15, low ? 6 : 10, low ? 4 : 7, 0, Math.PI * 2, 0, Math.PI * 0.62), o.helmet, 0, 0.115, 0.01, 1, 1.02, 1.1);
+    add('head', new THREE.BoxGeometry(0.22, 0.05, 0.05), 0x14161a, 0, 0.16, -0.155, 1, 1, 1, 0.25);
+  } else if (o.helmet) {                                       // le casque jaune des agents de roulage (photos du dossier Herman)
+    add('head', new THREE.SphereGeometry(0.133, low ? 6 : 10, low ? 4 : 6, 0, Math.PI * 2, 0, Math.PI * 0.5), o.helmet, 0, 0.14, 0.005, 1, 1.05, 1.08);
+    add('head', new THREE.BoxGeometry(0.2, 0.015, 0.075), o.helmet, 0, 0.145, -0.135);
+    if (!low) add('head', new THREE.BoxGeometry(0.03, 0.012, 0.2), o.helmet === 0xf2c200 ? 0xe8c000 : 0xee6a1c, 0, 0.268, 0);
+  } else if (o.beret) {                                        // le béret noir de la police
     add('head', new THREE.SphereGeometry(0.135, low ? 6 : 9, low ? 4 : 5), o.beret, 0.015, 0.205, 0.005, 1.05, 0.42, 1.08);
     if (!low) add('head', new THREE.SphereGeometry(0.018, 5, 3), 0xc9a227, -0.055, 0.2, -0.115);
   } else if (o.headwrap) {
@@ -112,7 +176,7 @@ function parts(o, low = false) {
   } else if (o.cap) {
     add('head', new THREE.SphereGeometry(0.122, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), o.cap, 0, 0.13, 0);
     add('head', new THREE.BoxGeometry(0.18, 0.02, 0.1), o.cap, 0, 0.14, -0.13);
-  } else if (o.hair !== 'bald') {
+  } else if (o.hair !== 'bald' && !M) {
     add('head', new THREE.SphereGeometry(0.12, low ? 5 : 9, low ? 3 : 5, 0, Math.PI * 2, 0, Math.PI * (o.hair === 'short' ? 0.42 : 0.5)), HAIR, 0, 0.125, 0.012);
     if (o.hair === 'bun') add('head', new THREE.SphereGeometry(0.065, 6, 4), HAIR, 0, 0.23, 0.07);
     if (o.hair === 'braids' && !low) add('head', new THREE.BoxGeometry(0.2, 0.2, 0.05), HAIR, 0, 0.02, 0.085);
@@ -121,9 +185,8 @@ function parts(o, low = false) {
     add('head', new THREE.CylinderGeometry(0.3, 0.2, 0.14, 10), o.basin, 0, 0.3, 0);
     add('head', new THREE.SphereGeometry(0.24, 6, 4), o.goods, 0, 0.38, 0, 1, 0.45, 1);
   }
-  // bras : manche + avant-bras + main (un peu plus épais si corpulent)
   const ag = Math.sqrt(o.girth);
-  for (const s of ['L', 'R']) {
+  if (!M) for (const s of ['L', 'R']) {
     if (o.longSleeves || low) add(`upperArm.${s}`, cap(0.052 * ag, 0.18, 6), o.shirt, 0, -0.13, 0);
     else {                                                     // manche courte, bras nu dessous
       add(`upperArm.${s}`, cap(0.056 * ag, 0.08, 6), o.shirt, 0, -0.07, 0);
@@ -132,28 +195,46 @@ function parts(o, low = false) {
     add(`foreArm.${s}`, cap(0.044 * ag, 0.17, 6), o.longSleeves ? o.shirt : o.skin, 0, -0.12, 0);
     if (!low) add(`foreArm.${s}`, new THREE.SphereGeometry(0.048, 6, 4), o.skin, 0, -0.275, -0.01, 0.75, 1.3, 0.9);
   }
-  if (o.vest) {                                                // le gilet orange du roulage, ses bandes grises et son ceinturon noir
-    add('chest', new THREE.CylinderGeometry(0.178, 0.168, 0.42, low ? 6 : 10, 1, true), o.vest, 0, 0.03, 0, 0.5 + gx / 2, 1, 0.72 * (0.5 + gx / 2));
-    for (const y of [0.11, -0.07]) add('chest', new THREE.CylinderGeometry(0.182, 0.176, 0.035, low ? 6 : 10, 1, true), 0xb8bcc0, 0, y, 0, 0.5 + gx / 2, 1, 0.72 * (0.5 + gx / 2));
+  if (o.vest) {
+    const kx = (0.5 + gx / 2) * (o.vestK ?? 1);                 // (vestK : gilet plus ajusté sur un buste mince)                                                // le gilet orange du roulage, ses bandes grises et son ceinturon noir
+    add('chest', new THREE.CylinderGeometry(0.2, 0.19, 0.42, low ? 6 : 10, 1, true), o.vest, 0, 0.03, 0, kx, 1, 0.92 * kx);
+    for (const y of o.vestRings === 1 ? [0] : [0.11, -0.07]) add('chest', new THREE.CylinderGeometry(0.204, 0.198, 0.035, low ? 6 : 10, 1, true), 0xb8bcc0, 0, y, 0, kx, 1, 0.92 * kx);
     add('hips', new THREE.CylinderGeometry(0.17, 0.17, 0.06, low ? 6 : 10, 1, true), 0x101114, 0, 0.09, 0, gx, 1, gz);
+    // bandes verticales grises sur le devant du gilet (le dos n'en a pas, d'après les photos), posées sur la surface du gilet
+    const vx = 0.085 * kx, vz = 0.204 * 0.92 * kx * Math.sqrt(1 - (vx / (0.204 * kx)) ** 2) + 0.002;
+    for (const sx of [-1, 1]) add('chest', new THREE.BoxGeometry(0.014, 0.4, 0.008), 0xb8bcc0, sx * vx, 0.03, -vz);
+    if (!low && o.id) {                                          // numéro d'identification de l'agent, petit, imprimé en noir en haut du dos (4 chiffres)
+      const SEG = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg' };
+      const k = o.idScale ?? 1, W = 0.018 * k, H = 0.036 * k, T = 0.005 * k, D = 0.005, gap = 0.027 * k, n = String(o.id).length;
+      [...String(o.id)].forEach((ch, i) => {
+        const cx = (i - (n - 1) / 2) * gap * kx, cz = 0.204 * 0.92 * kx * Math.sqrt(1 - (cx / (0.204 * kx)) ** 2) + 0.003, cy = 0.16;
+        for (const sg of SEG[ch]) {
+          const hor = 'adg'.includes(sg), up = 'abf'.includes(sg), right = 'bc'.includes(sg);
+          const geo = hor ? new THREE.BoxGeometry(W, T, D) : new THREE.BoxGeometry(T, H / 2, D);
+          const dy = hor ? (sg === 'a' ? H / 2 : sg === 'd' ? -H / 2 : 0) : (up ? H / 4 : -H / 4);
+          add('chest', geo, 0x0b0b0e, cx + (hor ? 0 : (right ? W / 2 : -W / 2)), cy + dy, cz);
+        }
+      });
+    }
   }
-  if (o.beret && !low) {                                       // l'uniforme de près : col, épaulettes, écussons, poches, ceinturon, boucle, insigne de poitrine
+  if ((o.beret || o.helmet) && !o.civil && !low) {                         // l'uniforme de près : col, épaulettes, écussons, poches, ceinturon, boucle, insigne de poitrine
     add('chest', new THREE.CylinderGeometry(0.075, 0.1, 0.05, 10, 1, true), 0x101a30, 0, 0.245, 0, 1, 1, 0.92);
     for (const sx of [-1, 1]) {
       add('chest', new THREE.BoxGeometry(0.1, 0.012, 0.075), 0x0d1626, sx * 0.135, 0.226, 0, 1, 1, 1);
+      if (o.vest) continue;                                    // (sous le gilet, les poches ne se voient pas)
       add('chest', new THREE.BoxGeometry(0.085, 0.075, 0.012), 0x1e2f52, sx * 0.08, 0.095, -0.118 * (0.5 + gx / 2));
       add('chest', new THREE.BoxGeometry(0.09, 0.022, 0.016), 0x101a30, sx * 0.08, 0.135, -0.12 * (0.5 + gx / 2));
     }
-    for (const s of ['L', 'R']) add(`upperArm.${s}`, new THREE.BoxGeometry(0.01, 0.075, 0.06), 0xb8902a, s === 'L' ? -0.056 : 0.056, -0.09, 0);
-    add('chest', new THREE.BoxGeometry(0.035, 0.035, 0.012), 0xc9a227, 0.08, 0.1, -0.125 * (0.5 + gx / 2));
-    if (!o.vest) add('hips', new THREE.CylinderGeometry(0.168, 0.168, 0.055, 10, 1, true), 0x0c0d10, 0, 0.09, 0, gx, 1, gz);
+    for (const s of ['L', 'R']) add(`upperArm.${s}`, new THREE.BoxGeometry(0.01, 0.075, 0.06), o.vest ? 0xc8201e : 0xb8902a, s === 'L' ? -0.056 : 0.056, -0.09, 0);
+    if (!o.vest) add('chest', new THREE.BoxGeometry(0.035, 0.035, 0.012), 0xc9a227, 0.08, 0.1, -0.125 * (0.5 + gx / 2));
+    if (!o.vest && !M) add('hips', new THREE.CylinderGeometry(0.168, 0.168, 0.055, 10, 1, true), 0x0c0d10, 0, 0.09, 0, gx, 1, gz);
     add('hips', new THREE.BoxGeometry(0.05, 0.04, 0.015), 0xc9a227, 0, 0.09, -0.125 * gz);
   }
   if (o.gloves) for (const s of ['L', 'R']) add(`foreArm.${s}`, new THREE.SphereGeometry(0.056, low ? 5 : 6, 4), 0xf4f4f0, 0, -0.27, -0.01, 0.8, 1.3, 0.95);
   if (o.bag) add('foreArm.R', new THREE.BoxGeometry(0.25, 0.3, 0.1), o.bag, 0.04, -0.42, 0);
   if (o.phone && !low) add('foreArm.R', new THREE.BoxGeometry(0.03, 0.13, 0.065), 0x111111, 0, -0.3, -0.03);
   // jambes
-  for (const s of ['L', 'R']) {
+  if (!M) for (const s of ['L', 'R']) {
     add(`thigh.${s}`, cap(0.078 * ag, 0.3, 7), legCol, 0, -0.21, 0);
     add(`shin.${s}`, cap(0.058, 0.3, 6), legCol, 0, -0.2, 0);
     if (o.sandals) {
@@ -172,6 +253,14 @@ function parts(o, low = false) {
 }
 
 const rnd = (a, b) => a + Math.random() * (b - a);
+/** Quel modèle MakeHuman pour cette tenue (undefined si le fichier manque : l'ancien corps est gardé). */
+function pickModel(o) {
+  const ok = n => MODELS[n] ? n : undefined;
+  if (o.kind === 'police' || o.kind === 'roulage') return ok(o.female ? 'policiere' : 'policier');
+  if (o.kind === 'student') return ok(Math.random() < 0.5 ? 'fille' : 'garcon');
+  if (o.female) return ok(pick(['femme', 'femme', 'femme_nue']));
+  return ok(pick(['homme', 'homme', 'garcon']));
+}
 /** Couleur de tissu un peu passée ou plus vive : deux tenues ne sont jamais identiques. */
 function worn(c) { return _c.set(c).multiplyScalar(rnd(0.82, 1.05)).getHex(); }
 
@@ -209,38 +298,80 @@ export function outfit(kind = Math.random() < 0.5 ? 'woman' : 'man', extra = {})
     const fem = Math.random() < 0.35;
     Object.assign(o, { female: fem, dress: false, pagneTop: false, headwrap: null, cap: null, basin: null, bag: null, beard: false, hair: 'short', untucked: false, sandals: false, longSleeves: true,
       shirt: 0x16233f, pants: 0x16233f, shoes: 0x0c0d10, beret: 0x111318, idle: kind === 'roulage' ? 0 : pick([0, 1, 2]), height: rnd(0.97, 1.05), girth: rnd(0.95, 1.2) });
-    if (kind === 'roulage') Object.assign(o, { vest: 0xee6a1c, gloves: true });
+    // roulage (photos du dossier Herman) : uniforme bleu marine, gants blancs, numéro dans le dos ; deux tenues vues sur les photos :
+    // gilet orange à une bande (casque bleu clair pour les hommes, béret pour les femmes) ou gilet vert fluo à deux bandes (casque jaune)
+    if (kind === 'roulage') {
+      const lime = !fem && Math.random() < 0.4;
+      Object.assign(o, { vest: lime ? 0xc4e11c : 0xee6a1c, vestRings: lime ? 2 : 1, gloves: true, id: 1000 + Math.floor(Math.random() * 9000),
+        helmet: fem ? null : lime ? 0xf2c200 : 0x5aa6e0, beret: fem ? 0x111318 : null });
+    }
   }
   o.phone = o.idle === 3 && !o.bag;
+  o.skinTint = rnd(0.82, 1.12);
+  o.model = pickModel(o);
+  if (o.kind === 'student' && o.model === 'fille') o.female = true;
   return Object.assign(o, extra);
 }
 
 const MATERIAL = new THREE.MeshLambertMaterial({ vertexColors: true });
 
+/** Couleur de chaque sommet d'un modèle MakeHuman selon sa zone : la texture (peau, tissu, cheveux) est multipliée par la couleur de la tenue. */
+function zoneColors(zone, o, M) {
+  const col = hex => { _c.set(hex); return [_c.r, _c.g, _c.b]; };
+  const t = o.skinTint ?? 1, ct = rnd(0.88, 1.08);
+  const pal = [
+    [t, t, t],                                            // peau
+    col(o.shirt), col(o.dress ? o.pagne : o.pants), col(o.shoes),
+    col(M.hair), [1, 1, 1],                               // cheveux, yeux
+    [ct, ct, ct],                                         // vêtement texturé du modèle
+    col(0x0c0d10),                                        // ceinturon
+  ];
+  const n = zone.count, c = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) c.set(pal[zone.array[i]], i * 3);
+  return new THREE.BufferAttribute(c, 3);
+}
+
 /** Personnage animé : détaillé de près, version allégée au-delà de 30 m (même squelette). */
 export class Character {
   constructor(o = outfit()) {
     this.outfit = o;
-    this.bones = BONES.map(([name, parent, off]) => {
+    const M = this.model = MODELS[o.model];
+    this.bones = BONES.map(([name, parent, off], i) => {
       const b = new THREE.Bone();
       b.name = name;
-      b.position.fromArray(off);
+      b.position.fromArray(M ? M.offsets[i] : off);
       return b;
     });
     BONES.forEach(([, parent], i) => { if (parent) this.bones[BI[parent]].add(this.bones[i]); });
     this.mesh = new THREE.LOD();
     this.mesh.add(this.bones[0]);
-    this.mesh.scale.setScalar(o.height ?? 1);
+    const h = o.height ?? 1;
+    // corpulence : le modèle MakeHuman s'élargit (le gabarit est dans le maillage, pas dans les pièces)
+    if (M) this.mesh.scale.set(h * (1 + ((o.girth ?? 1) - 1) * 0.7), h, h * (1 + ((o.girth ?? 1) - 1) * 0.5)); else this.mesh.scale.setScalar(h);
     this.mesh.updateMatrixWorld(true);              // les inverses du squelette se calculent sur la pose de référence
     const skeleton = new THREE.Skeleton(this.bones);
     for (const [low, dist] of [[false, 0], [true, 30]]) {
-      const m = new THREE.SkinnedMesh(mergeParts(parts(o, low), true), MATERIAL);
-      this.mesh.addLevel(m, dist);
-      m.updateMatrixWorld(true);
-      m.bind(skeleton);
-      m.castShadow = true;
-      // Volume englobant fixe (les os bougent, mais restent dans cette sphère)
-      m.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.4);
+      const list = [];
+      if (M) {
+        const src = M.geos[low ? 1 : 0];
+        const geo = new THREE.BufferGeometry();
+        for (const k of ['position', 'normal', 'uv', 'skinIndex', 'skinWeight']) geo.setAttribute(k, src.attributes[k]);   // (partagés entre tous les personnages)
+        geo.setIndex(src.index);
+        geo.setAttribute('color', zoneColors(src.attributes._zone, o, M));
+        list.push(new THREE.SkinnedMesh(geo, M.material));
+      }
+      const extra = parts(o, low);
+      if (!M || extra.length) list.push(new THREE.SkinnedMesh(mergeParts(extra, true, M ? M.rest : REST), MATERIAL));
+      const holder = list.length > 1 ? new THREE.Group() : list[0];
+      for (const m of list) {
+        if (holder !== m) holder.add(m);
+        m.updateMatrixWorld(true);
+        m.bind(skeleton);
+        m.castShadow = true;
+        // Volume englobant fixe (les os bougent, mais restent dans cette sphère)
+        m.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.4);
+      }
+      this.mesh.addLevel(holder, dist);
     }
     this.b = Object.fromEntries(BONES.map(([n], i) => [n, this.bones[i]]));
     this.phase = Math.random() * 10;
@@ -248,17 +379,18 @@ export class Character {
   }
 
   /** Un outil tenu dans la main droite (pelle, panneau) : un maillage accroché à l'avant-bras, qui suit l'animation. */
-  hold(mesh) { this.b['foreArm.R'].add(mesh); mesh.position.set(0, -0.3, 0); return mesh; }
+  hold(mesh) { this.b['foreArm.R'].add(mesh); mesh.position.set(0, this.model ? -0.37 : -0.3, 0); return mesh; }
   /** Applique une animation. mode : 'walk' | 'idle' | 'wave' | 'sit'. t en secondes, speed en m/s. */
   pose(mode, t, speed = 1.1) {
     applyPose(this.b, mode, t + this.phase, speed, this.outfit);
   }
 }
 
-function mergeParts(list, skinned) {
+function mergeParts(list, skinned, rest = REST) {
+  if (!list.length) return new THREE.BufferGeometry();
   const geos = list.map(p => {
     const g = p.geo;
-    if (skinned) g.translate(...REST[p.bone]);
+    if (skinned) g.translate(...rest[p.bone]);
     return colored(g, p.color, p.bone);
   });
   const merged = mergeGeometries(geos);
@@ -373,6 +505,15 @@ function applyPose(b, mode, t, speed, o) {
       b['foreArm.L'].rotation.x = 0.95;
       b['foreArm.R'].rotation.x = 0.95;
     }
+  } else if (mode === 'ride') {
+    // à califourchon sur une moto, le bassin à l'origine (face vers -z : rotation x positive = vers l'avant) : o.ride = { arm: [haut, avant, écart], lean }
+    const { arm: [au, af, sp], lean } = o.ride;
+    b.hips.position.set(0, 0, 0);
+    b.hips.rotation.x = lean * 0.3; b.spine.rotation.x = lean; b.chest.rotation.x = lean * 0.5; b.neck.rotation.x = -lean * 0.8; b.head.rotation.x = -lean * 0.5;
+    b['thigh.L'].rotation.set(1.22, 0, -0.14); b['thigh.R'].rotation.set(1.22, 0, 0.14);
+    b['shin.L'].rotation.set(-1.42, 0, 0.14); b['shin.R'].rotation.set(-1.42, 0, -0.14);
+    b['upperArm.L'].rotation.set(au, 0, -sp); b['upperArm.R'].rotation.set(au, 0, sp);
+    b['foreArm.L'].rotation.x = af; b['foreArm.R'].rotation.x = af;
   } else if (mode === 'dig') {
     // creuser (l'auteur, 13/11 : les ouvriers du chantier) : penché, la pelle plonge et remonte
     const w = t * 2.4, s = Math.sin(w), up = Math.max(0, s);
@@ -505,13 +646,134 @@ const _m = new THREE.Matrix4();
  * Utilisé pour les vendeurs assis et les foules statiques : pas de squelette, coût minimal.
  */
 export function bakeCharacter(builder, o, mode, x, z, ry = 0, t = Math.random() * 10, low = false) {
+  if (MODELS[o.model]?.geos[2]) return bakeModelled(builder, o, mode, x, z, ry, t);
   applyPose(_b, mode, t, 1, o);
   _root.position.set(x, 0, z);
   _root.rotation.set(0, ry, 0);
   _root.scale.setScalar(o.height ?? 1);
   _root.updateMatrixWorld(true);
-  for (const p of parts(o, low)) {
+  for (const p of parts(o, low, true)) {
     p.geo.applyMatrix4(_m.copy(_bones[p.bone].matrixWorld));
+    builder.addRaw(p.geo, p.color);
+  }
+}
+
+
+/** Le modèle d'un personnage est-il chargé (sinon on garde l'ancien dessin) ? */
+export const hasModel = name => !!MODELS[name];
+
+/**
+ * Fige un personnage dans une pose et en fait un maillage immobile (LOD : près, loin), à placer sur un véhicule : le squelette est appliqué une fois pour toutes.
+ * origin : position du bassin ; o.ride = { arm: [haut, avant, écart], lean, grip: [x, y, z] }, si grip est donné les bras sont ajustés pour que la main L (et son symétrique) l'atteigne.
+ */
+export function bakeStatic(o, mode, origin, farDist = 14) {
+  const ch = new Character(o);
+  ch.mesh.position.set(...origin);
+  if (mode === 'ride' && o.ride.grip) {
+    const hand = new THREE.Object3D(); hand.position.set(0, -0.37, 0); ch.b['foreArm.L'].add(hand);
+    const g = new THREE.Vector3(...o.ride.grip), v = new THREE.Vector3();
+    let best = null;
+    for (let au = 0.2; au < 1.5; au += 0.05) for (let af = -0.3; af < 1.2; af += 0.05) for (const sp of [0.1, 0.2, 0.3, 0.4]) {
+      o.ride.arm = [au, af, sp];
+      ch.pose(mode, 0);
+      ch.mesh.updateMatrixWorld(true);
+      const e = hand.getWorldPosition(v).distanceTo(g);
+      if (!best || e < best[0]) best = [e, au, af, sp];
+    }
+    o.ride.arm = best.slice(1);
+    ch.b['foreArm.L'].remove(hand);
+  }
+  ch.phase = 0;
+  ch.pose(mode, 0);
+  ch.mesh.updateMatrixWorld(true);
+  const lod = new THREE.LOD(), p = new THREE.Vector3(), q = new THREE.Vector3();
+  ch.mesh.levels.slice(0, 2).forEach(({ object }, li) => {
+    const grp = new THREE.Group();
+    for (const sm of object.isSkinnedMesh ? [object] : object.children.filter(c => c.isSkinnedMesh)) {
+      const src = sm.geometry, { pos, nor } = skinnedWorld(sm);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('color', src.attributes.color);
+      if (src.attributes.uv) geo.setAttribute('uv', src.attributes.uv);
+      geo.setIndex(src.index);
+      const m = new THREE.Mesh(geo, sm.material);
+      m.castShadow = true;
+      grp.add(m);
+    }
+    lod.addLevel(grp, li ? farDist : 0);
+  });
+  return lod;
+}
+const q2 = new THREE.Vector3();
+
+/** Positions et normales (repère du monde) d'un SkinnedMesh dans sa pose actuelle. */
+function skinnedWorld(sm) {
+  sm.skeleton.update();
+  const src = sm.geometry, n = src.attributes.position.count, pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+  const nm = new THREE.Matrix3().getNormalMatrix(sm.matrixWorld);
+  for (let i = 0; i < n; i++) {
+    sm.getVertexPosition(i, _sp);                                          // (pose appliquée, repère du maillage)
+    q2.fromBufferAttribute(src.attributes.position, i).addScaledVector(_sn.fromBufferAttribute(src.attributes.normal, i), 0.02);
+    sm.applyBoneTransform(i, q2);                                          // même point décalé le long de la normale : la différence donne la normale posée
+    q2.sub(_sp).normalize().applyMatrix3(nm).normalize().toArray(nor, i * 3);
+    _sp.applyMatrix4(sm.matrixWorld).toArray(pos, i * 3);
+  }
+  return { pos, nor };
+}
+const _sp = new THREE.Vector3(), _sn = new THREE.Vector3();
+
+// ---------- Figures fixes du décor avec les modèles MakeHuman ----------
+// Les foules, élèves et postes de police sont fusionnés dans le décor (un seul matériau, des couleurs par sommet) : on pose le squelette une fois,
+// et la texture du modèle (visage, vêtements) est « cuite » dans les couleurs des sommets de la version de 700 triangles.
+const _poser = {}, _atlas = {};
+function atlasPixels(M) {
+  if (!_atlas[M.name]) {
+    const img = M.material.map.image, c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0);
+    _atlas[M.name] = { d: x.getImageData(0, 0, c.width, c.height).data, w: c.width, h: c.height };
+  }
+  return _atlas[M.name];
+}
+const _lin = new Float32Array(256).map((_, i) => Math.pow(i / 255, 2.2));
+function bakeModelled(builder, o, mode, x, z, ry, t) {
+  const M = MODELS[o.model];
+  let P = _poser[o.model];
+  if (!P) {
+    const ch = new Character({ ...outfit('man'), model: o.model });
+    const g2 = new THREE.BufferGeometry(), src = M.geos[2];
+    for (const k of ['position', 'normal', 'uv', 'skinIndex', 'skinWeight']) g2.setAttribute(k, src.attributes[k]);
+    g2.setIndex(src.index);
+    const sm = new THREE.SkinnedMesh(g2, M.material);
+    ch.mesh.add(sm);
+    ch.mesh.updateMatrixWorld(true);
+    sm.bind(ch.mesh.levels[0].object.isSkinnedMesh ? ch.mesh.levels[0].object.skeleton : ch.mesh.levels[0].object.children.find(c => c.isSkinnedMesh).skeleton);
+    P = _poser[o.model] = { ch, sm };
+  }
+  const { ch, sm } = P, h = o.height ?? 1, g = o.girth ?? 1;
+  ch.mesh.position.set(x, 0, z);
+  ch.mesh.rotation.set(0, ry, 0);
+  ch.mesh.scale.set(h * (1 + (g - 1) * 0.7), h, h * (1 + (g - 1) * 0.5));
+  applyPose(ch.b, mode, t, 1, o);
+  ch.mesh.updateMatrixWorld(true);
+  const src = sm.geometry, { pos, nor } = skinnedWorld(sm), n = pos.length / 3;
+  const zc = zoneColors(M.geos[2].attributes._zone, o, M).array, A = atlasPixels(M), uv = src.attributes.uv, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const px = Math.min(A.w - 1, Math.max(0, Math.floor(uv.getX(i) * A.w))), py = Math.min(A.h - 1, Math.max(0, Math.floor(uv.getY(i) * A.h))), k = (py * A.w + px) * 4;
+    col[i * 3] = zc[i * 3] * _lin[A.d[k]]; col[i * 3 + 1] = zc[i * 3 + 1] * _lin[A.d[k + 1]]; col[i * 3 + 2] = zc[i * 3 + 2] * _lin[A.d[k + 2]];
+  }
+  let geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(src.index);
+  geo = geo.toNonIndexed();
+  builder.parts.push(geo);
+  for (const p of parts(o, true)) {                                         // béret, gilet, foulard... : pièces rigides posées sur leur os
+    p.geo.applyMatrix4(_m.copy(ch.bones[p.bone].matrixWorld));
     builder.addRaw(p.geo, p.color);
   }
 }

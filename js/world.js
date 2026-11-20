@@ -10,6 +10,8 @@ import { Builder, VC_MAT, createMinibus, createHatchback, createMoto, createCity
 import { bakeCharacter, outfit, Character } from './characters.js';
 import { toGame, GAME_LEN, bendGeometry, bendRigid, place, worldVec, setSpread, realX, toWorld, frameAt, extYaw, EXT_ARCS } from './route.js';
 import { CURRENT as R, ROUTES, ATTACHED } from './routes.js';
+const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
+__mark('world.js : début');
 
 const g = sReal => -Math.round(toGame(sReal));      // position de jeu d'un point situé à sReal m du départ
 const POPULAR = R.style === 'popular';
@@ -1417,6 +1419,7 @@ const chance = p => Math.random() < p;
 const loadImage = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
 const ASPHALT = await loadImage(new URL('../data/tex/asphalt.jpg', import.meta.url).href).catch(() => null);
 // Bandes photographiques des façades (tools/strips.py) ; sans elles, le décor reste entièrement modélisé
+__mark('world.js : avant les textures de bandes');
 const STRIPS = await fetch(new URL('../data/tex/strips/strips.json', import.meta.url)).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
 // Grands panneaux publicitaires avec une photo (routes.js photoBoards) ; sans l'image, le panneau n'est pas construit
 const PHOTO_BOARDS = await Promise.all((R.photoBoards ?? []).map(async p =>
@@ -6582,9 +6585,8 @@ const palazzoloSign = () => canvasTexture(1024, 680, (x, W, H) => {
   x.fillText('ASS. SOEURS DES PAUVRES DE BERGAME', W / 2, 600, W - 60);
 });
 
-/** Un élève en uniforme (photos du dossier Lycée) : les filles en chemisier blanc et jupe bleu marine, les garçons en chemise blanche et pantalon bleu marine. */
-const pupil = i => (i % 3 ? outfit('woman', { shirt: 0xffffff, pagne: 0x1d3557, pagne2: 0x1d3557, dress: true, pagneTop: false, headwrap: null, bag: chance(0.6) ? 0x2b2b2b : null, basin: null, longSleeves: false })
-  : outfit('student'));
+/** Une élève du lycée en uniforme (photos du dossier Lycée ; l'auteur, 20/11 : « lycée : les filles ») : chemisier bleu très clair à manches courtes et longue jupe bleu marine (photo lycée2), modèle MakeHuman « fille ». */
+const pupil = () => outfit('student', { model: 'fille', female: true, dress: true, pagne: 0x1d3557, pagne2: 0x1d3557, pagneTop: false, shirt: 0xdfe9f7, shoes: 0x2b2b2b, headwrap: null, basin: null, bag: chance(0.6) ? 0x2b2b2b : null });
 
 /** Le Lycée de Kingasani 2 et l'E.P. Elikya de Kingasani 2 (l'auteur, 14/11 : « vas dans le dossier Lycée, tu vas voir les images intérieures du lycée,
  *  implémente ça, respecte bien, parce que nous allons donner la possibilité aux véhicules d'entrer » ; photos et vidéo du dossier Kingasani/Lycée).

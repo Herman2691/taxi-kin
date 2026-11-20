@@ -3,6 +3,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { outfit, bakeStatic, hasModel } from './characters.js';
+const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
+__mark('models.js : début');
 
 export const VC_MAT = new THREE.MeshLambertMaterial({ vertexColors: true });
 export const CAR_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.36, metalness: 0.12 });
@@ -526,7 +529,34 @@ const WEWA = await new GLTFLoader().loadAsync(new URL('../data/personnages/wewa.
   g.scene.traverse(m => { if (m.isMesh) o[m.name] = m.geometry; });
   return o;
 }).catch(() => null);
+__mark('models.js : wewa.glb chargé');
 const PEOPLE_MAT = new THREE.MeshLambertMaterial({ vertexColors: true });
+// Les occupants du wewa avec les modèles MakeHuman du dossier Herman (data/personnages/*.glb, comme les piétons) : figés à califourchon à leur première apparition,
+// quelques conducteurs (gilet jaune à bandes grises, numéro noir dans le dos, casque, chacun son numéro) et quelques passagers, tirés au sort sur chaque moto
+const RIDE_OK = hasModel('homme');
+const _riders = { drv: [], pas: [] };
+const DRV_NUMS = [], PAS_N = 6;
+function ridePeople(look) {
+  if (!_riders.drv.length) {
+    for (let i = 0; i < PAS_N; i++) {
+      const id = 100 + Math.floor(Math.random() * 900);
+      const o = outfit('man', { model: 'homme', shirt: pick([0xd9480f, 0xe0a030, 0x2b8a3e, 0xd9480f]), pants: 0x24344f, shoes: 0x17181b, vest: 0xd6dc24, vestRings: 2, vestK: 0.8, helmet: pick([0x1a2a55, 0x2a2d33, 0xd8d8d8]), helmetFull: true, civil: true,
+        id, idScale: 1.7, beard: false, hair: 'short', bag: null, phone: false, cap: null, basin: null, headwrap: null, dress: false, pagneTop: false, longSleeves: true, idle: 0, height: 0.97 + Math.random() * 0.08, girth: 0.95 + Math.random() * 0.15,
+        ride: { arm: [0.8, 0.3, 0.2], lean: 0.04, grip: [-0.36, 1.08, -0.52] } });
+      _riders.drv.push({ id, lod: bakeStatic(o, 'ride', [0, 0.9, 0.06]) });
+      const fem = i % 3 === 2;
+      const q = outfit(fem ? 'woman' : 'man', { shirt: pick([0xffffff, 0x1d4fa0, 0xc92a2a, 0x2b8a3e, 0x7b2cbf]), pants: pick([0x24344f, 0x17181b, 0x3b3f47]), dress: false, pagneTop: false, headwrap: null, basin: null, bag: null, phone: false, cap: null, idle: 0,
+        longSleeves: true, height: 0.95 + Math.random() * 0.08, ride: { arm: [0.25, 0.75, 0.16], lean: 0.03 } });
+      _riders.pas.push(bakeStatic(q, 'ride', [0, 0.92, 0.5]));
+    }
+  }
+  const d = (look?.num && _riders.drv.find(r => r.id === look.num)) || pick(_riders.drv);
+  const drv = d.lod.clone(), pas = pick(_riders.pas).clone();     // (les maillages restent partagés)
+  drv.userData.rider = 'conducteur'; drv.userData.num = d.id;
+  pas.userData.rider = 'passager';
+  return { drv, pas };
+}
+
 function wewaRider(kind) {
   const lod = new THREE.LOD();
   for (const [q, d] of [['h', 0], ['l', LOD_DIST]]) { const m = new THREE.Mesh(WEWA[`${kind}_${q}`], PEOPLE_MAT); m.castShadow = true; lod.addLevel(m, d); }
@@ -568,7 +598,7 @@ function wewaNumber(n = pick(WEWA_NUMS)) {
 // look : { tank, num } pour garder la même moto et le même conducteur (la moto du joueur, quand le client monte ou descend)
 export function createMoto({ riders: only = null, look = null } = {}) {   // only : nombre de personnes imposé (la moto du joueur part seule)
   const L = 2.05, W = 0.82, tank = look?.tank ?? pick([0xb91c1c, 0x17181b, 0x1e3a8a, 0x17181b]), riders = only ?? 2, helmet = pick([0x1a2a55, 0x2a2d33, 0xd8d8d8]), shirt = pick([0xd9480f, 0xffffff, 0x2b8a3e, 0x1d4fa0, 0x7b2cbf]);
-  const m = vehicle(`moto|${tank}|${WEWA ? 0 : `${riders}|${helmet}|${shirt}`}`, L, W, (b, low) => {
+  const m = vehicle(`moto|${tank}|${WEWA || RIDE_OK ? 0 : `${riders}|${helmet}|${shirt}`}`, L, W, (b, low) => {
     const seg = low ? 8 : 16, black = 0x17181b;
     for (const z of [-0.7, 0.7]) {
       b.add(new THREE.CylinderGeometry(0.31, 0.31, 0.1, seg).rotateZ(Math.PI / 2), TYRE, 0, 0.31, z).add(new THREE.CylinderGeometry(0.23, 0.23, 0.11, seg).rotateZ(Math.PI / 2), low ? RIM : 0x24262a, 0, 0.31, z);
@@ -588,12 +618,13 @@ export function createMoto({ riders: only = null, look = null } = {}) {   // onl
       .box(0.03, 0.2, 0.34, tank, 0.16, 0.62, 0.3).box(0.03, 0.2, 0.34, tank, -0.16, 0.62, 0.3)                                                                  // caches latéraux
       .box(0.34, 0.03, 0.36, 0x202226, 0, 0.92, 0.72).box(0.14, 0.1, 0.03, 0xb3131a, 0, 0.84, 0.91)                                                               // porte-bagages et feu
       .cyl(0.045, 0.035, 0.85, CHROME, 0.17, 0.42, 0.36, Math.PI / 2 - 0.12, 0, 0, 8).box(0.46, 0.03, 0.03, 0x2a2c30, 0, 0.36, -0.36);                             // échappement, repose-pieds
-    if (!WEWA) for (let i = 0; i < riders; i++) {
+    if (!WEWA && !RIDE_OK) for (let i = 0; i < riders; i++) {
       const z = -0.12 + i * 0.44, top = i === 0 ? 0xd6dc24 : shirt;
       b.add(new THREE.CapsuleGeometry(0.17, 0.3, 2, low ? 5 : 8).scale(1.05, 1, 0.72), top, 0, 1.28, z, 0.08).ball(0.14, SKIN[i % 3], 0, 1.72, z);
       if (i === 0) b.ball(0.18, helmet, 0, 1.75, z, 1, 0.95, 1.08);
     }
-  }, WEWA ? [wewaRider('conducteur'), ...(WEWA_BACK ? [wewaNumber(look?.num)] : []), ...(riders > 1 ? [wewaRider('passager')] : [])] : []);
+  }, RIDE_OK ? (() => { const r = ridePeople(look); return riders > 1 ? [r.drv, r.pas] : [r.drv]; })()
+    : WEWA ? [wewaRider('conducteur'), ...(WEWA_BACK ? [wewaNumber(look?.num)] : []), ...(riders > 1 ? [wewaRider('passager')] : [])] : []);
   let num = null;
   m.traverse(c => { if (c.userData.num) num = c.userData.num; });
   m.userData.look = { tank, num };

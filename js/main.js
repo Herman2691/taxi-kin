@@ -22,6 +22,10 @@ import { Sound } from './audio.js';
 import * as RT1 from './route.js';
 import { ROUTES, CURRENT, ITINERAIRES, VEHICULES, COURSES } from './routes.js';
 import { THANKS } from './credits.js';
+// Mesure du chargement (adresse + ?mesure) : temps depuis le début de la navigation, dans la console (lignes « MESURE »)
+const MESURE = new URLSearchParams(location.search).has('mesure');
+const mark = n => { if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
+mark('fichiers de code chargés et évalués (world.js compris)');
 
 // Fonctions de la route où roule le taxi : celles du trajet principal, ou celles du trajet attaché (ATT) quand le taxi y
 // est (voir switchRoad)
@@ -171,11 +175,14 @@ const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 3600);
 globalThis.TAXIKIN_KV = !!CURRENT.attachKv && want('kv');   // (world.js : le décor du carrefour Kasa-Vubu laisse la place à la vraie avenue)
 globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les entrées « Rocade Sud-Est » laissent la place à la vraie route)
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
+mark('avant la construction de la ville');
 const world = W1.buildWorld(scene);
+mark('ville principale construite');
 await new Promise(r => setTimeout(r, 0));
 const lunettes = new Lunettes(renderer);          // mode lunettes (téléphone glissé dans des lunettes)
 const retro = new Retro(renderer);                // rétroviseur (image de l'arrière en haut de l'écran)
 const rain = new Rain(scene);                     // la pluie (averses dans la journée)
+mark('lunettes, rétroviseur, pluie créés');
 let fogFar = 380;
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -189,14 +196,19 @@ let ROAD2 = null, ROAD3 = null, ROAD4 = null, ROAD5 = null, ROAD6 = null, ROAD7 
 /** Charge une autre copie des modules pour un trajet attaché et la construit dans un groupe de la scène. */
 async function loadRoad(route) {
   const q = `?route=${route}`;
+  mark(`route attachée ${route} : début`);
   const [W, RT, T, P, L, H] = await Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`)));
+  mark(`route attachée ${route} : fichiers chargés`);
   await new Promise(r => setTimeout(r, 0));
   const group = new THREE.Group();
   scene.add(group);
-  return { W, RT, group, world: W.buildWorld(group, { env: false, fog: scene.fog }), Hud: H.Hud,
+  const built = W.buildWorld(group, { env: false, fog: scene.fog });
+  mark(`route attachée ${route} : construite`);
+  return { W, RT, group, world: built, Hud: H.Hud,
     Traffic: T.Traffic, Passengers: P.Passengers, StreetLife: L.StreetLife, endName: ROUTES[route].end.name, startMsg: 'Fin de la route', title: ROUTES[route].title };
 }
 const ang = v => Math.atan2(v.x, v.z);
+mark('avant les routes attachées 1');
 const [r2Loaded, r3Loaded] = await Promise.all([
   CURRENT.attach && want('30juin') ? loadRoad(CURRENT.attach.route) : null,
   CURRENT.attachPL && want('pl') ? loadRoad(CURRENT.attachPL.route) : null,
@@ -358,7 +370,7 @@ if (ROAD7) loadedRoads.add('roc');
 if (ROAD8) loadedRoads.add('mm');
 const MULTI = !!(ROAD2 || ROAD3 || ROAD4 || ROAD5 || ROAD6 || ROAD7 || ROAD8);   // (plusieurs routes : raccords et décor des autres routes)
 let quality = isTouch ? 'low' : 'high';
-$('sel-quality').value = quality;
+$('sel-quality').value = (PARAMS.get('autostart') === '1' && store('quality')) || quality;
 
 function applyQuality() {
   const high = quality === 'high';
@@ -497,6 +509,8 @@ const screens = { menu: $('menu'), pause: $('pause'), end: $('end') };
 function show(name) {
   for (const [k, el] of Object.entries(screens)) el.hidden = k !== name;
   const playing = name === 'play';
+  if (playing) document.documentElement.classList.remove('boot');       // (écran d'attente de jeu.html)
+  if (playing) mark('écran de jeu affiché');
   $('hud').hidden = !(playing || name === 'pause');
   $('touch').hidden = !(isTouch && playing);
   retro.rect = null;                             // (le cadre du rétroviseur se remesure quand le HUD apparaît)
@@ -829,6 +843,7 @@ function startShift() {
   // Test : ?essai=policier pose les deux policiers d'essai devant le taxi, sur le bas-côté (voir essai.js)
   if (new URLSearchParams(location.search).get('essai') === 'policier') import('./essai.js').then(m => m.start(scene, A, taxi));
   if (new URLSearchParams(location.search).get('essai') === 'voitures') import('./essai.js').then(m => m.startCars(scene, A, taxi));
+  if (new URLSearchParams(location.search).get('essai') === 'personnages') import('./essai.js').then(m => m.startPeople(scene, A, taxi));
   if (IT && MODE === 'course') { if (VEH_ID === 'bus') setVehicle('berline'); SENS = 'aller'; }
   if (IT) { startItinerary(); BOARD.riders.length = 0; BOARD.extra = 0; BOARD.comfort = 100; G.terminus = legs().to.name; if (motoTwo) setVehicle('moto', false); }
   Object.assign(G, { leg: 1, termStop: null, saidBosa: false });
@@ -931,6 +946,13 @@ function endShift(reason) {
 // ---------- Boutons ----------
 $('btn-start').addEventListener('click', startShift);
 worldReady = true;
+mark('ville prête (bouton de départ actif)');
+if (MESURE) {
+  const R = performance.getEntriesByType('resource'), by = k => R.filter(r => r.name.includes(k)), kb = a => Math.round(a.reduce((n, r) => n + (r.encodedBodySize || r.decodedBodySize), 0) / 1024);
+  console.log(`MESURE fichiers : ${R.length} requêtes ; code ${by('/js/').length} (${kb(by('/js/'))} Ko), données ${by('/data/').length} (${kb(by('/data/'))} Ko), personnages ${by('personnages').length} (${kb(by('personnages'))} Ko), three ${by('three').length}`);
+  console.log('MESURE les plus longues : ' + [...R].sort((a, b) => b.duration - a.duration).slice(0, 6).map(r => `${r.name.split('/').slice(-2).join('/')} ${Math.round(r.duration)} ms`).join(' | '));
+  console.log(`MESURE mémoire JS : ${performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' Mo' : 'n/a'} ; triangles : ${renderer.info.render.triangles}`);
+}
 $('btn-start').disabled = false;                 // (la ville est construite : voir index.html)
 $('btn-start').textContent = MODE === 'course' ? '🏁 Lancer la course' : '🚕 Commencer la journée';
 
@@ -1130,6 +1152,7 @@ $('songs-file').addEventListener('change', async e => {
 $('btn-radio').addEventListener('click', () => { radio.toggle(); showRadio(); hud.toast(radio.on ? '📻 Radio allumée' : '📻 Radio éteinte', 1.5); });
 $('sel-radio').value = radio.on ? 'on' : 'off';
 $('sel-radio').addEventListener('change', e => { radio.setOn(e.target.value === 'on'); showRadio(); });
+if (PARAMS.get('autostart') === '1' && store('radioOn')) { radio.setOn(store('radioOn') === 'on'); showRadio(); }
 $('songs-power').addEventListener('click', () => { radio.toggle(); showRadio(); drawSongs(); });
 $('btn-next').addEventListener('click', () => radio.next());
 $('btn-mute').addEventListener('click', toggleMute);
@@ -2726,6 +2749,7 @@ function frame(now) {
 
   if (G.state === 'menu') { menuT += dt; menuCamera(menuT); }
   else updateCamera(dt);
+  if (window.__essaiCam) window.__essaiCam(camera);                 // (?essai=personnages : caméra posée par l'essai)
 
   if (G.state === 'play' || G.state === 'pause') hud.update(dt, G, taxi, passengers);
   updateItin(dt);
