@@ -4,7 +4,7 @@ import { buildCockpit } from './cockpit.js';
 import { Lunettes } from './lunettes.js';
 import * as THREE from 'three';
 import * as W1 from './world.js';
-import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue, setReceveurLive } from './models.js';
+import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue, setReceveurLive, RECEVEUR_POSTE } from './models.js';
 import { NightGlow, makeBeam, setBeam } from './nuit.js';
 import { Retro } from './retro.js';
 import { buildCabin } from './cabine.js';
@@ -430,12 +430,13 @@ const RCV = { step: null, ground: null };
 function newReceveur(bus) {
   const W = bus.userData.W;
   const ch = new Character(outfit('man', receveurTenue([0xf2c200, 0xf4f4f4, 0x1d4fa0, 0x2b8a3e][Math.floor(Math.random() * 4)])));
-  RCV.step = new THREE.Vector3(W / 2 + 0.22, 0.5, -0.1);
+  RCV.step = new THREE.Vector3(...RECEVEUR_POSTE.pos);
+  RCV.yaw = RECEVEUR_POSTE.yaw;
   RCV.ground = new THREE.Vector3(W / 2 + 1.1, 0, 0.45);
   ch.mesh.position.copy(RCV.step);
-  ch.mesh.rotation.y = -0.9;
+  ch.mesh.rotation.y = RCV.yaw;
   bus.add(ch.mesh);
-  return { ch, st: 'on', k: 0, t: 0, idle: 0 };
+  return { ch, st: 'on', k: 0, t: 0, idle: 0, grip: ch.outfit.grip };
 }
 /** Chaque image : le receveur sur le marchepied, en train de descendre, dehors ou en train de remonter. */
 function receveurCorps(dt) {
@@ -444,19 +445,20 @@ function receveurCorps(dt) {
   R.t += dt;
   if (R.st === 'on') {
     if (serving) { R.st = 'down'; R.k = 0; }
-    else { R.ch.pose('call', R.t); m.position.copy(RCV.step); m.rotation.y = -0.9; }
+    else { R.ch.pose('call', R.t); m.position.copy(RCV.step); m.rotation.y = RCV.yaw; R.ch.outfit.grip = R.grip; }
   } else if (R.st === 'down' || R.st === 'up') {
     if (sp > 2.5) { R.st = 'on'; R.k = 0; return; }                  // (le bus repart : il saute à bord)
     const dir = R.st === 'down' ? 1 : -1;
     R.k = Math.min(1, Math.max(0, R.k + dir * dt / 0.9));
     m.position.lerpVectors(RCV.step, RCV.ground, R.k);
-    m.rotation.y = -0.9 + (-Math.PI / 2 + 0.9) * R.k;
+    m.rotation.y = RCV.yaw + (-Math.PI / 2 - RCV.yaw) * R.k;
     R.ch.pose('walk', R.t, 1.3);
     if (R.st === 'down' && R.k >= 1) { R.st = 'out'; R.idle = 0; }
     else if (R.st === 'up' && R.k <= 0) R.st = 'on';
   } else {                                                           // dehors : il appelle les clients ; il remonte quand tout le monde est monté ou descendu
     R.idle = serving || sp < 0.5 && /Arrête|Réponds|Complet/.test(passengers.prompt) ? 0 : R.idle + dt;
     m.position.copy(RCV.ground); m.rotation.y = -Math.PI / 2;
+    R.ch.outfit.grip = null;                                         // (dehors : plus de barre à tenir)
     R.ch.pose('call', R.t);
     if (R.idle > 1.2 || sp > 1.5) { R.st = 'up'; R.k = 1; }
   }

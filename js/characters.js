@@ -641,17 +641,22 @@ function applyPose(b, mode, t, speed, o) {
       }
     }
     if (mode === 'call') {
-      // le receveur qui appelle les clients (22/11 : « ses bras doivent bien bouger ») : grand geste du bras droit levé sur le côté, l'avant-bras qui balaie vers lui,
-      // l'autre main agrippée à la porte, le buste et la tête qui suivent
-      const s = Math.sin(t * 4.4), c = Math.cos(t * 4.4);
-      b.spine.rotation.set(0.05, -0.18 * c, 0.05 * s);
-      b.chest.rotation.y = 0.14 * s;
-      b.head.rotation.y = 0.45 * Math.sin(t * 0.8);
-      b.head.rotation.x = -0.06;
-      b['upperArm.R'].rotation.set(0.35 * s, 0, 1.9 + 0.35 * c);
-      b['foreArm.R'].rotation.set(1.0 + 0.75 * Math.sin(t * 4.4 + 1.1), 0, 0.15 * s);
-      b['upperArm.L'].rotation.set(0.7, 0, -0.3);
-      b['foreArm.L'].rotation.set(1.25 + 0.1 * s, 0, 0);
+      // le receveur sur le marchepied (22/11) : la main gauche tient fermement la barre de la porte (o.grip : angles calculés par solveGrip pour que la main touche la barre),
+      // la main droite invite à entrer : le bras part vers la rue, puis l'avant-bras ramène la main vers la porte, paume vers le haut, en boucle
+      const s = Math.sin(t * 3.6), k = 0.5 + 0.5 * s;
+      b.spine.rotation.set(0.06, -0.2 + 0.1 * s, 0.03 * s);
+      b.chest.rotation.y = 0.1 * s;
+      b.head.rotation.y = 0.5 * Math.sin(t * 0.8);
+      b.head.rotation.x = -0.05;
+      b['upperArm.R'].rotation.set(0.95 + 0.25 * k, 0, 0.55 - 0.2 * k);
+      b['foreArm.R'].rotation.set(0.35 + 1.25 * k, 0.5 * (1 - k), 0);
+      if (o.grip) {
+        b['upperArm.L'].rotation.set(o.grip[0], 0, o.grip[1]);
+        b['foreArm.L'].rotation.set(o.grip[2], 0, 0);
+      } else {
+        b['upperArm.L'].rotation.set(0.7, 0, -0.3);
+        b['foreArm.L'].rotation.set(1.25, 0, 0);
+      }
     }
   }
   if (o.cuffed && mode !== 'climb') {                          // (arrêté par la police : les mains dans le dos, la tête basse)
@@ -668,6 +673,27 @@ function applyPose(b, mode, t, speed, o) {
     b['foreArm.L'].rotation.set(0, 0, -0.35);
     b.head.rotation.set(0, 0, 0);                              // la tête reste droite sous la charge
   }
+}
+
+/**
+ * Angles [épaule avant, épaule côté, coude] du bras gauche pour que la main touche `target` (dans le repère du parent du personnage, dont le maillage est déjà placé) :
+ * recherche sur une grille, le moins tordu l'emporte. À donner à o.grip (pose 'call').
+ */
+export function solveGrip(ch, target) {
+  const hand = new THREE.Object3D(), v = new THREE.Vector3(), T = new THREE.Vector3(...target), U = ch.b['upperArm.L'], F = ch.b['foreArm.L'];
+  hand.position.set(0, -0.37, 0);
+  F.add(hand);
+  ch.mesh.updateMatrixWorld(true);
+  let best = null;
+  for (let x = -0.4; x <= 2.2; x += 0.05) for (let z = -1.3; z <= 0.7; z += 0.05) for (let f = 0; f <= 2.4; f += 0.05) {
+    U.rotation.set(x, 0, z); F.rotation.set(f, 0, 0);
+    U.updateMatrixWorld(true);
+    const cost = v.setFromMatrixPosition(hand.matrixWorld).distanceTo(T) + 0.03 * (Math.abs(z + 0.3) + Math.abs(f - 1.1));
+    if (!best || cost < best[0]) best = [cost, x, z, f];
+  }
+  F.remove(hand);
+  U.rotation.set(0, 0, 0); F.rotation.set(0, 0, 0);
+  return best.slice(1);
 }
 
 /** Les mêmes animations sur un squelette venu d'un fichier (mêmes noms d'os, sans rotation au repos). */
