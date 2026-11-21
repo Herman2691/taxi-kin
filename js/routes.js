@@ -226,6 +226,9 @@ export const ROUTES = {
       // (l'auteur, 10/11 : « mettre une station à droite, 10 m avant le saut-de-mouton de Debonhomme ») : OSM a bien une station sans nom
       // à 10 269 m, côté Salongo (data/lumumba.json) ; posée juste avant le début de la rampe (10 319 m). Nom à confirmer par l'auteur.
       { kind: 'fuel', name: 'STATION DEBONHOMME', s: 10290, side: 1 },
+      // (l'auteur, 22/11 : « l'église Shekinah, à gauche, finit 10 m avant la station qui est avant le saut-de-mouton de Debonhomme » ; photos : dossier shekinanh) :
+      // 70 m de clôture, de 10 210 à 10 280 m ; leur ancien bâtiment à étages (statue de l'aigle) est à droite, à faire avec ses photos
+      { kind: 'shekinah', name: 'ÉGLISE SHEKINAH', sub: 'Debonhomme · Kinshasa', s: 10245, side: -1 },
       { kind: 'hospital', name: 'HÔPITAL TELEMA', sub: 'Centre Hospitalier de Matete', s: 11140, side: -1 },
       { kind: 'pont_matete', s: 11496, side: 1 },                   // Remblai + pont sur le chemin de fer et la Route Poids Lourds (Hôpital Akram), 2e pont sur les petits boulevards (Transco, Collège Lumumba)
     ],
