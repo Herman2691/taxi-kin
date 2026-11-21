@@ -4,7 +4,7 @@ import { buildCockpit } from './cockpit.js';
 import { Lunettes } from './lunettes.js';
 import * as THREE from 'three';
 import * as W1 from './world.js';
-import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue } from './models.js';
+import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue, setReceveurLive } from './models.js';
 import { NightGlow, makeBeam, setBeam } from './nuit.js';
 import { Retro } from './retro.js';
 import { buildCabin } from './cabine.js';
@@ -429,7 +429,7 @@ let rcv = null;
 const RCV = { step: null, ground: null };
 function newReceveur(bus) {
   const W = bus.userData.W;
-  const ch = new Character(outfit('man', receveurTenue([0xd62828, 0x1d4fa0, 0xf2c200, 0xffffff][Math.floor(Math.random() * 4)])));
+  const ch = new Character(outfit('man', receveurTenue([0xf2c200, 0xf4f4f4, 0x1d4fa0, 0x2b8a3e][Math.floor(Math.random() * 4)])));
   RCV.step = new THREE.Vector3(W / 2 + 0.22, 0.5, -0.1);
   RCV.ground = new THREE.Vector3(W / 2 + 1.1, 0, 0.45);
   ch.mesh.position.copy(RCV.step);
@@ -444,7 +444,7 @@ function receveurCorps(dt) {
   R.t += dt;
   if (R.st === 'on') {
     if (serving) { R.st = 'down'; R.k = 0; }
-    else { R.ch.pose(sp < 4 ? 'wave' : 'idle', R.t); m.position.copy(RCV.step); m.rotation.y = -0.9; }
+    else { R.ch.pose('call', R.t); m.position.copy(RCV.step); m.rotation.y = -0.9; }
   } else if (R.st === 'down' || R.st === 'up') {
     if (sp > 2.5) { R.st = 'on'; R.k = 0; return; }                  // (le bus repart : il saute à bord)
     const dir = R.st === 'down' ? 1 : -1;
@@ -457,8 +457,17 @@ function receveurCorps(dt) {
   } else {                                                           // dehors : il appelle les clients ; il remonte quand tout le monde est monté ou descendu
     R.idle = serving || sp < 0.5 && /Arrête|Réponds|Complet/.test(passengers.prompt) ? 0 : R.idle + dt;
     m.position.copy(RCV.ground); m.rotation.y = -Math.PI / 2;
-    R.ch.pose('wave', R.t);
+    R.ch.pose('call', R.t);
     if (R.idle > 1.2 || sp > 1.5) { R.st = 'up'; R.k = 1; }
+  }
+}
+/** Les 207 de la circulation proches du joueur : leur receveur s'anime (les autres restent figés, pour ne pas alourdir le jeu). */
+function receveursProches() {
+  for (const v of A.traffic.list) {
+    const g = v.mesh;
+    if (!g?.userData.receveurStatic) continue;
+    const ch = setReceveurLive(g, g.visible && Math.abs(v.z - taxi.z) < 40);
+    if (ch) ch.pose('call', G.time);
   }
 }
 let taxiMesh = makeVehicle(VEH_ID);
@@ -2529,6 +2538,7 @@ function update(dt) {
     G.prompt = passengers.prompt;
     receveur(dt);
     receveurCorps(dt);
+    receveursProches();
     overloadCheck();
   }
   if (!(Math.abs(taxi.x) > MEDIAN && Math.abs(taxi.x) < ROAD_EDGE && Math.abs(taxi.speed) > 3 && (taxi.x > 0 ? Math.cos(taxi.heading) * taxi.speed < -2 : Math.cos(taxi.heading) * taxi.speed > 2))) G.wrongT = 0;

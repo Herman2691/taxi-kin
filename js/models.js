@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { outfit, bakeStatic, hasModel } from './characters.js';
+import { outfit, bakeStatic, hasModel, Character } from './characters.js';
 const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 __mark('models.js : début');
 
@@ -357,10 +357,10 @@ export function createSUV() {
 }
 /** Taxi-bus Mercedes 207 (photo « Taxi avec 27 ») : bas jaune, haut et toit bleu ciel, museau court, calandre à lamelles, pare-chocs noir, jantes d'acier. Sans `top` : le 207 des vidéos, toit clair et galerie chargée. */
 export function createMinibus({ color = 0xf2c200, apprenti = true, top = null } = {}) {
-  const shirt = pick([0xd9480f, 0xffffff, 0x2b8a3e, 0x1d4fa0]), blue = top ?? 0x1d4fa0, { L, W } = M207, zF = -L / 2;
+  const shirt = pick([0xf2c200, 0xf4f4f4, 0x1d4fa0, 0x2b8a3e]), blue = top ?? 0x1d4fa0, { L, W } = M207, zF = -L / 2;
   const human = apprenti && hasModel('homme') ? receveurHumain(shirt, W) : null;   // (corps MakeHuman ; sans le fichier, l'ancien dessin en boîtes)
   const sp = { ...M207, roof: top ?? 0xe8edf2, roofEnd: 0.98, pillarColor: top ?? color, paint: (u, j) => (j >= 6 && u > 0.2 && u < 0.24 ? blue : undefined) };
-  return vehicle(`m207|${color}|${top}|${apprenti ? shirt : 0}`, L, W, (b, low) => {
+  const g = vehicle(`m207|${color}|${top}|${apprenti ? shirt : 0}`, L, W, (b, low) => {
     loftBody(b, sp, color, low);
     realWheels(b, M207, low);
     // l'avant : calandre à lamelles, phares rectangulaires, clignotants, gros pare-chocs noir
@@ -393,16 +393,41 @@ export function createMinibus({ color = 0xf2c200, apprenti = true, top = null } 
     }
     if (apprenti && !human) b.box(0.3, 0.66, 0.26, shirt, W / 2 + 0.2, 1.48, -0.1).box(0.24, 0.68, 0.22, 0x22252a, W / 2 + 0.2, 0.86, -0.1).ball(0.15, SKIN[0], W / 2 + 0.2, 1.96, -0.1);
   }, human ? [human] : []);
+  if (human) Object.assign(g.userData, { receveurStatic: human, receveurShirt: shirt });   // (setReceveurLive : le receveur animé quand le 207 est près du joueur)
+  return g;
 }
 // Le receveur du 207 (l'auteur, 22/11 : « il faut que le receveur prenne aussi la forme humaine ») : un corps MakeHuman (comme les piétons), figé debout sur le marchepied
 // de la porte ouverte, le bras levé (il appelle les clients), tourné vers la rue ; un modèle par couleur de chemise, partagé par tous les 207
 const _receveurs = new Map();
-/** La tenue du receveur (22/11) : casquette noire, maillot de couleur sorti du pantalon, jean, baskets blanches (aussi pour le receveur animé du bus du joueur, main.js). */
-export const receveurTenue = shirt => ({ model: 'homme', shirt, pants: 0x2b4a7a, shoes: 0xf2f2f2, cap: 0x17181b, untucked: true, sandals: false, civil: true, beard: false, hair: 'short', bag: null, phone: false,
-  basin: null, headwrap: null, dress: false, pagneTop: false, longSleeves: false, idle: 0, height: 1.0, girth: 0.97 });
+/** La tenue du receveur (22/11) : casquette noire, maillot de couleur uni, short rouge, baskets blanches (aussi pour le receveur animé du bus du joueur, main.js). */
+export const receveurTenue = shirt => ({ model: 'homme', shirt, paintShirt: shirt, shorts: 0xc8102e, pants: 0xc8102e, shoes: 0xf2f2f2, cap: 0x17181b, untucked: false, sandals: false, civil: true, beard: false, hair: 'short', bag: null, phone: false,
+  basin: null, headwrap: null, dress: false, pagneTop: false, longSleeves: false, idle: 0, height: 1.0, girth: 0.97, skinTint: 1 });
+const _rpool = new Map();
+/** Remplace le receveur figé d'un 207 par un receveur animé (pris dans une petite réserve) quand `live`, ou l'inverse ; renvoie le personnage animé (ou null). */
+export function setReceveurLive(g, live) {
+  const st = g.userData.receveurStatic;
+  if (!st) return null;
+  if (live && !g.userData.receveurChar) {
+    const sh = g.userData.receveurShirt, list = _rpool.get(sh) ?? [];
+    _rpool.set(sh, list);
+    const ch = list.pop() ?? new Character(outfit('man', receveurTenue(sh)));
+    ch.mesh.position.copy(st.position);
+    ch.mesh.rotation.y = st.rotation.y;
+    g.add(ch.mesh);
+    st.visible = false;
+    g.userData.receveurChar = ch;
+  } else if (!live && g.userData.receveurChar) {
+    const ch = g.userData.receveurChar;
+    g.remove(ch.mesh);
+    st.visible = true;
+    _rpool.get(g.userData.receveurShirt).push(ch);
+    g.userData.receveurChar = null;
+  }
+  return g.userData.receveurChar ?? null;
+}
 function receveurHumain(shirt, W) {
   if (!_receveurs.has(shirt)) {
-    _receveurs.set(shirt, bakeStatic(outfit('man', receveurTenue(shirt)), 'wave', [0, 0, 0]));
+    _receveurs.set(shirt, bakeStatic(outfit('man', receveurTenue(shirt)), 'call', [0, 0, 0]));
   }
   const m = _receveurs.get(shirt).clone();
   m.position.set(W / 2 + 0.22, 0.5, -0.1);       // (sur le marchepied, à côté de la porte)

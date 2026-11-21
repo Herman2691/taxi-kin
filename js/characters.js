@@ -315,6 +315,32 @@ export function outfit(kind = Math.random() < 0.5 ? 'woman' : 'man', extra = {})
 
 const MATERIAL = new THREE.MeshLambertMaterial({ vertexColors: true });
 
+// Short et maillot (22/11, le receveur) : sur le modèle « homme », les vêtements sont dessinés dans la texture (jean et T-shirt bleus, zone 6) ; on les repeint par sommet :
+// jean (u de 0,68 à 0,855 dans l'atlas) au-dessus du genou → couleur unie (texel gris neutre × couleur), en dessous → peau nue ; reste de la zone 6 → maillot uni.
+const PAINT_NEUTRAL = [0.62, 0.9], PAINT_SKIN = [0.16, 0.34], SHORT_HEM = 0.56, TEXEL_GREY = 0.2158, _paint = new Map();
+function paintClothes(geo, src, o, M, low) {
+  if (M.name !== 'homme' || !(o.shorts || o.paintShirt)) return;
+  const key = `${low}|${o.shorts}|${o.paintShirt}|${(o.skinTint ?? 1).toFixed(2)}`;
+  let P = _paint.get(key);
+  if (!P) {
+    const pos = src.attributes.position, zone = src.attributes._zone.array, uv = new Float32Array(src.attributes.uv.array), col = new Float32Array(zoneColors(src.attributes._zone, o, M).array);
+    const flat = hex => { _c.set(hex); return [_c.r / TEXEL_GREY, _c.g / TEXEL_GREY, _c.b / TEXEL_GREY]; };
+    const red = o.shorts ? flat(o.shorts) : null, tee = o.paintShirt ? flat(o.paintShirt) : null, t = o.skinTint ?? 1;
+    for (let i = 0; i < pos.count; i++) {
+      if (zone[i] !== ZONE_CLOTH) continue;
+      const u = uv[i * 2], jeans = u >= 0.68 && u < 0.855;
+      if (jeans && red) {
+        if (pos.getY(i) >= SHORT_HEM) { uv[i * 2] = PAINT_NEUTRAL[0]; uv[i * 2 + 1] = PAINT_NEUTRAL[1]; col.set(red, i * 3); }
+        else { uv[i * 2] = PAINT_SKIN[0]; uv[i * 2 + 1] = PAINT_SKIN[1]; col.set([t, t, t], i * 3); }
+      } else if (!jeans && tee) { uv[i * 2] = PAINT_NEUTRAL[0]; uv[i * 2 + 1] = PAINT_NEUTRAL[1]; col.set(tee, i * 3); }
+    }
+    P = { uv: new THREE.BufferAttribute(uv, 2), color: new THREE.BufferAttribute(col, 3) };
+    _paint.set(key, P);
+  }
+  geo.setAttribute('uv', P.uv);
+  geo.setAttribute('color', P.color);
+}
+
 /** Couleur de chaque sommet d'un modèle MakeHuman selon sa zone : la texture (peau, tissu, cheveux) est multipliée par la couleur de la tenue. */
 function zoneColors(zone, o, M) {
   const col = hex => { _c.set(hex); return [_c.r, _c.g, _c.b]; };
@@ -358,6 +384,7 @@ export class Character {
         for (const k of ['position', 'normal', 'uv', 'skinIndex', 'skinWeight']) geo.setAttribute(k, src.attributes[k]);   // (partagés entre tous les personnages)
         geo.setIndex(src.index);
         geo.setAttribute('color', zoneColors(src.attributes._zone, o, M));
+        paintClothes(geo, src, o, M, low);
         list.push(new THREE.SkinnedMesh(geo, M.material));
       }
       const extra = parts(o, low);
@@ -612,6 +639,19 @@ function applyPose(b, mode, t, speed, o) {
         b['upperArm.R'].rotation.set(0.25, 0, 2.45);
         b['foreArm.R'].rotation.set(0, 0, 0.35 + Math.sin(t * 6.5) * 0.45);
       }
+    }
+    if (mode === 'call') {
+      // le receveur qui appelle les clients (22/11 : « ses bras doivent bien bouger ») : grand geste du bras droit levé sur le côté, l'avant-bras qui balaie vers lui,
+      // l'autre main agrippée à la porte, le buste et la tête qui suivent
+      const s = Math.sin(t * 4.4), c = Math.cos(t * 4.4);
+      b.spine.rotation.set(0.05, -0.18 * c, 0.05 * s);
+      b.chest.rotation.y = 0.14 * s;
+      b.head.rotation.y = 0.45 * Math.sin(t * 0.8);
+      b.head.rotation.x = -0.06;
+      b['upperArm.R'].rotation.set(0.35 * s, 0, 1.9 + 0.35 * c);
+      b['foreArm.R'].rotation.set(1.0 + 0.75 * Math.sin(t * 4.4 + 1.1), 0, 0.15 * s);
+      b['upperArm.L'].rotation.set(0.7, 0, -0.3);
+      b['foreArm.L'].rotation.set(1.25 + 0.1 * s, 0, 0);
     }
   }
   if (o.cuffed && mode !== 'climb') {                          // (arrêté par la police : les mains dans le dos, la tête basse)
