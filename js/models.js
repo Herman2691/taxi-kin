@@ -356,7 +356,7 @@ export function createSUV() {
   });
 }
 /** Taxi-bus Mercedes 207 (photo « Taxi avec 27 ») : bas jaune, haut et toit bleu ciel, museau court, calandre à lamelles, pare-chocs noir, jantes d'acier. Sans `top` : le 207 des vidéos, toit clair et galerie chargée. */
-const GRIP_AT = [M207.W / 2 + 0.05, 1.55, -0.55], RCV_STEP = [M207.W / 2 + 0.22, 0.5, -0.1], RCV_YAW = -0.9;   // (barre de la porte ; marchepied du receveur et son orientation)
+const GRIP_AT = [M207.W / 2 + 0.05, 1.55, -0.55], RCV_STEP = [M207.W / 2 - 0.06, 0.46, -0.1], RCV_YAW = -0.9;   // (barre de la porte ; marchepied du receveur et son orientation)
 export function createMinibus({ color = 0xf2c200, apprenti = true, top = null } = {}) {
   const shirt = pick([0xf2c200, 0xf4f4f4, 0x1d4fa0, 0x2b8a3e]), blue = top ?? 0x1d4fa0, { L, W } = M207, zF = -L / 2;
   const human = apprenti && hasModel('homme') ? receveurHumain(shirt, W) : null;   // (corps MakeHuman ; sans le fichier, l'ancien dessin en boîtes)
@@ -387,7 +387,8 @@ export function createMinibus({ color = 0xf2c200, apprenti = true, top = null } 
       taxiSticker(b, W, 1.08, -1.0);
       for (const sx of [-0.62, 0.62]) b.box(0.32, 0.07, 0.03, 0xd62828, sx, 0.74, L / 2 + 0.01);
     }
-    b.box(0.08, 1.2, 0.86, 0x111317, W / 2 - 0.02, 1.14, -0.1).box(0.16, 0.05, 0.86, BUMPER, W / 2 + 0.02, 0.5, -0.1);   // la porte ouverte, à droite
+    if (!apprenti) b.box(0.08, 1.2, 0.86, 0x111317, W / 2 - 0.02, 1.14, -0.1);   // la porte ouverte, à droite (avec le receveur : il l'occupe, les deux pieds à l'intérieur)
+    b.box(0.16, 0.05, 0.86, BUMPER, W / 2 + 0.02, 0.5, -0.1);
     if (apprenti) b.box(0.035, 0.8, 0.035, 0xb8bcc2, GRIP_AT[0], GRIP_AT[1], GRIP_AT[2]).box(0.07, 0.03, 0.03, 0x24272c, GRIP_AT[0] - 0.03, GRIP_AT[1] + 0.36, GRIP_AT[2]).box(0.07, 0.03, 0.03, 0x24272c, GRIP_AT[0] - 0.03, GRIP_AT[1] - 0.36, GRIP_AT[2]);   // (barre d'appui du receveur, au bord avant de la porte)
     if (!top) {
       b.box(1.76, 0.08, 2.8, 0x2b2f36, 0, 2.21, 0.8).box(1.5, 0.34, 2.1, 0x7a5a32, 0, 2.4, 0.8).box(0.85, 0.32, 0.85, 0x2d6a4f, 0.28, 2.7, 0.45).box(0.65, 0.3, 0.65, 0xa8382b, -0.38, 2.66, 1.5);
@@ -445,7 +446,7 @@ function receveurHumain(shirt, W) {
     _receveurs.set(shirt, bakeStatic(outfit('man', receveurTenue(shirt)), 'call', [0, 0, 0]));
   }
   const m = _receveurs.get(shirt).clone();
-  m.position.set(...RCV_STEP);                    // (sur le marchepied, à côté de la porte)
+  m.position.set(...RCV_STEP);                    // (dans l'ouverture de la porte, les deux pieds sur le plancher)
   m.rotation.y = RCV_YAW;                         // (l'avant du personnage est vers -z : il regarde vers l'avant et la rue)
   m.userData.rider = 'receveur';
   return m;
