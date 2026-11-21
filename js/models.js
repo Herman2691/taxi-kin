@@ -358,6 +358,7 @@ export function createSUV() {
 /** Taxi-bus Mercedes 207 (photo « Taxi avec 27 ») : bas jaune, haut et toit bleu ciel, museau court, calandre à lamelles, pare-chocs noir, jantes d'acier. Sans `top` : le 207 des vidéos, toit clair et galerie chargée. */
 export function createMinibus({ color = 0xf2c200, apprenti = true, top = null } = {}) {
   const shirt = pick([0xd9480f, 0xffffff, 0x2b8a3e, 0x1d4fa0]), blue = top ?? 0x1d4fa0, { L, W } = M207, zF = -L / 2;
+  const human = apprenti && hasModel('homme') ? receveurHumain(shirt, W) : null;   // (corps MakeHuman ; sans le fichier, l'ancien dessin en boîtes)
   const sp = { ...M207, roof: top ?? 0xe8edf2, roofEnd: 0.98, pillarColor: top ?? color, paint: (u, j) => (j >= 6 && u > 0.2 && u < 0.24 ? blue : undefined) };
   return vehicle(`m207|${color}|${top}|${apprenti ? shirt : 0}`, L, W, (b, low) => {
     loftBody(b, sp, color, low);
@@ -390,8 +391,23 @@ export function createMinibus({ color = 0xf2c200, apprenti = true, top = null } 
       b.box(1.76, 0.08, 2.8, 0x2b2f36, 0, 2.21, 0.8).box(1.5, 0.34, 2.1, 0x7a5a32, 0, 2.4, 0.8).box(0.85, 0.32, 0.85, 0x2d6a4f, 0.28, 2.7, 0.45).box(0.65, 0.3, 0.65, 0xa8382b, -0.38, 2.66, 1.5);
       if (!low) b.box(0.28, 0.42, 0.28, 0x1d6fd1, 0.55, 2.42, -0.55).add(new THREE.CylinderGeometry(0.34, 0.34, 0.2, 10), TYRE, -0.35, 2.32, -0.55);
     }
-    if (apprenti) b.box(0.3, 0.66, 0.26, shirt, W / 2 + 0.2, 1.48, -0.1).box(0.24, 0.68, 0.22, 0x22252a, W / 2 + 0.2, 0.86, -0.1).ball(0.15, SKIN[0], W / 2 + 0.2, 1.96, -0.1);
-  });
+    if (apprenti && !human) b.box(0.3, 0.66, 0.26, shirt, W / 2 + 0.2, 1.48, -0.1).box(0.24, 0.68, 0.22, 0x22252a, W / 2 + 0.2, 0.86, -0.1).ball(0.15, SKIN[0], W / 2 + 0.2, 1.96, -0.1);
+  }, human ? [human] : []);
+}
+// Le receveur du 207 (l'auteur, 22/11 : « il faut que le receveur prenne aussi la forme humaine ») : un corps MakeHuman (comme les piétons), figé debout sur le marchepied
+// de la porte ouverte, le bras levé (il appelle les clients), tourné vers la rue ; un modèle par couleur de chemise, partagé par tous les 207
+const _receveurs = new Map();
+function receveurHumain(shirt, W) {
+  if (!_receveurs.has(shirt)) {
+    const o = outfit('man', { model: 'homme', shirt, pants: 0x22252a, shoes: 0x17181b, civil: true, beard: false, hair: 'short', bag: null, phone: false, cap: null, basin: null, headwrap: null,
+      dress: false, pagneTop: false, longSleeves: false, idle: 0, height: 1.0, girth: 1.0 });
+    _receveurs.set(shirt, bakeStatic(o, 'wave', [0, 0, 0]));
+  }
+  const m = _receveurs.get(shirt).clone();
+  m.position.set(W / 2 + 0.22, 0.5, -0.1);       // (sur le marchepied, à côté de la porte)
+  m.rotation.y = -0.9;                           // (l'avant du personnage est vers -z : il regarde vers l'avant et la rue)
+  m.userData.rider = 'receveur';
+  return m;
 }
 /** Fourgonnette Toyota Hiace, Sprinter : tout jaune, blanc à bas jaune, ou blanc à bande rouge. */
 export function createVan() {
