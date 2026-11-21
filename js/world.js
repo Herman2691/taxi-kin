@@ -5228,6 +5228,45 @@ function addShekinah(b, signs, side, z, p) {
   addMango(b, x(17), z + 27, 1.0);
 }
 
+/**
+ * L'ancien bâtiment de l'église Shekinah (l'auteur, 22/11, d'après sa description) : à droite, à étages (4 niveaux), peinture crème passée ; devant, la statue de l'aigle sur son
+ * piédestal, tournée vers le macadam.
+ */
+function addShekinahOld(b, signs, side, z, p) {
+  const L = 30, H = 14.4, x = d => side * (FRONT + d), face = -side * Math.PI / 2, e = -side;   // e : vers la route
+  const CREAM = 0xe0d5b4, BAND = 0xb3a888, GLASS_D = 0x1e2f42;
+  b.box(14, H, L, CREAM, x(16), H / 2, z);
+  for (const y of [3.6, 7.2, 10.8]) b.box(14.4, 0.3, L + 0.4, BAND, x(16), y, z);
+  b.box(14.6, 0.9, L + 0.6, 0x9a8f72, x(16), H + 0.35, z);
+  // la patine : coulures sombres sous les rebords
+  for (let k = 0; k < 12; k++) b.box(0.05, rand(2.5, 6), rand(0.2, 0.45), 0x9c9174, x(8.97), rand(3.2, 9.5), z + rand(-L / 2 + 1, L / 2 - 1));
+  // fenêtres : 6 travées sur 4 niveaux ; au rez-de-chaussée, l'entrée à la place des deux travées du milieu
+  for (let f = 0; f < 4; f++) for (let k = 0; k < 6; k++) {
+    const dz = -12.5 + k * 5;
+    if (f === 0 && (k === 2 || k === 3)) continue;
+    b.box(0.12, 1.55, 1.8, GLASS_D, x(8.95), 2.0 + f * 3.6, z + dz).box(0.14, 0.1, 2.0, BAND, x(8.9), 1.15 + f * 3.6, z + dz);
+  }
+  b.box(0.14, 2.8, 3.2, 0x3a2a1c, x(8.95), 1.4, z).box(2.6, 0.2, 4.4, BAND, x(7.7), 3.3, z).box(2.2, 0.2, 4.0, 0xbfb6a0, x(7.7), 0.1, z);
+  // balcon filant du 1er étage et son garde-corps
+  b.box(1.4, 0.2, L, CREAM, x(8.3), 3.7, z).box(0.06, 0.9, L, 0x3a3f46, x(7.65), 4.25, z);
+  for (let dz = -L / 2 + 0.5; dz <= L / 2 - 0.4; dz += 1.0) b.box(0.05, 0.9, 0.05, 0x3a3f46, x(7.65), 4.25, z + dz);
+  // toit-terrasse : deux citernes bleues et une antenne
+  b.cyl(1.0, 1.0, 1.6, 0x2f6fb0, x(18), H + 1.5, z - 7).cyl(1.0, 1.0, 1.6, 0x2f6fb0, x(18), H + 1.5, z + 3).box(0.06, 4, 0.06, 0x6b7076, x(14), H + 2.8, z + 10);
+  signs.add(`shek_old_${side}`, () => signTexture('SHEKINAH', 'Ancien bâtiment · Debonhomme', '#1d4fa0', '#ffffff'), 11, 1.3, x(8.85), 12.5, z, face, true);
+  // le sol devant : dalle de béton
+  b.box(9, 0.04, L + 2, 0xa8a49a, x(4.5), 0.03, z);
+  // la statue de l'aigle : piédestal, corps, tête blanche, bec doré, ailes déployées, queue ; il regarde le macadam
+  const px = x(3), BR = 0x7a5a2c, DK = 0x4a3820, GOLD = 0xe2a812;
+  b.box(2.4, 0.5, 2.4, 0xc9c2b2, px, 0.25, z).box(1.7, 2.4, 1.7, 0xd8d2c4, px, 1.7, z).box(2.0, 0.25, 2.0, 0xc9c2b2, px, 3.0, z);
+  b.ball(0.55, BR, px, 3.75, z, 1.5, 0.95, 0.8);
+  b.ball(0.3, 0xf2efe6, px + e * 0.95, 4.35, z).box(0.34, 0.1, 0.12, GOLD, px + e * 1.3, 4.3, z).box(0.2, 0.08, 0.1, GOLD, px + e * 1.18, 4.22, z);
+  for (const sz of [-1, 1]) {
+    b.box(0.95, 0.12, 1.9, BR, px, 4.05, z + sz * 1.15, -sz * 0.45, 0, 0).box(0.8, 0.1, 1.3, DK, px, 4.55, z + sz * 2.2, -sz * 0.8, 0, 0);
+  }
+  b.box(1.0, 0.1, 0.8, DK, px - e * 0.95, 3.55, z, 0, 0, -side * 0.4);
+  b.box(0.6, 0.3, 0.8, 0x8a8478, px + e * 0.2, 3.25, z);
+}
+
 /** Immeuble commercial, banque ou hôtel nommé (Rawbank, Equity BCDC, TMB, Hôtel Océan, Siège PNC — d'après TPF). */
 function addCommercialBldg(b, signs, side, z, p) {
   const x = side * (FRONT + 8), fx = side * (FRONT - 0.05), H = p.h ?? 10.2, gh = Math.min(7.2, H - 3);   // p.h : hauteur (2 niveaux ≈ 7,4 m)
@@ -11587,6 +11626,7 @@ export function buildWorld(scene, opts = {}) {
     else if (p.kind === 'church') addNamedChurch(chunks.at(g(p.s)), signs, p.side, g(p.s), p);
     else if (p.kind === 'commercial') addCommercialBldg(chunks.at(g(p.s)), signs, p.side, g(p.s), p);
     else if (p.kind === 'shekinah') addShekinah(chunks.at(g(p.s)), signs, p.side, g(p.s), p);
+    else if (p.kind === 'shekinah_old') addShekinahOld(chunks.at(g(p.s)), signs, p.side, g(p.s), p);
     else if (p.kind === 'lumumba_monument') addLumumbaMonument(chunks.at(g(p.s)), signs, p.side, g(p.s));
     else if (p.kind === 'petro') addPetroCongo(chunks.at(g(p.s)), signs, p.side, g(p.s));
     else if (p.kind === 'tanks') addTanks(chunks.at(g(p.s)), p.side, g(p.s));
@@ -11706,7 +11746,7 @@ export function buildWorld(scene, opts = {}) {
   const SKIP_BOTH = [...RIVERS.map(r => ({ z: r.z, d: r.w / 2 + 4 })), ...RINGS.map(q => ({ z: q.z, d: q.reach + 4 })), ...RINGS.filter(q => q.kind === 'gap').map(q => ({ z: q.z0 + 150, d: 75 })), ...(R.campus ? [{ z: CAMPUS_Z - 400, d: 400 }] : []),
     ...CROSSINGS.map(c => ({ z: c.z, d: c.w / 2 + 3 }))];
   const SKIP_SIDE = [...R.monuments.map(m => ({ side: m.side, z: g(m.s), d: m.kind === 'stadium' ? 110 : m.kind === 'palais' ? 95 : m.kind === 'culture' ? 100 : 50 })),
-    ...(R.places ?? []).filter(p => p.kind !== 'tanks' && p.kind !== 'pont_matete').map(p => ({ side: p.side, z: g(p.s), d: { petro: 24, lds_church: 18, kimbanseke_commune: 18, masina_commune: 18, vodacom_shop: 12, orange_shop: 13, airtel_shop: 9, atm: 7, mosque: 16, mbujimayi_kananga: 15, ecole_luka: 18, stade_masina: (p.length ?? 36) / 2 + 3, hospital: 16, school: 15, church: 14, shekinah: 42, commercial: 12, lumumba_monument: 8, apocalypse: 68, regideso: 20, kinmarche: 32, transco_depot: 46, fuel: 22, b30_kintambo: 38, b30_rev_kim: 28, b30_mural: 38, b30_ggmart: 34, b30_chantier: 22, b30_jac: 32, b30_batetela: 26, b30_cnss_glass: 22, b30_res165: 24, b30_gouvernement: 44, b30_white_tower: 22, b30_three_pillars: 24, b30_copper_glass: 22, b30_africell_tower: 24, b30_afriland: 22, b30_matrix: 24, b30_mandela_apt: 24, b30_rotana: 44, b30_believe: 22, b30_sabena: 34, b30_orange_tower: 22, b30_chancellerie: 28, b30_regideso: 32, b30_dentisterie_chantier: 28, b30_blue_curve: 22, b30_scpt: 36, b30_sozacom: 38, b30_solenac: 24, b30_memling: 26, b30_bcdc_tower: 36, b30_palais_justice: 42, b30_bold_chantier: 24, b30_ferris_wheel: 34 }[p.kind] ?? 30 })),
+    ...(R.places ?? []).filter(p => p.kind !== 'tanks' && p.kind !== 'pont_matete').map(p => ({ side: p.side, z: g(p.s), d: { petro: 24, lds_church: 18, kimbanseke_commune: 18, masina_commune: 18, vodacom_shop: 12, orange_shop: 13, airtel_shop: 9, atm: 7, mosque: 16, mbujimayi_kananga: 15, ecole_luka: 18, stade_masina: (p.length ?? 36) / 2 + 3, hospital: 16, school: 15, church: 14, shekinah: 42, shekinah_old: 22, commercial: 12, lumumba_monument: 8, apocalypse: 68, regideso: 20, kinmarche: 32, transco_depot: 46, fuel: 22, b30_kintambo: 38, b30_rev_kim: 28, b30_mural: 38, b30_ggmart: 34, b30_chantier: 22, b30_jac: 32, b30_batetela: 26, b30_cnss_glass: 22, b30_res165: 24, b30_gouvernement: 44, b30_white_tower: 22, b30_three_pillars: 24, b30_copper_glass: 22, b30_africell_tower: 24, b30_afriland: 22, b30_matrix: 24, b30_mandela_apt: 24, b30_rotana: 44, b30_believe: 22, b30_sabena: 34, b30_orange_tower: 22, b30_chancellerie: 28, b30_regideso: 32, b30_dentisterie_chantier: 28, b30_blue_curve: 22, b30_scpt: 36, b30_sozacom: 38, b30_solenac: 24, b30_memling: 26, b30_bcdc_tower: 36, b30_palais_justice: 42, b30_bold_chantier: 24, b30_ferris_wheel: 34 }[p.kind] ?? 30 })),
     ...(HAS_MATETE ? [-1, 1].map(side => ({ side, z: (MATETE_ZONE[side][0] + MATETE_ZONE[side][1]) / 2, d: (MATETE_ZONE[side][0] - MATETE_ZONE[side][1]) / 2 + 4 })) : []),
     ...(IS_TOWER ? [{ side: 1, z: (ECH_ZONE[0] + ECH_ZONE[1]) / 2, d: (ECH_ZONE[0] - ECH_ZONE[1]) / 2 },
       ...ECH_ZONES_L.map(([a, c]) => ({ side: -1, z: (a + c) / 2, d: (a - c) / 2 }))] : []),

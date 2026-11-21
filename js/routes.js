@@ -229,6 +229,9 @@ export const ROUTES = {
       // (l'auteur, 22/11 : « l'église Shekinah, à gauche, finit 10 m avant la station qui est avant le saut-de-mouton de Debonhomme » ; photos : dossier shekinanh) :
       // 70 m de clôture, de 10 210 à 10 280 m ; leur ancien bâtiment à étages (statue de l'aigle) est à droite, à faire avec ses photos
       { kind: 'shekinah', name: 'ÉGLISE SHEKINAH', sub: 'Debonhomme · Kinshasa', s: 10245, side: -1 },
+      // leur ancien bâtiment à étages, à droite, avec la statue de l'aigle devant qui regarde le macadam (l'auteur, 22/11, d'après sa description, sans photo) ;
+      // il finit avant l'aire de la Station Debonhomme (qui commence à 10 275 m)
+      { kind: 'shekinah_old', name: 'SHEKINAH', sub: 'Ancien bâtiment · Debonhomme', s: 10257, side: 1 },
       { kind: 'hospital', name: 'HÔPITAL TELEMA', sub: 'Centre Hospitalier de Matete', s: 11140, side: -1 },
       { kind: 'pont_matete', s: 11496, side: 1 },                   // Remblai + pont sur le chemin de fer et la Route Poids Lourds (Hôpital Akram), 2e pont sur les petits boulevards (Transco, Collège Lumumba)
     ],
