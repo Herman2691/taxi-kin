@@ -4,14 +4,14 @@ import { buildCockpit } from './cockpit.js';
 import { Lunettes } from './lunettes.js';
 import * as THREE from 'three';
 import * as W1 from './world.js';
-import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight } from './models.js';
+import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue } from './models.js';
 import { NightGlow, makeBeam, setBeam } from './nuit.js';
 import { Retro } from './retro.js';
 import { buildCabin } from './cabine.js';
 import { Preacher } from './predication.js';
 import { Incidents } from './incidents.js';
 import { Rain } from './pluie.js';
-import { Character, outfit } from './characters.js';
+import { Character, outfit, hasModel } from './characters.js';
 import { Traffic } from './traffic.js';
 import { Passengers, newBoard, LINES } from './passengers.js';
 import { StreetLife } from './life.js';
@@ -413,11 +413,54 @@ const makeVehicle = (id, two = false) => {
     return ch.mesh;
   }
   if (id === 'perso') return createCar({ color: 0x1e3a8a, taxi: false });   // (voiture personnelle : berline bleue, sans enseigne)
-  if (id !== 'moto') return id === 'bus' ? createMinibus({ top: 0x2a93cc, apprenti: true }) : createCar({ color: 0xf5c400, taxi: true });
+  if (id === 'bus') {
+    const humain = hasModel('homme'), m = createMinibus({ top: 0x2a93cc, apprenti: !humain });   // (avec le corps MakeHuman, le receveur est animé : voir receveurCorps)
+    rcv = humain ? newReceveur(m) : null;
+    return m;
+  }
+  if (id !== 'moto') return createCar({ color: 0xf5c400, taxi: true });
   const m = createMoto({ riders: two ? 2 : 1, look: MOTO_LOOK });
   MOTO_LOOK ??= m.userData.look;
   return m;
 };
+// Le receveur du bus du joueur (corps MakeHuman animé, 22/11 : « il peut faire des mouvements, il peut descendre et monter ») : debout sur le marchepied, il appelle les clients ;
+// quand le bus s'arrête pour faire monter ou descendre des clients, il descend sur la chaussée, appelle, puis remonte dès que le bus repart
+let rcv = null;
+const RCV = { step: null, ground: null };
+function newReceveur(bus) {
+  const W = bus.userData.W;
+  const ch = new Character(outfit('man', receveurTenue([0xd62828, 0x1d4fa0, 0xf2c200, 0xffffff][Math.floor(Math.random() * 4)])));
+  RCV.step = new THREE.Vector3(W / 2 + 0.22, 0.5, -0.1);
+  RCV.ground = new THREE.Vector3(W / 2 + 1.1, 0, 0.45);
+  ch.mesh.position.copy(RCV.step);
+  ch.mesh.rotation.y = -0.9;
+  bus.add(ch.mesh);
+  return { ch, st: 'on', k: 0, t: 0, idle: 0 };
+}
+/** Chaque image : le receveur sur le marchepied, en train de descendre, dehors ou en train de remonter. */
+function receveurCorps(dt) {
+  if (!rcv) return;
+  const R = rcv, m = R.ch.mesh, sp = Math.abs(taxi.speed), serving = /montent|descendent/.test(passengers.prompt) && sp < 1;
+  R.t += dt;
+  if (R.st === 'on') {
+    if (serving) { R.st = 'down'; R.k = 0; }
+    else { R.ch.pose(sp < 4 ? 'wave' : 'idle', R.t); m.position.copy(RCV.step); m.rotation.y = -0.9; }
+  } else if (R.st === 'down' || R.st === 'up') {
+    if (sp > 2.5) { R.st = 'on'; R.k = 0; return; }                  // (le bus repart : il saute à bord)
+    const dir = R.st === 'down' ? 1 : -1;
+    R.k = Math.min(1, Math.max(0, R.k + dir * dt / 0.9));
+    m.position.lerpVectors(RCV.step, RCV.ground, R.k);
+    m.rotation.y = -0.9 + (-Math.PI / 2 + 0.9) * R.k;
+    R.ch.pose('walk', R.t, 1.3);
+    if (R.st === 'down' && R.k >= 1) { R.st = 'out'; R.idle = 0; }
+    else if (R.st === 'up' && R.k <= 0) R.st = 'on';
+  } else {                                                           // dehors : il appelle les clients ; il remonte quand tout le monde est monté ou descendu
+    R.idle = serving || sp < 0.5 && /Arrête|Réponds|Complet/.test(passengers.prompt) ? 0 : R.idle + dt;
+    m.position.copy(RCV.ground); m.rotation.y = -Math.PI / 2;
+    R.ch.pose('wave', R.t);
+    if (R.idle > 1.2 || sp > 1.5) { R.st = 'up'; R.k = 1; }
+  }
+}
 let taxiMesh = makeVehicle(VEH_ID);
 scene.add(camera);                               // (le poste de conduite de la vue intérieure est accroché à la caméra)
 let cockpit = buildCockpit(VEH_ID);
@@ -2485,6 +2528,7 @@ function update(dt) {
     passengers.update(dt, taxi, G.time, callbacks);
     G.prompt = passengers.prompt;
     receveur(dt);
+    receveurCorps(dt);
     overloadCheck();
   }
   if (!(Math.abs(taxi.x) > MEDIAN && Math.abs(taxi.x) < ROAD_EDGE && Math.abs(taxi.speed) > 3 && (taxi.x > 0 ? Math.cos(taxi.heading) * taxi.speed < -2 : Math.cos(taxi.heading) * taxi.speed > 2))) G.wrongT = 0;

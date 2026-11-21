@@ -397,11 +397,12 @@ export function createMinibus({ color = 0xf2c200, apprenti = true, top = null } 
 // Le receveur du 207 (l'auteur, 22/11 : « il faut que le receveur prenne aussi la forme humaine ») : un corps MakeHuman (comme les piétons), figé debout sur le marchepied
 // de la porte ouverte, le bras levé (il appelle les clients), tourné vers la rue ; un modèle par couleur de chemise, partagé par tous les 207
 const _receveurs = new Map();
+/** La tenue du receveur (22/11) : casquette noire, maillot de couleur sorti du pantalon, jean, baskets blanches (aussi pour le receveur animé du bus du joueur, main.js). */
+export const receveurTenue = shirt => ({ model: 'homme', shirt, pants: 0x2b4a7a, shoes: 0xf2f2f2, cap: 0x17181b, untucked: true, sandals: false, civil: true, beard: false, hair: 'short', bag: null, phone: false,
+  basin: null, headwrap: null, dress: false, pagneTop: false, longSleeves: false, idle: 0, height: 1.0, girth: 0.97 });
 function receveurHumain(shirt, W) {
   if (!_receveurs.has(shirt)) {
-    const o = outfit('man', { model: 'homme', shirt, pants: 0x22252a, shoes: 0x17181b, civil: true, beard: false, hair: 'short', bag: null, phone: false, cap: null, basin: null, headwrap: null,
-      dress: false, pagneTop: false, longSleeves: false, idle: 0, height: 1.0, girth: 1.0 });
-    _receveurs.set(shirt, bakeStatic(o, 'wave', [0, 0, 0]));
+    _receveurs.set(shirt, bakeStatic(outfit('man', receveurTenue(shirt)), 'wave', [0, 0, 0]));
   }
   const m = _receveurs.get(shirt).clone();
   m.position.set(W / 2 + 0.22, 0.5, -0.1);       // (sur le marchepied, à côté de la porte)
