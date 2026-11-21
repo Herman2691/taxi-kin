@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { outfit, bakeStatic, hasModel, Character, solveGrip } from './characters.js';
+import { nonIndexed } from './geo.js';
 const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 __mark('models.js : début');
 
@@ -31,14 +32,14 @@ export class Builder {
   constructor() { this.parts = []; }
   add(geo, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
     _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz, 'YXZ')), ONE);
-    const g = geo.index ? geo.toNonIndexed() : geo;
+    const g = geo.index ? nonIndexed(geo) : geo;
     if (g !== geo) geo.dispose();
     this.parts.push(paint(g.applyMatrix4(_m), color));
     return this;
   }
   /** Ajoute une géométrie déjà placée (sans transformation). */
   addRaw(geo, color) {
-    const g = geo.index ? geo.toNonIndexed() : geo;
+    const g = geo.index ? nonIndexed(geo) : geo;
     if (g !== geo) geo.dispose();
     this.parts.push(paint(g, color));
     return this;

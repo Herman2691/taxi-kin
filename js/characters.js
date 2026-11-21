@@ -4,6 +4,7 @@
 // Le même modèle peut être « figé » dans une pose et fusionné dans le décor (vendeurs assis).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { nonIndexed } from './geo.js';
 const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 
 // ---------- Modèles MakeHuman (tools/personnages_mh.py → data/personnages/*.glb) ----------
@@ -87,7 +88,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 // ---------- Géométrie ----------
 const _c = new THREE.Color();
 function colored(geo, color, bone) {
-  const g = geo.index ? geo.toNonIndexed() : geo;
+  const g = geo.index ? nonIndexed(geo) : geo;
   const n = g.attributes.position.count;
   const col = new Float32Array(n * 3), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
   _c.set(color);
@@ -836,7 +837,7 @@ function bakeModelled(builder, o, mode, x, z, ry, t) {
   geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setIndex(src.index);
-  geo = geo.toNonIndexed();
+  geo = nonIndexed(geo);
   builder.parts.push(geo);
   for (const p of parts(o, true)) {                                         // béret, gilet, foulard... : pièces rigides posées sur leur os
     p.geo.applyMatrix4(_m.copy(ch.bones[p.bone].matrixWorld));
