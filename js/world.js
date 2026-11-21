@@ -1446,7 +1446,14 @@ function canvasTexture(w, h, draw) {
   return t;
 }
 
+// (partagée entre les copies du module chargées pour les routes attachées : même image, même contexte WebGL ; chargement plus court)
+const TEX_SHARED = (globalThis.TAXIKIN_TEX ??= new Map());
 function roadTexture(mirror, lanes = LANES) {
+  const key = `road|${mirror}|${lanes}|${!!R.twoLane}|${!!ASPHALT}`;
+  if (!TEX_SHARED.has(key)) TEX_SHARED.set(key, roadTextureDraw(mirror, lanes));
+  return TEX_SHARED.get(key);
+}
+function roadTextureDraw(mirror, lanes) {
   // Le carreau couvre toute la chaussée d'un sens (LANES voies) sur 12 m de long.
   const t = canvasTexture(1024, 1024, (x, W, H) => {
     if (ASPHALT) {
@@ -1502,6 +1509,11 @@ function groundTexture() {
 }
 
 function signTexture(title, sub, bg, fg = '#fff', painted = false) {
+  const key = `sign|${title}|${sub}|${bg}|${fg}|${painted}`;
+  if (!TEX_SHARED.has(key)) TEX_SHARED.set(key, signTextureDraw(title, sub, bg, fg, painted));
+  return TEX_SHARED.get(key);
+}
+function signTextureDraw(title, sub, bg, fg, painted) {
   return canvasTexture(512, 160, (x, w, h) => {
     x.fillStyle = bg; x.fillRect(0, 0, w, h);
     if (painted) {
@@ -11230,6 +11242,7 @@ export function buildWorld(scene, opts = {}) {
   chunks.scan = details.scan = true;                       // (l'auteur, 13/11 : les obstacles du bord de la route, voir obstacleAt)
   obstInit(Z_START + 30, Math.min(Z_GEN, Z_END) - 40);
 
+  __mark('bw Sol (hors rivières) plié le long de la route, plus');
   // Sol (hors rivières) plié le long de la route, plus un grand plan plat en dessous pour le lointain
   const groundMat = new THREE.MeshLambertMaterial({ map: groundTexture() });
   for (const [a, z] of solid(Z_START + (START_ATTACHED ? 0 : 700), EXT ? Z_FORK - 4 : R.end.kind === 'open' ? Z_END - 20 : Math.min(END_Z - 700, Z_END - 400))) {
@@ -11240,7 +11253,9 @@ export function buildWorld(scene, opts = {}) {
       scene.add(m);
     }
   }
+  __mark('bw Masina : le sol plié continue au-delà de ±260 m ju');
   // Masina : le sol plié continue au-delà de ±260 m jusqu'au chemin de fer et à SOCIDER ; là où la rivière Bonamak s'arrête
+  __mark('bw (avant Kulumba), le sol recouvre la suite de son l');
   // (avant Kulumba), le sol recouvre la suite de son lit
   if (MAS) {
     const ground = geo => { const m = new THREE.Mesh(bendGeometry(geo), groundMat); m.receiveShadow = true; scene.add(m); };
@@ -11267,6 +11282,7 @@ export function buildWorld(scene, opts = {}) {
     }
   }
 
+  __mark('bw Terre-plein : bordures + séparateur béton (avec pa');
   // Terre-plein : bordures + séparateur béton (avec passages sauvages) + lampadaires
   const signalCuts = MEDIAN_CUTS.map(c => [c.z + c.w / 2, c.z - c.w / 2]);   // carrefours ouverts : pas de terre-plein
   for (const [p, q] of minus([...spans(Z_START, IS_TOWER ? ECH.fork0 : Z_GEN), ...(IS_TOWER ? pieces(ECH.merge, Z_GEN) : [])], signalCuts)) {
@@ -11276,6 +11292,7 @@ export function buildWorld(scene, opts = {}) {
     else if (inHighway(zc)) b.box(MEDIAN * 2, 0.02, len, 0x7a7b7e, 0, 0.012, zc);   // simple marquage au sol
     else b.box(MEDIAN * 2, 0.22, len, 0xa9a49a, 0, 0.11, zc);
   }
+  __mark('bw Section rénovée : terre-plein en herbe planté de p');
   // Section rénovée : terre-plein en herbe planté de palmiers, bordures rouge et blanc
   const GREEN_END = R.greenMedianUntil === 'END' ? Z_END - 1 : R.greenMedianUntil ? lmZ(R.greenMedianUntil) : Infinity;
   if (GREEN_END !== Infinity) for (const [p, q] of pieces(Z_START, GREEN_END)) chunks.at((p + q) / 2).box(MEDIAN * 2 - 0.3, 0.3, p - q, 0x5f8a3a, 0, 0.16, (p + q) / 2);
@@ -11328,11 +11345,14 @@ export function buildWorld(scene, opts = {}) {
       for (const ry of [0, Math.PI]) signs.add('flagRDC', flagTexture, 1.1, 0.75, side * (ROAD_EDGE + 2.4) + 0.6 * Math.cos(ry), 6.6, z, ry);
     }
   }
+  __mark('bw (pas de pylône sur le tronçon de Limete : il tombe');
   // (pas de pylône sur le tronçon de Limete : il tomberait sur une des rues du croquis)
+  __mark('bw (à Masina, côté droit : la boucle passe derrière l');
   // (à Masina, côté droit : la boucle passe derrière les façades)
   const inMasZ = z => MAS && z < MAS_Z0 + 40 && z > MAS_Z1 - 40;
   for (let z = -420; z > Z_GEN + 200; z -= rand(700, 1100)) if (!(LIM && z < Z16 + 40) && !(inMobZ(z) && inMasZ(z))) addMast(chunks.at(z), (inMasZ(z) || chance(0.5) ? -1 : 1) * rand(45, 80), z);   // (ni dans la boucle de Masina, ni dans le quartier de Moboma)
 
+  __mark('bw Glissières métalliques (ex. vers Kingasani)');
   // Glissières métalliques (ex. vers Kingasani)
   for (const [at, r] of R.guardrails) {
     const zc = lmZ(at);
@@ -11349,6 +11369,7 @@ export function buildWorld(scene, opts = {}) {
     }
   }
 
+  __mark('bw Bordures peintes rouge et blanc + bornes (petits o');
   // Bordures peintes rouge et blanc + bornes (petits objets : affichés seulement de près)
   let paint = 0;
   for (let z = Z_START; z > Z_GEN; z -= 1.5) {
@@ -11362,6 +11383,7 @@ export function buildWorld(scene, opts = {}) {
     if (paint % 2 === 0 && !inRiver(z, 1)) for (const s of [-1, 1]) if (!atSideRoad(s, z, 0.5)) d.box(0.28, 0.32, 0.5, 0x6e2a22, s * (ROAD_EDGE + 0.3), 0.36, z);
   }
 
+  __mark('bw Bordures, caniveaux et accotements (pas sur les po');
   // Bordures, caniveaux et accotements (pas sur les ponts) — ou trottoirs dallés sur les avenues rénovées
   for (const [a, c] of solid(Z_START, Z_GEN, true)) {
     for (const [p0, q0] of spans(a, c)) for (const s of [-1, 1]) for (const [p, q] of cutSide(s, p0, q0)) {
@@ -11391,7 +11413,9 @@ export function buildWorld(scene, opts = {}) {
       }
     }
   }
+  __mark('bw (lauteur, 09/11 : « ces boulevards ne sont pas bi');
   // (l'auteur, 09/11 : « ces boulevards ne sont pas bien attachés ») : les entrées « Avenue Kasa-Vubu » du 30 Juin ne sont pas dessinées quand la vraie
+  __mark('bw avenue est chargée (main.js ROAD6) : elle arrive a');
   // avenue est chargée (main.js ROAD6) : elle arrive au même endroit ; on y roule quand même (onSideRoad), jusqu'au changement de route
   for (const r of SIDE_ROADS.filter(r => r.z > Z_END && !r.light && !(r.kv && globalThis.TAXIKIN_KV) && !(r.roc && globalThis.TAXIKIN_ROC) && !(r.mm && globalThis.TAXIKIN_MM))) {   // (rien au-delà de la fin de la chaussée : parc de l'Échangeur)
     addSideRoad(chunks.at(r.z), details, signs, r);
@@ -11408,6 +11432,7 @@ export function buildWorld(scene, opts = {}) {
     }
   }
 
+  __mark('bw Arrêts de bus et taxis-bus le long du boulevard');
   // Arrêts de bus et taxis-bus le long du boulevard
   for (const bz of BUS_STOPS.filter(z => z > Z_END)) {
     const nearest = LANDMARKS.reduce((best, l) => (Math.abs(l.z - bz) < Math.abs(best.z - bz) ? l : best), LANDMARKS[0]);
@@ -11418,12 +11443,18 @@ export function buildWorld(scene, opts = {}) {
     addBusStop(chunks.at(bz), details, signs, bz, nearest.short, -1);
   }
 
+  __mark('bw Ouvrages');
   // Ouvrages
   for (const r of RIVERS) addRiver(chunks.at(r.z), signs, r, LIM && r.z < Z16 ? [[LIM_PB_X - PB_W / 2 - 2.5, LIM_PB_X + PB_W / 2 + 2.5]] : [], masRiverEnd(r));
+  __mark('ouvrage 1 : for (const r of RIVERS) addRiver(chu');
   for (const f of FLYOVERS) addFlyover(scene, signs, f, roadMats);
+  __mark('ouvrage 2 : for (const f of FLYOVERS) addFlyover');
   for (const z of FOOTBRIDGES.filter(z => z > Z_END)) addFootbridge(chunks.at(z), z);
+  __mark('ouvrage 3 : for (const z of FOOTBRIDGES.filter(z');
   for (const st of STATIONS) if (st.kind !== 'fork') (st.kind === 'strip' ? addStripStation : addStation)(chunks.at(st.z), signs, st);
+  __mark('ouvrage 4 : for (const st of STATIONS) if (st.ki');
   CROSSINGS.forEach((c, i) => { if (!c.hide) addCrossStreet(chunks.at(c.z), details, signs, c.z, c.name, `cross${i}`); });
+  __mark('ouvrage 5 : CROSSINGS.forEach((c, i) => { if (!c');
   if (R.start === 'airport') {
     addAirport(chunks.at(0), signs);
     // Clôture continue à droite : de 10 m avant le parvis de l'aéroport (z = -58) jusqu'à 20 m avant la Station Cobil de Siforco (g(4064) + 35)
@@ -11431,12 +11462,19 @@ export function buildWorld(scene, opts = {}) {
     addPromoBillboards(scene, chunks);
   }
   else if (!START_ATTACHED) addCrossStreet(chunks.at(24), details, signs, 24, R.landmarks[0][0], 'crossStart');
+  __mark('ouvrage 7 : else if (!START_ATTACHED) addCrossSt');
   if (R.end.kind === 'tower') addInterchange(scene, chunks, details, signs);
   else if (R.end.kind !== 'open') addCrossStreet(chunks.at(END_Z + 4), details, signs, END_Z + 4, R.end.name, 'crossEnd');
+  __mark('ouvrage 9 : else if (R.end.kind !== open) addC');
   if (LIM) addLimete(chunks, details, curbs, signs, scene);
+  __mark('ouvrage 10 : if (LIM) addLimete(chunks, details, ');
   const rigid = new Rigid();
+  __mark('ouvrage 11 : const rigid = new Rigid();');
   if (LIM?.fork && R.end.fork) addSendweFork(chunks, details, signs, rigid);
+  __mark('ouvrage 12 : if (LIM?.fork && R.end.fork) addSend');
   if (EXT) addExtension(scene, chunks, details, curbs, signs, rigid, groundMat);
+  __mark('ouvrage 13 : if (EXT) addExtension(scene, chunks,');
+  __mark('bw Boucle de Masina : tranches à part, affichées de p');
   // Boucle de Masina : tranches à part, affichées de plus loin quand le taxi y roule (voir follow)
   const masNear = new Chunks(100), masFar = new Chunks(100), masD = new Chunks(100), plates = new PlateAtlas();
   if (MAS && MAS_OSM) addMasina(masNear, masFar, masD, signs, plates);
@@ -11525,10 +11563,12 @@ export function buildWorld(scene, opts = {}) {
   }
   if (MONUMENTAL) addFence(chunks, details);
 
+  __mark('bw Marchés (grands hangars) et taxis-bus / taxis « Ke');
   // Marchés (grands hangars) et taxis-bus / taxis « Ketch » en attente de clients aux arrêts
   const LIB = R.market ? lmZ(R.market.at) : null;
   const PARKS = R.busParks.map(lmZ);
   if (R.market) addMarketHalls(chunks.at(LIB), details, LIB + 85, LIB - 110);
+  __mark('bw Véhicules en stationnement aux grands terminus (Pa');
   // Véhicules en stationnement aux grands terminus (Pascal, Q1) et en amont/aval des arrêts (sans bloquer l'abribus ni la zone jaune)
   for (const zc of PARKS) {
     for (let i = 0; i < 4; i++) {
@@ -11546,6 +11586,7 @@ export function buildWorld(scene, opts = {}) {
     }
   }
   addPolicePosts(scene, details);
+  __mark('bw La foule des zones de Masina, Pascal, Bitabe, Quar');
   // La foule des zones de Masina, Pascal, Bitabe, Quartier 1 : des gens debout ou assis le long des deux trottoirs (figés : légers)
   for (const C of CROWDS) for (const side of [-1, 1]) for (let z = C.z0 - 4; z > C.z1; z -= rand(4, 7.5)) {
     if (atSideRoad(side, z, 4) || inRiver(z, 6) || inRaised(z, 6) || FUELS.some(f => f.side === side && Math.abs(f.z - z) < 20)) continue;
@@ -11558,6 +11599,7 @@ export function buildWorld(scene, opts = {}) {
     chunks.at(LIB).box(0.6, 7.5, 0.6, 0xd8d3c6, FRONT - 7, 3.75, LIB + 112).box(0.6, 7.5, 0.6, 0xd8d3c6, FRONT + 9, 3.75, LIB + 112);
   }
 
+  __mark('bw Panneaux de direction');
   // Panneaux de direction
   LANDMARKS.slice(1).filter(lm => !lm.minor).forEach((lm, i) => addRoadSign(chunks.at(lm.z + 200), signs, `dir${i}`, lm.name, '200 m', lm.z + 200));
   addRoadSign(chunks.at(-40), signs, 'start', R.startSign[0], R.startSign[1], -40);
@@ -11568,11 +11610,13 @@ export function buildWorld(scene, opts = {}) {
     }
   }
 
+  __mark('bw Façades photographiques (vidéos) là où le trajet e');
   // Façades photographiques (vidéos) là où le trajet en a ; ailleurs, façades modélisées
   const PHOTO = R.backdrops ?? {};
   const planFor = (side, cz) => (inHighway(cz) && PHOTO[side > 0 ? 'highwayRight' : 'highwayLeft']) || PHOTO[side > 0 ? 'right' : 'left'] || [];
   const photoAt = (side, cz) => planFor(side, cz).some(n => STRIPS[n]);
 
+  __mark('bw Panneaux publicitaires (pas devant les façades pho');
   // Panneaux publicitaires (pas devant les façades photographiques : elles ont leurs vrais panneaux)
   let bi = 0;
   for (let z = -160; !R.industrial && z > Z_GEN + 100; z -= rand(220, 320)) {   // (Route Poids Lourds : plBoards)
@@ -11586,6 +11630,7 @@ export function buildWorld(scene, opts = {}) {
     bi++;
   }
 
+  __mark('bw Façades : boutiques, parcelles, immeubles R+2, ter');
   // Façades : boutiques, parcelles, immeubles R+2, terrains vagues avec arbres
   const SKIP_R = [...STATIONS.map(s => ({ z: s.z, d: 30 })), ...PARKS.map(z => ({ z, d: 45 })), ...BUS_STOPS.map(z => ({ z, d: 30 })),
     ...(R.market ? [{ z: LIB, d: 125 }] : [])];
@@ -11678,25 +11723,41 @@ export function buildWorld(scene, opts = {}) {
     }
   }
 
+  __mark('bw (la flèche passe au-dessus de la route : pas de gr');
   // (la flèche passe au-dessus de la route : pas de grue sur le remblai du Pont Matete ni là où les chaussées s'écartent)
   if (R.cranes) for (const [x, z0] of [[-48, END_Z + 875], [105, END_Z + 435]]) { const z = inRaised(z0, 40) ? MAT.down1 - 80 : z0; addCrane(chunks.at(z), x, z); }
 
   chunks.build(scene);
+  __mark('build chunks');
   skyline.build(scene, Object.assign(VC_MAT.clone(), { fog: false }));   // (jamais masquée : pas de cull)
+  __mark('build skyline');
   rigid.build(scene);
+  __mark('build rigid');
   details.build(scene);
+  __mark('build details');
   curbs.build(scene);
+  __mark('build curbs');
   if (PAIR) { pairPeople.build(scene, VC_MAT, true, true); pairFar.build(scene, VC_MAT, true, true); }
   masNear.build(scene);
+  __mark('build masNear');
   masFar.build(scene);
+  __mark('build masFar');
   masD.build(scene);
+  __mark('build masD');
   mobNear.build(scene);
+  __mark('build mobNear');
   mobFar.build(scene);
+  __mark('build mobFar');
   mobD.build(scene);
+  __mark('build mobD');
   plates.build(scene);
+  __mark('build plates');
   signs.build(scene);
+  __mark('build signs');
   lamps.build(scene, LAMP_MAT, false);
+  __mark('build lamps');
   pools.build(scene, POOL_MAT, false);
+  __mark('build pools');
   for (const m of pools.meshes) { m.receiveShadow = false; m.renderOrder = 1; }
   LAMPS = POOLS = null;
 

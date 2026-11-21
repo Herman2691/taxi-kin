@@ -235,6 +235,7 @@ if (r2Loaded) {
 // ---------- Route Poids Lourds (routes.js `attachPL`) : du bout de la route des rails du Pont Matete à la Place de la Gare ----------
 // Même principe que le Boulevard du 30 Juin ; son début (z = 0) prolonge la route des rails et son tracé (tools/poids_lourds.py) a
 // été calculé pour que son bout tombe sur le bout du Boulevard du 30 Juin.
+mark('routes attachées 1 en place');
 const JOINS = [];                                // raccords : { a, za, b, zb, w (point de la scène), r (décor de l'autre route affiché en deçà) }
 if (JOIN_W) JOINS.push({ a: ROAD1, za: ROAD1.zJoin, b: ROAD2, zb: ROAD2.zJoin, w: JOIN_W, r: 900 });
 if (r3Loaded) {
@@ -295,6 +296,7 @@ if (CURRENT.attachBp && want('bp')) {
 // ---------- Avenue Kasa-Vubu (routes.js `attachKv`, l'auteur, 08/11) : branchée au croisement Sendwe / Triomphal (Pont-Cabu), au milieu de son tracé ----------
 // Son point du croisement (kvJoin.s) est posé sur le centre du carrefour du trajet principal, et son axe suit son cap réel (extYaw : le prolongement
 // après la fourche suit les caps réels d'OSM). De là, elle part vers la Gombe et vers Kintambo.
+mark('routes attachées 2 en place');
 const KV = { z1: 0, z6: 0, dir6: null, dir1: null };
 if (CURRENT.attachKv && want('kv')) {
   ROAD6 = await loadRoad(CURRENT.attachKv.route);
@@ -360,6 +362,7 @@ if (ROAD8) {
   JOINS.push({ a: ROAD1, za: MM.z1, b: ROAD8, zb: 0, w: RT1.worldVec(-ROAD_EDGE, 0, MM.z1, new V()), r: 420 });
   JOINS.push({ a: ROAD7, za: MM.z7, b: ROAD8, zb: MM.zEnd8, w: ROAD8.RT.worldVec(0, 0, MM.zEnd8, new V()), r: 420 });
 }
+mark('routes attachées 3 en place');
 const loadedRoads = new Set();
 if (ROAD2) loadedRoads.add('30juin');
 if (ROAD3) loadedRoads.add('pl');
@@ -396,6 +399,7 @@ addEventListener('resize', resize);
 
 // ---------- Objets du jeu ----------
 // (l'auteur, 08/11 : « une fois que la personne monte, ce n'est plus la même personne ») : la moto du joueur garde sa couleur et le numéro de son conducteur
+mark('qualité réglée');
 let MOTO_LOOK = null;
 const makeVehicle = (id, two = false) => {
   if (id === 'athlete') {
@@ -471,6 +475,7 @@ function startCoords() {
   return { x, z };
 }
 // level : sur un saut-de-mouton, 'up' (rampe) ou 'down' (voies du bas), choisi en y entrant
+mark('véhicule, cockpit, cabine créés');
 const taxi = { ...startCoords(), heading: 0, speed: 0, steer: 0, level: null, y: 0 };
 
 const DAY = { urgent: 0 };                       // (partagé par la circulation de toutes les routes)
@@ -479,17 +484,23 @@ const GROUP_MAX = { berline: 2, bus: 4, moto: 1, perso: 1, athlete: 1 };
 const BOARD = IT ? newBoard(VEH.places, VEH.fare, GROUP_MAX[VEH_ID]) : newBoard();
 for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
   if (!r) continue;
+  mark('vie de la route : début');
   r.traffic = new r.Traffic(r.group);
+  mark('  circulation créée');
   r.traffic.day = DAY;
   r.glow = new NightGlow(r.group);             // (nuit : halos des phares et des feux de sa circulation)
+  mark('  lueurs de nuit créées');
   r.passengers = new r.Passengers(r.group);
+  mark('  clients créés');
   r.passengers.board = BOARD;
   r.life = new r.StreetLife(r.group);
+  mark('  piétons créés');
   r.traffic.peds = r.life.crossers;
   r.life.traffic = r.traffic;                   // (l'auteur, 13/11 : les piétons attendent les véhicules, contournent les clients)
   r.life.passengers = r.passengers;
   r.qlife = new QuartierLife(r.group, r.W.quartierPaths?.() ?? [], r.W.quartierRoads?.() ?? []);   // (l'auteur, 14/11 : les gens, les motos et les voitures des quartiers)
 }
+mark('vie de toutes les routes créée');
 let A = ROAD1;                                   // route où roule le taxi
 let { traffic, passengers, life } = ROAD1;
 const input = new Input();
