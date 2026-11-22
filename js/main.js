@@ -1510,7 +1510,7 @@ function plPolyAt(P, u, out) {
 }
 function spawnPlTurner(P, pIdx, u0 = 0) {
   const r = Math.random();
-  const mesh = r < 0.30 ? createTruck() : r < 0.56 ? createMinibus() : r < 0.78 ? createCar({ color: 0xf2c200, taxi: true, roof: false }) : r < 0.90 ? createTricycle() : createMoto();
+  const mesh = r < 0.30 ? createTruck() : r < 0.56 ? createMinibus() : r < 0.78 ? createCar({ color: 0xf2c200, taxi: true, roof: false }) : r < 0.90 ? createTricycle() : createMoto({ riders: 1 });
   scene.add(mesh);
   const cruise = 7.5 + Math.random() * 3.5;
   PL_TURN.list.push({ mesh, P, pIdx, u: u0, speed: cruise, cruise, vl: mesh.userData.L ?? 4.5, vw: mesh.userData.W ?? 1.9, x: 0, z: 0, hx: 0, hz: -1 });

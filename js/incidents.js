@@ -238,19 +238,19 @@ export class Incidents {
       return a;
     };
     const driver = mk(outfit('man', { shirt: 0xd6dc24, cap: 0x1a2a55, idle: 1 }), v.x, v.z - 0.15, v.x + impactSide * 1.05, v.z - 0.55, baseYaw + 0.4, true);
-    const client1 = mk(outfit('woman'), v.x, v.z + 0.35, v.x + impactSide * 1.55, v.z + 0.25, baseYaw - 0.5, true);
-    const client2 = mk(outfit('man'), v.x, v.z + 0.65, v.x + impactSide * 0.85, v.z + 0.95, baseYaw + 1.1, true);
+    // autant de clients qui tombent que la moto en portait (conducteur seul, ou avec un passager : userData.riders)
+    const clients = (v.mesh.userData.riders ?? 2) > 1 ? [mk(outfit(Math.random() < 0.5 ? 'woman' : 'man'), v.x, v.z + 0.35, v.x + impactSide * 1.55, v.z + 0.25, baseYaw - 0.5, true)] : [];
     const side = v.x >= 0 ? 1 : -1, edgeX = side * (W.ROAD_EDGE + 2.2);
     const h1 = mk(outfit('man'), edgeX, v.z - 2.5, v.x + impactSide * 1.85, v.z - 0.3, 0, false);
     const h2 = mk(outfit('woman'), edgeX, v.z + 2.5, v.x + impactSide * 1.85, v.z + 0.8, 0, false);
     h1.path = [[edgeX, v.z - 2.5], [v.x + impactSide * 1.85, v.z - 0.3], 0.9, 3.2];
     h2.path = [[edgeX, v.z + 2.5], [v.x + impactSide * 1.85, v.z + 0.8], 1.2, 3.5];
-    const F = { t: 0, v, byAi: !!byCar, impactSide, side, edgeX, group, W, T, driver, client1, client2, helpers: [h1, h2], actors: [driver, client1, client2, h1, h2] };
+    const F = { t: 0, v, byAi: !!byCar, impactSide, side, edgeX, group, W, T, driver, clients, helpers: [h1, h2], actors: [driver, ...clients, h1, h2] };
     this.fallenMotos.push(F);
     this.c.sound.crash(0.55);
     this.c.sound.voice('Aïe ! Wewa akweyi !', { pitch: 1.05, rate: 1.15 });
-    this.c.say('Aïe ! Wewa akweyi na ba clients na ye ! — Le wewa est tombé avec ses clients !', 'client', 4);
-    this.c.toast(byCar ? 'Accident devant : un véhicule a tamponné un wewa, il est tombé avec ses clients !' : 'Accident ! Tu as tamponné un wewa : il est tombé avec ses clients !', 4);
+    this.c.say('Aïe ! Wewa akweyi ! — Le wewa est tombé !', 'client', 4);
+    this.c.toast(byCar ? 'Accident devant : un véhicule a tamponné un wewa, il est tombé avec ses clients !' : 'Accident ! Tu as tamponné un wewa : il est tombé !', 4);
     T.sendAmbulance(taxi);
   }
   updateFallenMotos(dt, taxi) {
@@ -274,10 +274,7 @@ export class Incidents {
       }
       if (t > 4.4 && !F.clientsUp) {
         F.clientsUp = true;
-        F.client1.down = false;
-        F.client2.down = false;
-        F.client1.mode = 'idle';
-        F.client2.mode = 'idle';
+        for (const c of F.clients) { c.down = false; c.mode = 'idle'; }
         if (!F.byAi && Math.hypot(taxi.x - v.x, taxi.z - v.z) < 18) {
           this.c.say('Obeti wewa na ngai ! Ba clients bakweyi na goudron ! — Tu as tamponné mon wewa ! Mes clients sont tombés !', 'client', 3.8);
         }
@@ -286,14 +283,13 @@ export class Incidents {
         F.remount = true;
         F.driver.mode = 'idle';
         F.driver.path = [[F.driver.x, F.driver.z], [v.x + F.impactSide * 0.4, v.z - 0.15], t, t + 1.4];
-        F.client1.path = [[F.client1.x, F.client1.z], [v.x + F.impactSide * 0.4, v.z + 0.35], t + 0.25, t + 1.7];
-        F.client2.path = [[F.client2.x, F.client2.z], [v.x + F.impactSide * 0.4, v.z + 0.65], t + 0.4, t + 1.9];
+        F.clients.forEach((c, k) => { c.path = [[c.x, c.z], [v.x + F.impactSide * 0.4, v.z + 0.35 + k * 0.3], t + 0.25 + k * 0.15, t + 1.7 + k * 0.2]; });
         F.helpers.forEach((h, k) => { h.path = [[h.x, h.z], [F.edgeX, v.z + (k ? 3 : -3)], t + 0.3, t + 2.6]; });
       }
       if (t > 11.0 && !F.righted) {
         F.righted = true;
         this.rightMoto(v);
-        F.driver.ch.mesh.visible = F.client1.ch.mesh.visible = F.client2.ch.mesh.visible = false;
+        for (const a of [F.driver, ...F.clients]) a.ch.mesh.visible = false;
       }
       for (const a of F.actors) if (a.ch.mesh.visible) this.move(a, t, time);
     }

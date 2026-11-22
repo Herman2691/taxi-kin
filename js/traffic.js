@@ -43,7 +43,7 @@ function makeMesh(kind) {
       return r < 0.1 ? createTanker() : r < 0.2 ? createTruck() : r < 0.36 ? createTipperTruck() : r < 0.5 ? createContainerTruck() : r < 0.62 ? createCraneTruck()
         : r < 0.74 ? createFlatbedTruck() : r < 0.87 ? createReeferTruck() : createCurtainTruck();
     }
-    case 'moto': return createMoto();
+    case 'moto': { const riders = Math.random() < 0.5 ? 1 : 2, m = createMoto({ riders }); m.userData.riders = riders; return m; }   // (le wewa roule seul ou avec un passager)
     case 'keke': return createTricycle();
     default: {                                             // voitures personnelles, de plusieurs modèles
       const r = Math.random();
