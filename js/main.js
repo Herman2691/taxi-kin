@@ -1910,23 +1910,22 @@ function startWewaFall(hit) {
     return { ch, x0, z0, x1, z1, x: x0, z: z0, yaw, down: true, walking: false };
   };
   const driver = mk(outfit('man', { shirt: 0xd6dc24, cap: 0x1a2a55, idle: 1 }), taxi.x, taxi.z - 0.1, taxi.x + side * 1.05, taxi.z - 0.55, taxi.heading + 0.35);
-  const riderOutfits = BOARD.riders.map(r => r.ch?.outfit).filter(Boolean);
-  if (riderOutfits.length === 0) riderOutfits.push(outfit('woman'), outfit('man'));
-  else if (riderOutfits.length === 1) riderOutfits.push(outfit('woman'));
+  // (l'auteur, 22/11 : « je suis seul dans ma moto mais quand on me tamponne je tombe avec 2 personnes ») : seuls ceux qui sont vraiment à bord tombent avec le conducteur
+  const riderOutfits = BOARD.riders.map(r => r.ch?.outfit ?? outfit(Math.random() < 0.5 ? 'woman' : 'man'));
   const clients = riderOutfits.slice(0, 2).map((o, i) =>
     mk(o, taxi.x, taxi.z + 0.35 + i * 0.3, taxi.x + side * (1.5 - i * 0.55), taxi.z + 0.25 + i * 0.65, taxi.heading + (i ? 0.9 : -0.5))
   );
   G.wewaFall = { t: 0, side, roll, curRoll: 0, road: A, driver, clients, actors: [driver, ...clients] };
-  say('Aïe ! Wewa akweyi na ba clients na ye ! — Le wewa est tombé avec ses clients !', 'client', 4);
+  say(clients.length ? 'Aïe ! Wewa akweyi na ba clients na ye ! — Le wewa est tombé avec ses clients !' : 'Aïe ! Wewa akweyi ! — Le wewa est tombé !', 'client', 4);
   sound.voice('Aïe ! Wewa akweyi !', { pitch: 1.05, rate: 1.15 });
-  hud.toast('Accident ! Ton wewa est tombé avec ses clients !', 3.8);
+  hud.toast(clients.length ? 'Accident ! Ton wewa est tombé avec ses clients !' : 'Accident ! Ton wewa est tombé !', 3.8);
 }
 function wewaFallScene(dt) {
   const S = G.wewaFall;
   if (!S) return;
   const t = (S.t += dt);
   taxi.speed = 0;
-  G.prompt = 'Chute à moto… le wewa et ses clients se relèvent';
+  G.prompt = S.clients.length ? 'Chute à moto… le wewa et ses clients se relèvent' : 'Chute à moto… le wewa se relève';
   if (t < 0.35) S.curRoll = S.roll * smooth(t / 0.35);
   else if (t < 3.4) S.curRoll = S.roll;
   else if (t < 4.2) S.curRoll = S.roll * (1 - smooth((t - 3.4) / 0.8));
