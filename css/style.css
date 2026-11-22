@@ -693,3 +693,7 @@ body.vr #hud, body.vr #bubbles, body.vr #touch, body.vr #choice, body.vr #songs,
 .step-next:hover { background: #ffd01a; }
 .menu-wizard .menu-sum { position: static; width: 100%; max-width: 640px; }
 @media (max-width: 540px) { .mode-cards { grid-template-columns: 1fr; } }
+
+/* Messages discrets (lieu, chanson, météo) : ne gênent pas la conduite */
+#toast.note { top: 6px; bottom: auto; max-width: min(300px, 40vw); font-size: 12px; padding: 4px 10px; background: rgba(10,12,14,.55); pointer-events: none; }
+@media (max-width: 900px), (max-height: 520px) { #toast.note { font-size: 11px; padding: 3px 8px; max-width: 34vw; left: 62%; } }

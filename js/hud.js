@@ -107,7 +107,17 @@ export class Hud {
     }
   }
 
+  // Message discret (lieu, chanson, météo) : petit, bref, jamais par-dessus un vrai message.
+  note(msg, dur = 2) {
+    if (this.toastTime > 0) return;
+    this.el.toast.classList.add('note');
+    this.el.toast.textContent = msg;
+    this.el.toast.classList.add('show');
+    this.toastTime = Math.min(dur, 2);
+  }
+
   toast(msg, dur = 2.8) {
+    this.el.toast.classList.remove('note');
     this.el.toast.textContent = msg;
     this.el.toast.classList.add('show');
     this.toastTime = dur;

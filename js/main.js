@@ -873,7 +873,7 @@ function startShift() {
   let bouchon = false;
   for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeJams) bouchon = r.W.randomizeJams().some(j => j.lvl > 1) || bouchon;
   if (PARAMS.get('bouchon')) for (const r of [ROAD1]) r.W.JAMS.forEach(j => { j.on = PARAMS.get('bouchon') !== '0'; });
-  if (bouchon) setTimeout(() => { if (G.state === 'play') hud.toast('📻 Embouteillage signalé de Pascal au Quartier 1 aujourd’hui', 5); }, 4000);
+  if (bouchon) setTimeout(() => { if (G.state === 'play') hud.note('📻 Embouteillage signalé de Pascal au Quartier 1 aujourd’hui', 2); }, 4000);
   for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeWorks) { r.W.randomizeWorks(); if (PARAMS.get('travaux')) r.W.WORKS.forEach(Wk => { Wk.on = true; for (const m of Wk.meshes) m.visible = true; }); }
   worksWarned.clear();
   if (PARAMS.get('pluie')) rain.startNow(Number(PARAMS.get('pluie')) || 400);   // (test : ?pluie=1)
@@ -1186,7 +1186,7 @@ const showRadio = () => {
   $('sel-radio').value = radio.on ? 'on' : 'off';
   $('btn-next').hidden = !radio.on || !radio.hasSongs;
 };
-radio.onTitle = (t, first) => setTimeout(() => { if (G.state === 'play') hud.toast(`📻 ${t}`, 3.5); }, first ? 5000 : 0);
+radio.onTitle = (t, first) => setTimeout(() => { if (G.state === 'play') hud.note(`📻 ${t}`, 2); }, first ? 5000 : 0);
 radio.ready.then(() => { showRadio(); drawSongs(); });
 // La liste des chansons : en choisir une, en ajouter depuis l'appareil, retirer celles qu'on a ajoutées, régler le volume
 try { const v = Number(localStorage.getItem('taxikin-volume')); if (v >= 0 && localStorage.getItem('taxikin-volume') !== null) radio.level = v; } catch { /* */ }
@@ -1717,7 +1717,7 @@ function drive(dt) {
   if (!isAth && !taxi.level && A.W.onDirt?.(taxi.x, taxi.z)) {
     if (sp > 6) taxi.speed *= 1 - Math.min(1, dt * 1.6);
     if (sp > 2) { G.shake = Math.max(G.shake ?? 0, 0.25); if ((G.dirtT = (G.dirtT ?? 0) + dt) > 1.5) { G.dirtT = 0; const l = passengers.jolt(3); if (l) say(l, 'client'); } }
-    if (!G.dirtWarned) { G.dirtWarned = true; hud.toast('Tu roules sur la terre : doucement, ça secoue !', 2.5); }
+    if (!G.dirtWarned) { G.dirtWarned = true; hud.note('Tu roules sur la terre : doucement !', 2); }
   }
 
   // Carburant (pas pour l'athlète)
@@ -2303,7 +2303,7 @@ function continueShift(t) {
   hud.setClients(passengers.clients);
   updateCamera(0, true);
   show('play');
-  hud.toast(t.name, 4);
+  hud.note(t.name, 2);
   if (t.muted) toggleMute();
   // (le son ne peut repartir qu'après un geste : première touche ou premier appui)
   const wake = () => sound.init();
@@ -2364,7 +2364,7 @@ function switchRoad(to, x, z, heading, quiet = false, name = null) {
     }
   }
   life.reset(taxi.z);
-  hud.toast(name ?? (A === ROAD2 ? 'Boulevard du 30 Juin' : A === ROAD7 || A === ROAD8 ? A.title : 'Avenue de la Libération (ex-24 Novembre)'), 3);
+  hud.note(name ?? (A === ROAD2 ? 'Boulevard du 30 Juin' : A === ROAD7 || A === ROAD8 ? A.title : 'Avenue de la Libération (ex-24 Novembre)'), 3);
 }
 /**
  * Au bout du 24 Novembre, le taxi entre sur le Boulevard du 30 Juin attaché (et en ressort par la même entrée). Au bout de la route
@@ -2587,8 +2587,8 @@ function rainTick(dt) {
   rain.update(dt, G.time, camera.position);
   const k = rain.k;
   if (Math.abs(k - rainK) > 0.015 || (k === 0 && rainK !== 0)) {
-    if (k > 0.1 && rainK <= 0.1) hud.toast('Il commence à pleuvoir : roule doucement, la route glisse.', 4);
-    if (k < 0.1 && rainK >= 0.1) hud.toast('La pluie s’arrête.', 2.5);
+    if (k > 0.1 && rainK <= 0.1) hud.note('Il commence à pleuvoir : roule doucement.', 2);
+    if (k < 0.1 && rainK >= 0.1) hud.note('La pluie s’arrête.', 2);
     rainK = k;
     for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) r?.world?.rain?.(k);
     scene.fog.far = fogFar * (1 - 0.3 * k);
