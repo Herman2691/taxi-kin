@@ -167,29 +167,40 @@ export class Traffic {
     // Carrefours à feux : des voitures sortent de la rue et traversent le boulevard pendant le vert de la rue.
     // dir -1 : de la droite vers la gauche, dir +1 : de la gauche vers la droite (seulement s'il y a une rue de ce côté)
     this.crossing = [];
+    // les voitures qui sortent des rues : leurs maillages se construisent par petits paquets après le démarrage (pas toutes au chargement)
+    this.crossTodo = [];
     for (const sg of SIGNALS) {
       for (const dir of [-1, 1]) {
         if (!sg.streets[-dir] || sg.streets[-dir].oneway === 'in') continue;   // personne ne sort d'une rue d'entrée
         const path = crossPath(sg, dir);
-        for (let i = 0; i < (dir < 0 ? 3 : 2); i++) {
-          const mesh = makeMesh(['taxi', 'car', 'bus', 'taxi', 'van'][(i + (dir > 0 ? 2 : 0)) % 5]);
-          scene.add(mesh);
-          this.crossing.push({ mesh, sg, dir, path, i, len: mesh.userData.L, wid: mesh.userData.W, u: 0, speed: 0, delay: 0,
-            hidden: false, inside: false, x: 0, z: 0, hx: dir, hz: 0 });
-        }
+        for (let i = 0; i < (dir < 0 ? 3 : 2); i++) this.crossTodo.push({ kind: ['taxi', 'car', 'bus', 'taxi', 'van'][(i + (dir > 0 ? 2 : 0)) % 5], sg, dir, path, i });
       }
     }
     // Rues à sens unique d'entrée : des voitures quittent le boulevard (voie de droite) et y tournent, sans feu
     for (const r of ONEWAY_IN) {
       const path = turnPath(r), ref = { z: r.z, w: 0 };
-      for (let i = 0; i < 2; i++) {
-        const mesh = makeMesh(['car', 'taxi'][i]);
-        scene.add(mesh);
-        this.crossing.push({ mesh, sg: ref, dir: 0, path, i, turner: true, len: mesh.userData.L, wid: mesh.userData.W, u: 0, speed: 0,
-          delay: 0, hidden: false, inside: false, x: 0, z: 0, hx: 0, hz: -r.side });
-      }
+      for (let i = 0; i < 2; i++) this.crossTodo.push({ kind: ['car', 'taxi'][i], sg: ref, dir: 0, path, i, turner: true, hz: -r.side });
     }
-    this.resetCrossing();
+    if (this.crossTodo.length) setTimeout(() => this.idleCrossing(), 2500);
+  }
+
+  /** Construit n voitures de traverse (toutes si n est omis). */
+  buildCrossing(n = Infinity) {
+    while (n-- > 0 && this.crossTodo.length) {
+      const d = this.crossTodo.shift(), mesh = makeMesh(d.kind);
+      mesh.visible = false;   // (updateCrossing l'affiche à sa place)
+      this.scene.add(mesh);
+      const c = { mesh, sg: d.sg, dir: d.dir, path: d.path, i: d.i, len: mesh.userData.L, wid: mesh.userData.W, u: 0, speed: 0, delay: 0,
+        hidden: false, inside: false, x: 0, z: 0, hx: d.turner ? 0 : d.dir, hz: d.turner ? d.hz : 0 };
+      if (d.turner) c.turner = true;
+      this.crossing.push(c);
+      this.resetOne(c);
+    }
+  }
+  idleCrossing() {
+    if (!this.crossTodo.length) return;
+    this.buildCrossing(4);
+    setTimeout(() => this.idleCrossing(), 300);
   }
 
   /** Construit n véhicules de la file d'embouteillage (tous si n est omis). */
@@ -205,14 +216,13 @@ export class Traffic {
     setTimeout(() => this.idleJam(), 400);
   }
 
-  resetCrossing() {
-    for (const c of this.crossing) {
-      c.u = c.turner ? 0 : Math.max(0, c.path.uStop - c.len / 2 - 0.6 - c.i * 7);   // en file devant la ligne d'arrêt de la rue
-      c.speed = 0;
-      c.delay = c.turner ? 1 + c.i * 8 : c.i * 1.5;
-      c.hidden = !!c.turner;                                              // elles partent quand la voie est libre
-      c.inside = false;
-    }
+  resetCrossing() { for (const c of this.crossing) this.resetOne(c); }
+  resetOne(c) {
+    c.u = c.turner ? 0 : Math.max(0, c.path.uStop - c.len / 2 - 0.6 - c.i * 7);   // en file devant la ligne d'arrêt de la rue
+    c.speed = 0;
+    c.delay = c.turner ? 1 + c.i * 8 : c.i * 1.5;
+    c.hidden = !!c.turner;                                              // elles partent quand la voie est libre
+    c.inside = false;
   }
 
   /** Vitesse maximale pour s'arrêter avant la ligne d'arrêt d'un feu (side 1 : vers -z, -1 : vers +z). */
