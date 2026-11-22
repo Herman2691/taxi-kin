@@ -3923,46 +3923,55 @@ function addB30BcdcTower(b, signs, side, z, p) {
     12, 1.8, side * (FRONT + 1.9), 6.2, z, -side * Math.PI / 2, true);
 }
 
-/** Façade de pierre beige à pilastres et fenêtres en fentes verticales de l'immeuble ONATRA (une dalle = une travée de 2,6 m sur un étage de 3,4 m, répétée). */
+/** Façade de pierre beige à pilastres fins et petites fenêtres de l'immeuble ONATRA (une dalle = une travée de 1,3 m sur un étage de 3,2 m, répétée). */
 function onatraFacadeTexture() {
   if (!TEX_SHARED.has('onatra')) {
-    TEX_SHARED.set('onatra', canvasTexture(64, 64, (x, w, h) => {
-      x.fillStyle = '#bcae96'; x.fillRect(0, 0, w, h);
-      x.fillStyle = '#d3c7b0'; x.fillRect(0, 0, 11, h);             // pilastre clair
-      x.fillStyle = '#8f836f'; x.fillRect(11, 0, 3, h);             // son ombre
-      x.fillStyle = '#2b3037'; x.fillRect(24, 10, 20, 38);          // la fente de fenêtre
-      x.fillStyle = '#4a5560'; x.fillRect(26, 12, 16, 16);
-      x.fillStyle = '#a79a82'; x.fillRect(0, 56, w, 8);             // allège / bandeau
+    TEX_SHARED.set('onatra', canvasTexture(32, 64, (x, w, h) => {
+      x.fillStyle = '#b9ad98'; x.fillRect(0, 0, w, h);
+      x.fillStyle = '#d0c4ad'; x.fillRect(0, 0, 6, h);              // pilastre clair
+      x.fillStyle = '#8c806c'; x.fillRect(6, 0, 2, h);              // son ombre
+      x.fillStyle = '#3a3f44'; x.fillRect(12, 14, 12, 30);          // la petite fenêtre
+      x.fillStyle = '#6a7279'; x.fillRect(13, 15, 10, 12);
+      x.fillStyle = '#a69a84'; x.fillRect(8, 50, 24, 5);            // allège
     }));
   }
   return TEX_SHARED.get('onatra');
 }
 
 /**
- * 29. Immeuble ONATRA (l'auteur, 22/11, vidéo « place gard » 04:30–05:00 et façade de face à 04:44) : très grand immeuble de bureaux de pierre beige à droite du boulevard,
- * avant la Place de la Gare : un corps central haut (R+13) à trois grands pilastres, flanqué de deux ailes puis de deux ailes plus basses en gradins, façades à fentes de
- * fenêtres verticales, rez-de-chaussée sombre, couronnement en retrait ; devant, un jardin de palmiers derrière une grille basse, des lampadaires et un panneau Qatar Airways.
+ * 29. Immeuble ONATRA (l'auteur, 22/11, image « imeuble onatra » = vidéo « place gard » 05:25, et 04:30–05:00) : très grand immeuble de bureaux de pierre beige à droite du
+ * boulevard, avant la Place de la Gare. De face (de la droite vers la gauche de l'image, donc dans le sens de la marche) : une aile basse à grandes fenêtres, le corps principal
+ * (R+12) à pilastres fins et petites fenêtres, trois bandes noires à son angle, une tour plus haute et étroite à colonne de fenêtres vitrées et coffre à aérations, puis
+ * l'aile gauche ; devant, trois grands palmiers à gauche, le jardin et sa grille basse, des lampadaires et un panneau Qatar Airways.
  */
 function addB30PalaisJustice(b, signs, side, z, p) {
-  const GAP = 8, X = d => side * (FRONT + d), face = -side * Math.PI / 2;
-  const blocks = [[0, 30, 46, 19], [27, 24, 37, 18], [-27, 24, 37, 18], [49, 20, 28, 17], [-49, 20, 28, 17]];   // [dz, longueur, hauteur, profondeur]
+  const GAP = 8, X = d => side * (FRONT + d), face = -side * Math.PI / 2, STONE = 0xb9ad98, CORN = 0x8c8170;
+  // [dz, longueur, hauteur, profondeur] : image-droite = +z (côté d'où l'on vient), image-gauche = -z
+  const blocks = [[29, 24, 33, 17], [2, 30, 42, 19], [-18, 8, 47, 20], [-34, 26, 36, 18]];
   blocks.forEach(([dz, len, H, D], i) => {
     const cxx = X(GAP + D / 2);
-    b.box(D, H, len, 0xbcae96, cxx, H / 2, z + dz).box(D + 0.8, 0.9, len + 0.8, 0x8f8472, cxx, H + 0.45, z + dz);
-    if (i < 3) b.box(D * 0.55, 5, len * 0.62, 0xa89b84, cxx, H + 3.4, z + dz).box(D * 0.55 + 0.6, 0.5, len * 0.62 + 0.6, 0x8f8472, cxx, H + 6.1, z + dz);   // couronnement en retrait
+    b.box(D, H, len, STONE, cxx, H / 2, z + dz).box(D + 1.2, 0.9, len + 1.2, CORN, cxx, H + 0.45, z + dz);
     b.box(0.8, 4.4, len - 1, 0x40362c, X(GAP - 0.15), 2.2, z + dz);                                  // rez-de-chaussée sombre (boutiques, arcades)
     signs.add(`onatra_${side}_${i}`, () => {
       const t = onatraFacadeTexture().clone();
       t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(Math.round(len / 2.6), Math.round((H - 4.4) / 3.4));
+      t.repeat.set(Math.round(len / 1.3), Math.round((H - 4.4) / 3.2));
       return t;
     }, len, H - 4.4, X(GAP - 0.05), 4.4 + (H - 4.4) / 2, z + dz, face, true);
   });
-  for (const k of [-1, 0, 1]) b.box(1.2, 46, 2.0, 0xd8ccb5, X(GAP - 0.6), 23, z + k * 9);              // les trois grands pilastres du corps central
-  signs.add('onatra_name', () => signTexture('IMMEUBLE ONATRA', 'Office national des transports', '#1d4fa0', '#ffffff'), 15, 1.8, X(GAP - 0.4), 6.4, z, face, true);
-  // le jardin : grille basse, palmiers, lampadaires, panneau Qatar Airways
+  // le corps principal : couronnement en retrait, trois bandes noires verticales à l'angle (côté +z)
+  b.box(19 * 0.6, 4, 30 * 0.6, 0xa89b84, X(GAP + 9.5), 42 + 2.9, z + 2).box(19 * 0.6 + 0.6, 0.5, 30 * 0.6 + 0.6, CORN, X(GAP + 9.5), 42 + 5.2, z + 2);
+  for (let k = 0; k < 3; k++) b.box(0.45, 42, 0.32, 0x1f1c1a, X(GAP - 0.25), 21, z + 2 + 14.2 - k * 0.8);
+  // la tour étroite : colonne de fenêtres vitrées très hautes, coffre à aérations au sommet
+  for (let k = -1; k <= 1; k++) b.box(0.3, 36, 1.0, 0x2e3b4a, X(GAP - 0.25), 4.4 + 18, z - 18 + k * 2.2);
+  b.box(10, 3.6, 11, 0xa89b84, X(GAP + 10), 47 + 2.4, z - 18).box(10.5, 0.5, 11.5, CORN, X(GAP + 10), 47 + 4.45, z - 18);
+  for (let k = 0; k < 5; k++) b.box(0.15, 0.25, 6.6, 0x4a4036, X(GAP + 4.9), 47 + 2.6 + (k % 2 ? 0.4 : 0), z - 18);
+  b.cyl(0.15, 0.2, 6, 0x7b8086, X(GAP + 8), 47 + 7, z - 18);                                       // antenne
+  signs.add('onatra_name', () => signTexture('IMMEUBLE ONATRA', 'Office national des transports', '#1d4fa0', '#ffffff'), 15, 1.8, X(GAP - 0.4), 6.4, z + 2, face, true);
+  // le jardin : grille basse, palmiers (trois grands à gauche), lampadaires, panneau Qatar Airways
   b.box(0.12, 0.9, 112, 0x2f3a33, X(1.4), 0.45, z);
-  for (let dz = -52; dz <= 52; dz += 6.5) { addPalm(b, X(4.6), z + dz, 1.0); b.box(0.6, 0.5, 0.6, 0x9a8f78, X(1.4), 0.25, z + dz); }
+  for (let dz = -52; dz <= 52; dz += 6.5) { if (dz > -36 && dz < -16) continue; addPalm(b, X(4.6), z + dz, 1.0); b.box(0.6, 0.5, 0.6, 0x9a8f78, X(1.4), 0.25, z + dz); }
+  for (const [pd, pz, ps] of [[3.8, -31, 1.5], [5.2, -26, 1.35], [4.2, -21, 1.25]]) addPalm(b, X(pd), z + pz, ps);
   b.box(2.5, 0.5, 112, 0x6f7a5a, X(3.4), 0.2, z);
   for (const dz of [-40, 0, 40]) { b.cyl(0.1, 0.14, 9, 0x5b6168, X(2.4), 4.5, z + dz); lampHead(X(2.4), 9.1, z + dz); }
   b.cyl(0.15, 0.18, 6, 0x6b7076, X(0.6), 3, z + 60);
