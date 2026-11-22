@@ -3438,7 +3438,7 @@ function addHighrise(b, signs, side, z, w, t) {
 function addGare(b, signs, m) {
   const z = g(m.s), TILE = 0xd8b9a2, TILE2 = 0xc9a58c, RIM = 0x7a3f2e, STONE = 0xb39a80;
   // 1. Esplanade de terre et gravier gris, sans marquage (vidéos « place gard » et « actuel », 22/11) ; bordure rouge et blanche côté boulevard
-  b.box(96, 0.06, 92, 0xa3a099, 4, 0.03, z - 44);
+  b.box(96, 0.06, 200, 0xa3a099, 4, 0.03, z - 98);
   for (let dx = -46, k = 0; dx < 52; dx += 1.6, k++) b.box(1.6, 0.14, 0.9, k % 2 ? 0xf2f2f0 : 0xc42b22, dx + 0.8, 0.07, z + 1.2);
   for (const [tx, tz, tl] of [[-12, -22, 18], [8, -30, 14], [20, -12, 12], [-30, -40, 16]]) b.box(tl, 0.02, 0.5, 0x7e7a72, tx, 0.07, z + tz, 0, rand(-0.5, 0.5), 0);   // traces de pneus
   // 2. Garde-corps rouges et blancs le long de la place (00:01:05, 00:02:28)
@@ -3463,12 +3463,12 @@ function addGare(b, signs, m) {
   b.cyl(0.18, 0.2, 9, 0x6b7076, 31, 4.5, z - 26).cyl(0.18, 0.2, 9, 0x6b7076, 35, 4.5, z - 26);
   signs.add('gare_canadian', () => signTexture('CANADIAN PURE', 'Le leader de l\'eau minérale', '#1e6bb8', '#ffffff'), 7, 9, 33, 8.2, z - 25.8, 0, true);
   // 4b. Le fond de la place, à droite : hôtel ocre à balcons et bout arrondi (00:03:30, 00:07:00) ; à gauche : immeuble blanc à bandeaux vitrés R+7
-  b.box(34, 18, 16, 0xc9a45a, 24, 9, z - 104);
-  for (let fy = 3.4; fy < 18; fy += 3.4) b.box(34.4, 0.45, 17.5, 0x8d6e35, 24, fy, z - 103.2).box(34.2, 1.3, 0.08, 0x3a3326, 24, fy - 1.6, z - 96.1);
-  b.cyl(8, 8, 18, 0xd2b062, 41, 9, z - 104, 0, 0, 0, 20).cyl(8.4, 8.4, 0.6, 0x8d6e35, 41, 18.2, z - 104, 0, 0, 0, 20);
-  b.box(26, 24, 30, 0xe9ebe8, -46, 12, z - 86);
-  for (let fy = 3; fy < 24; fy += 3.2) b.box(26.3, 1.1, 30.3, 0x3a4650, -46, fy, z - 86);
-  signs.add('gare_hotel', () => signTexture('HÔTEL', 'Place de la Gare Centrale', '#8d6e35', '#ffffff'), 8, 1.4, 24, 16.5, z - 95.9, 0, true);
+  b.box(34, 18, 16, 0xc9a45a, 24, 9, z - 186);
+  for (let fy = 3.4; fy < 18; fy += 3.4) b.box(34.4, 0.45, 17.5, 0x8d6e35, 24, fy, z - 185.2).box(34.2, 1.3, 0.08, 0x3a3326, 24, fy - 1.6, z - 178.1);
+  b.cyl(8, 8, 18, 0xd2b062, 41, 9, z - 186, 0, 0, 0, 20).cyl(8.4, 8.4, 0.6, 0x8d6e35, 41, 18.2, z - 186, 0, 0, 0, 20);
+  b.box(26, 24, 30, 0xe9ebe8, -46, 12, z - 180);
+  for (let fy = 3; fy < 24; fy += 3.2) b.box(26.3, 1.1, 30.3, 0x3a4650, -46, fy, z - 180);
+  signs.add('gare_hotel', () => signTexture('HÔTEL', 'Place de la Gare Centrale', '#8d6e35', '#ffffff'), 8, 1.4, 24, 16.5, z - 177.9, 0, true);
   // 4. Monument aux deux hauts piliers de pierre fermant l'axe du boulevard, sur un socle à gradins (00:00:30, 00:07:00)
   const mz = z - 70, PH = 24;
   b.box(22, 1.2, 12, STONE, 0, 0.6, mz).box(18, 1.2, 9, 0xa68d73, 0, 1.8, mz);
@@ -3507,6 +3507,7 @@ function addGare(b, signs, m) {
   signs.add('gare_pub1', () => signTexture('FAMECO', 'Votre partenaire en acier', '#c8102e', '#ffffff'), 14, 7, ax, 11, iz + 10, -Math.PI / 2, true);
   signs.add('gare_pub2', () => signTexture('SKOL', 'Esili nanu te…', '#f2c230', '#8b1d24'), 9, 7, ax, 11, iz - 4, -Math.PI / 2, true);
   signs.add('gare_pub3', () => signTexture('ALOE VERA', 'Iveco · Yamaha · Isuzu', '#3d8b37', '#ffffff'), 12, 7, ax, 11, iz - 16, -Math.PI / 2, true);
+  addGareWheel(b, signs, z);   // la Grande Roue et son parc, derrière le monument
 }
 
 // ---------- Bâtiments emblématiques de Kintambo Magasin au Boulevard du 30 Juin (vidéo Boulevard du 30juin.wmv) ----------
@@ -3992,53 +3993,52 @@ function addB30BoldChantier(b, signs, side, z, p) {
 }
 
 /**
- * 31. La Grande Roue de Kinshasa et son parc de loisirs (Parc de la Gare Centrale, l'auteur, 22/11, vidéo « place de la gars actuel » de nuit) : la roue blanche
- * illuminée de toutes les couleurs, le château de jeux en bois à toboggan tubulaire vert, le cinéma « 5D » dans un conteneur peint, le manège à chevaux, la caisse
- * jaune, les petites barrières blanches, les parasols turquoise et les lampadaires. La nuit, les lumières de la roue, du manège et des lampadaires s'allument.
+ * 31. La clôture bleue du Parc de la Grande Roue le long du boulevard (vidéo 23:57 à gauche) et son panneau. La roue et le parc de loisirs eux-mêmes sont sur la place, derrière
+ * les deux piliers du monument (l'auteur, 22/11 : « la roue est derrière les deux piliers, c'est là l'espace de la gare ») : voir addGareWheel.
  */
 function addB30FerrisWheel(b, signs, side, z, p) {
-  const cx = side * (FRONT + 18), R = 21, yc = R + 4.5, X = d => side * (FRONT + d), face = -side * Math.PI / 2;
-  // Clôture métallique bleue et panneaux le long du boulevard (comme à 23:57)
   b.box(0.2, 2.6, 56, 0x1e6bb8, side * (FRONT - 0.1), 1.3, z);
   for (let dz = -24; dz <= 24; dz += 6) b.box(0.3, 1.2, 3.8, 0xf2f2ee, side * (FRONT - 0.22), 1.1, z + dz);
-  // Piliers en A blancs soutenant l'axe de la Grande Roue
-  for (const dx of [-2.4, 2.4]) {
-    for (const s of [-1, 1]) {
-      b.cyl(0.35, 0.45, yc + 2, 0xf4f6f8, cx + dx, yc / 2, z + s * 6.5, s * 0.28, 0, 0, 10);
-    }
+  signs.add('b30_wheel', () => signTexture('LA GRANDE ROUE', 'Place de la Gare Centrale · Kinshasa', '#1e6bb8', '#ffffff'),
+    12, 1.5, side * (FRONT - 0.25), 3.2, z, -side * Math.PI / 2, true);
+}
+
+/**
+ * La Grande Roue et son parc de loisirs, sur la place de la Gare, derrière le monument aux deux piliers (l'auteur, 22/11, vidéo « place de la gars actuel » de nuit) : la roue
+ * blanche tournée vers le boulevard, illuminée de toutes les couleurs ; le château de jeux en bois à toboggan tubulaire vert, le cinéma « 5D » dans un conteneur peint, le manège à
+ * chevaux, la caisse jaune, les petites barrières blanches, les parasols turquoise et les lampadaires. La nuit, les lumières de la roue, du manège et des lampadaires s'allument.
+ * (z : début de la place ; x = 0 est l'axe du boulevard, les piliers sont à z - 70)
+ */
+function addGareWheel(b, signs, z) {
+  const cx = -12, zc = z - 118, R = 21, yc = R + 4.5, LED = [0x46e6f0, 0xf050d8, 0xf0e050, 0x60f070, 0x7a8cff], WHITE = 0xf4f4f2;
+  // pieds en A blancs de chaque côté, axe et deux jantes concentriques, rayons et 20 nacelles
+  for (const dz of [-2.4, 2.4]) for (const s of [-1, 1]) b.cyl(0.35, 0.45, yc + 2, 0xf4f6f8, cx + s * 7, yc / 2, zc + dz, 0, 0, -s * 0.3, 10);
+  b.cyl(0.9, 0.9, 6.2, 0xd8dce2, cx, yc, zc, Math.PI / 2, 0, 0, 16);
+  for (const dz of [-1.4, 1.4]) {
+    b.add(new THREE.TorusGeometry(R, 0.32, 8, 36), 0xf6f8fa, cx, yc, zc + dz);
+    b.add(new THREE.TorusGeometry(R * 0.62, 0.18, 6, 28), 0xe2e8f0, cx, yc, zc + dz);
   }
-  b.cyl(0.9, 0.9, 6.2, 0xd8dce2, cx, yc, z, 0, 0, Math.PI / 2, 16);
-  // Deux jantes concentriques blanches + rayons + 20 nacelles suspendues
-  for (const dx of [-1.4, 1.4]) {
-    b.add(new THREE.TorusGeometry(R, 0.32, 8, 36).rotateY(Math.PI / 2), 0xf6f8fa, cx + dx, yc, z);
-    b.add(new THREE.TorusGeometry(R * 0.62, 0.18, 6, 28).rotateY(Math.PI / 2), 0xe2e8f0, cx + dx, yc, z);
-  }
-  const N = 20, LED = [0x46e6f0, 0xf050d8, 0xf0e050, 0x60f070, 0x7a8cff];
+  const N = 20;
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2, py = yc + Math.sin(a) * R, pz = z + Math.cos(a) * R;
-    b.add(new THREE.CylinderGeometry(0.08, 0.08, R * 2, 6).rotateX(a), 0xd8dce2, cx, yc, z);
-    b.cyl(1.1, 0.9, 1.8, i % 2 ? 0xf4f6f8 : 0x1e88e5, cx, py - 1.1, pz, 0, 0, 0, 10);
-    if (LAMPS) LAMPS.at(z).box(0.9, 0.5, 0.9, LED[i % 5], cx, py - 0.2, pz);                       // (la nuit : nacelles colorées allumées)
+    const a = i / N * Math.PI * 2, px = cx + Math.cos(a) * R, py = yc + Math.sin(a) * R;
+    b.add(new THREE.CylinderGeometry(0.08, 0.08, R * 2, 6).rotateZ(a + Math.PI / 2), 0xd8dce2, cx, yc, zc);
+    b.cyl(1.1, 0.9, 1.8, i % 2 ? 0xf4f6f8 : 0x1e88e5, px, py - 1.1, zc, 0, 0, 0, 10);
+    if (LAMPS) LAMPS.at(z).box(0.9, 0.5, 0.9, LED[i % 5], px, py - 0.2, zc);                       // (la nuit : nacelles colorées allumées)
   }
   if (LAMPS) {
     for (let i = 0; i < 48; i++) {                                                               // la jante allumée, tous les 7,5°
       const a = i / 48 * Math.PI * 2;
-      LAMPS.at(z).box(0.55, 0.55, 0.55, LED[i % 5], cx, yc + Math.sin(a) * (R + 0.3), z + Math.cos(a) * (R + 0.3));
-      if (i % 2 === 0) LAMPS.at(z).box(0.4, 0.4, 0.4, LED[(i + 2) % 5], cx, yc + Math.sin(a) * R * 0.62, z + Math.cos(a) * R * 0.62);
+      LAMPS.at(z).box(0.55, 0.55, 0.55, LED[i % 5], cx + Math.cos(a) * (R + 0.3), yc + Math.sin(a) * (R + 0.3), zc);
+      if (i % 2 === 0) LAMPS.at(z).box(0.4, 0.4, 0.4, LED[(i + 2) % 5], cx + Math.cos(a) * R * 0.62, yc + Math.sin(a) * R * 0.62, zc);
     }
-    for (let i = 0; i < 12; i++) LAMPS.at(z).box(0.12, 0.12, R * 1.9, LED[i % 5], cx + (i % 2 ? 0.2 : -0.2), yc, z, i / 12 * Math.PI);   // les rayons lumineux
+    for (let i = 0; i < 12; i++) LAMPS.at(z).box(R * 1.9, 0.12, 0.12, LED[i % 5], cx, yc, zc + (i % 2 ? 0.2 : -0.2), 0, 0, i / 12 * Math.PI);   // les rayons lumineux
   }
-  signs.add('b30_wheel', () => signTexture('LA GRANDE ROUE', 'Place de la Gare Centrale · Kinshasa', '#1e6bb8', '#ffffff'),
-    12, 1.5, side * (FRONT - 0.25), 3.2, z, -side * Math.PI / 2, true);
-
-  // ---- le parc de loisirs, derrière la clôture bleue ----
-  const WHITE = 0xf4f4f2;
   const rail = (x0, z0, w, d) => {                                                                // petite barrière blanche rectangulaire (w en x, d en z)
-    for (const sx of [-1, 1]) b.box(0.08, 0.9, d, WHITE, x0 + side * sx * w / 2, 0.55, z0).box(0.06, 0.06, d, WHITE, x0 + side * sx * w / 2, 0.95, z0);
+    for (const sx of [-1, 1]) b.box(0.08, 0.9, d, WHITE, x0 + sx * w / 2, 0.55, z0).box(0.06, 0.06, d, WHITE, x0 + sx * w / 2, 0.95, z0);
     for (const sz of [-1, 1]) b.box(w, 0.9, 0.08, WHITE, x0, 0.55, z0 + sz * d / 2).box(w, 0.06, 0.06, WHITE, x0, 0.95, z0 + sz * d / 2);
   };
   // le manège à chevaux : plateau rond, mât, grand toit à lumières, chevaux
-  const mx = X(11), mz = z + 31;
+  const mx = cx + 24, mz = zc + 22;
   rail(mx, mz, 12, 12);
   b.cyl(4.8, 4.8, 0.35, 0xd8c9b0, mx, 0.35, mz, 0, 0, 0, 20).cyl(0.35, 0.35, 5.2, 0xe9d28a, mx, 2.9, mz).cyl(1.2, 5.4, 1.5, 0xf2e6c4, mx, 5.9, mz, 0, 0, 0, 20)
     .cyl(0.2, 1.2, 1.1, 0xe2b83a, mx, 7.1, mz, 0, 0, 0, 16).cyl(5.5, 5.5, 0.18, 0xe2b83a, mx, 5.1, mz, 0, 0, 0, 20);
@@ -4048,32 +4048,33 @@ function addB30FerrisWheel(b, signs, side, z, p) {
     if (LAMPS) LAMPS.at(z).box(0.35, 0.35, 0.35, LED[i % 5], mx + Math.sin(a) * 5.3, 5.0, mz + Math.cos(a) * 5.3);
   }
   if (LAMPS) for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; LAMPS.at(z).box(0.3, 0.3, 0.3, LED[(i + 1) % 5], mx + Math.sin(a) * 3.2, 6.9 - Math.abs(Math.sin(a * 2)) * 0.6, mz + Math.cos(a) * 3.2); }
-  // la caisse jaune
-  b.box(2.4, 2.6, 2.4, 0xf0c21a, X(7), 1.3, z - 12).box(2.8, 0.25, 2.8, 0xd8a912, X(7), 2.7, z - 12).box(0.1, 0.9, 1.4, 0x3a4650, X(7) - side * 1.22, 1.5, z - 12);
-  signs.add('park_caisse', () => signTexture('CAISSE', 'Parc de la Gare', '#f0c21a', '#1a1a1a'), 2.2, 0.5, X(7) - side * 1.24, 2.2, z - 12, face, true);
+  // la caisse jaune (face au boulevard)
+  const kx = cx + 9, kz = zc + 24;
+  b.box(2.4, 2.6, 2.4, 0xf0c21a, kx, 1.3, kz).box(2.8, 0.25, 2.8, 0xd8a912, kx, 2.7, kz).box(1.4, 0.9, 0.1, 0x3a4650, kx, 1.5, kz + 1.22);
+  signs.add('park_caisse', () => signTexture('CAISSE', 'Parc de la Gare', '#f0c21a', '#1a1a1a'), 2.2, 0.5, kx, 2.2, kz + 1.24, 0, true);
   // le château de jeux en bois (tours à créneaux, plaques vertes) et son toboggan tubulaire vert
-  const gx2 = X(31), gz = z + 21;
-  rail(gx2, gz, 15, 11);
-  b.box(4, 5, 4, 0x6e4a30, gx2, 2.5, gz - 3).box(4.6, 0.5, 4.6, 0x5a3a24, gx2, 5.2, gz - 3)
-    .box(3.2, 3.2, 3.2, 0x7a5236, gx2 + side * 3.6, 1.6, gz + 1.6).box(3.8, 0.4, 3.8, 0x5a3a24, gx2 + side * 3.6, 3.4, gz + 1.6)
-    .box(3.0, 6.2, 3.0, 0x6e4a30, gx2 - side * 3.4, 3.1, gz + 2).box(3.6, 0.5, 3.6, 0x5a3a24, gx2 - side * 3.4, 6.4, gz + 2)
-    .box(0.1, 1.2, 1.2, 0x7bc043, gx2 - side * 2.04, 3.2, gz - 3).box(0.1, 1.0, 1.0, 0x7bc043, gx2 - side * 1.8, 5.0, gz + 2);
-  for (let k = -1; k <= 1; k++) for (const [cxk, czk, cw] of [[gx2, gz - 3, 4.6], [gx2 - side * 3.4, gz + 2, 3.6]]) b.box(0.7, 0.6, 0.7, 0x5a3a24, cxk + k * (cw / 2 - 0.4), cw > 4 ? 5.7 : 6.9, czk);
-  b.cyl(0.55, 0.55, 8, 0x4caf50, gx2 + side * 5.5, 2.6, gz + 1.8, 0.9, 0, 0, 12).cyl(0.62, 0.62, 2.4, 0x9aa0a6, gx2 + side * 8.6, 0.55, gz + 2.0, 1.45, 0, 0, 12);
-  // le cinéma « 5D » : conteneur peint (ciel, nuages, côte) sous une bande de pellicule, lettres rouges
-  const cx5 = X(37), cz5 = z - 25;
-  b.box(5, 4.6, 12, 0x7fa8d0, cx5, 2.3, cz5);
-  for (const [cdz, cw, ch] of [[-3.8, 2.8, 1.2], [1.6, 3.4, 1.6], [4.2, 2.2, 1.0]]) b.box(0.1, ch, cw, 0xf0f4f8, cx5 - side * 2.53, 3.3, cz5 + cdz);
-  b.box(0.1, 1.1, 11.6, 0x4f9a5a, cx5 - side * 2.53, 0.9, cz5).box(0.5, 1.3, 12.4, 0xf4f4f2, cx5 - side * 2.4, 5.3, cz5);
-  for (let dz = -5.5; dz <= 5.5; dz += 1.1) b.box(0.52, 0.55, 0.55, 0x30343a, cx5 - side * 2.4, 5.3, cz5 + dz);
-  signs.add('park_5d', () => signTexture('5D', 'Cinéma · Parc de la Gare', '#ffffff', '#c8102e'), 3.2, 1.6, cx5 - side * 2.7, 6.5, cz5, face, true);
-  // parasols turquoise (comme sur la vidéo : une grande ombrelle à côté de la roue) et lampadaires du parc
-  for (const [pd, pz] of [[13, 4], [14, -5], [24, 12], [33, -8]]) {
-    b.cyl(0.06, 0.07, 3.0, 0x8a8f94, X(pd), 1.5, z + pz).cyl(0.06, 2.4, 0.8, 0x13a89a, X(pd), 3.1, z + pz, 0, 0, 0, 10);
+  const gx = cx - 26, gz = zc + 16;
+  rail(gx, gz, 15, 11);
+  b.box(4, 5, 4, 0x6e4a30, gx, 2.5, gz - 3).box(4.6, 0.5, 4.6, 0x5a3a24, gx, 5.2, gz - 3)
+    .box(3.2, 3.2, 3.2, 0x7a5236, gx + 3.6, 1.6, gz + 1.6).box(3.8, 0.4, 3.8, 0x5a3a24, gx + 3.6, 3.4, gz + 1.6)
+    .box(3.0, 6.2, 3.0, 0x6e4a30, gx - 3.4, 3.1, gz + 2).box(3.6, 0.5, 3.6, 0x5a3a24, gx - 3.4, 6.4, gz + 2)
+    .box(1.2, 1.2, 0.1, 0x7bc043, gx, 3.2, gz - 0.96).box(1.0, 1.0, 0.1, 0x7bc043, gx - 3.4, 5.0, gz + 3.55);
+  for (let k = -1; k <= 1; k++) for (const [cxk, czk, cw] of [[gx, gz - 3, 4.6], [gx - 3.4, gz + 2, 3.6]]) b.box(0.7, 0.6, 0.7, 0x5a3a24, cxk + k * (cw / 2 - 0.4), cw > 4 ? 5.7 : 6.9, czk);
+  b.cyl(0.55, 0.55, 8, 0x4caf50, gx + 5.5, 2.6, gz + 1.8, 0, 0, 0.9, 12).cyl(0.62, 0.62, 2.4, 0x9aa0a6, gx + 8.6, 0.55, gz + 2.0, 0, 0, 1.45, 12);
+  // le cinéma « 5D » : conteneur peint (ciel, nuages, côte) sous une bande de pellicule, lettres rouges ; face au boulevard
+  const fx = cx + 30, fz = zc - 4;
+  b.box(12, 4.6, 5, 0x7fa8d0, fx, 2.3, fz);
+  for (const [cdx, cw, ch] of [[-3.8, 2.8, 1.2], [1.6, 3.4, 1.6], [4.2, 2.2, 1.0]]) b.box(cw, ch, 0.1, 0xf0f4f8, fx + cdx, 3.3, fz + 2.53);
+  b.box(11.6, 1.1, 0.1, 0x4f9a5a, fx, 0.9, fz + 2.53).box(12.4, 1.3, 0.5, 0xf4f4f2, fx, 5.3, fz + 2.4);
+  for (let dx = -5.5; dx <= 5.5; dx += 1.1) b.box(0.55, 0.55, 0.52, 0x30343a, fx + dx, 5.3, fz + 2.4);
+  signs.add('park_5d', () => signTexture('5D', 'Cinéma · Parc de la Gare', '#ffffff', '#c8102e'), 3.2, 1.6, fx, 6.5, fz + 2.7, 0, true);
+  // parasols turquoise et lampadaires du parc
+  for (const [px, pz] of [[cx + 4, zc + 20], [cx + 14, zc + 26], [cx - 12, zc + 28], [cx + 20, zc + 10]]) {
+    b.cyl(0.06, 0.07, 3.0, 0x8a8f94, px, 1.5, pz).cyl(0.06, 2.4, 0.8, 0x13a89a, px, 3.1, pz, 0, 0, 0, 10);
   }
-  for (const [ld, lz] of [[10, -34], [10, 20], [26, -4], [27, -34], [44, 4], [44, 40], [20, 44]]) {
-    b.cyl(0.1, 0.14, 9, 0x5b6168, X(ld), 4.5, z + lz);
-    lampHead(X(ld), 9.1, z + lz);
+  for (const [lx, lz] of [[cx - 40, zc + 6], [cx - 14, zc + 34], [cx + 16, zc + 36], [cx + 44, zc + 14], [cx + 40, zc - 18], [cx - 32, zc - 20]]) {
+    b.cyl(0.1, 0.14, 9, 0x5b6168, lx, 4.5, lz);
+    lampHead(lx, 9.1, lz);
   }
 }
 
@@ -9179,7 +9180,7 @@ const EXT_PLACES = (EXT?.places ?? []).map(p => ({ ...p, z: p.s !== undefined ? 
 const EXT_HALF = { fuel: 17, block: null, radio: 9, church: 13, stadium: 82, arena: 36, school: 14, palais: 118, culture: 118, tembe: 16, museum: 28, pnmls: 18, church_big: 28,
   campus: 30, tower: 16, rtnc_pond: 20, urk: 16, cathedral: 26, glass: null, netted: null, beaux_arts: 16, rotunda: 16, mall: 25, asanef: 0, billboard: 0, stadium_far: 0, hoarding: null, wall: null, empty_lot: null,
   commercial: 14, hospital: 16, kinmarche: 32, airtel_shop: 9, gare: 55,
-  b30_kintambo: 38, b30_rev_kim: 28, b30_mural: 38, b30_ggmart: 34, b30_chantier: 22, b30_jac: 32, b30_batetela: 26, b30_cnss_glass: 22, b30_res165: 24, b30_gouvernement: 44, b30_white_tower: 22, b30_3pillars: 24, b30_copper_glass: 22, b30_africell_tower: 24, b30_afriland: 22, b30_matrix: 24, b30_mandela_apt: 24, b30_rotana: 44, b30_believe: 22, b30_sabena: 34, b30_orange_tower: 22, b30_chancellerie: 28, b30_regideso: 32, b30_dentisterie_chantier: 28, b30_blue_curve: 22, b30_scpt: 36, b30_sozacom: 38, b30_solenac: 24, b30_memling: 26, b30_bcdc_tower: 36, b30_palais_justice: 60, b30_bold_chantier: 24, b30_ferris_wheel: 46 };
+  b30_kintambo: 38, b30_rev_kim: 28, b30_mural: 38, b30_ggmart: 34, b30_chantier: 22, b30_jac: 32, b30_batetela: 26, b30_cnss_glass: 22, b30_res165: 24, b30_gouvernement: 44, b30_white_tower: 22, b30_3pillars: 24, b30_copper_glass: 22, b30_africell_tower: 24, b30_afriland: 22, b30_matrix: 24, b30_mandela_apt: 24, b30_rotana: 44, b30_believe: 22, b30_sabena: 34, b30_orange_tower: 22, b30_chancellerie: 28, b30_regideso: 32, b30_dentisterie_chantier: 28, b30_blue_curve: 22, b30_scpt: 36, b30_sozacom: 38, b30_solenac: 24, b30_memling: 26, b30_bcdc_tower: 36, b30_palais_justice: 60, b30_bold_chantier: 24, b30_ferris_wheel: 34 };
 const extTaken = (() => {
   const out = { 1: [], [-1]: [] };
   if (!EXT) return out;
@@ -11858,7 +11859,7 @@ export function buildWorld(scene, opts = {}) {
   const SKIP_BOTH = [...RIVERS.map(r => ({ z: r.z, d: r.w / 2 + 4 })), ...RINGS.map(q => ({ z: q.z, d: q.reach + 4 })), ...RINGS.filter(q => q.kind === 'gap').map(q => ({ z: q.z0 + 150, d: 75 })), ...(R.campus ? [{ z: CAMPUS_Z - 400, d: 400 }] : []),
     ...CROSSINGS.map(c => ({ z: c.z, d: c.w / 2 + 3 }))];
   const SKIP_SIDE = [...R.monuments.map(m => ({ side: m.side, z: g(m.s), d: m.kind === 'stadium' ? 110 : m.kind === 'palais' ? 95 : m.kind === 'culture' ? 100 : 50 })),
-    ...(R.places ?? []).filter(p => p.kind !== 'tanks' && p.kind !== 'pont_matete').map(p => ({ side: p.side, z: g(p.s), d: { petro: 24, lds_church: 18, kimbanseke_commune: 18, masina_commune: 18, vodacom_shop: 12, orange_shop: 13, airtel_shop: 9, atm: 7, mosque: 16, mbujimayi_kananga: 15, ecole_luka: 18, stade_masina: (p.length ?? 36) / 2 + 3, hospital: 16, school: 15, church: 14, shekinah: 42, shekinah_old: 22, commercial: 12, lumumba_monument: 8, apocalypse: 68, regideso: 20, kinmarche: 32, transco_depot: 46, fuel: 22, b30_kintambo: 38, b30_rev_kim: 28, b30_mural: 38, b30_ggmart: 34, b30_chantier: 22, b30_jac: 32, b30_batetela: 26, b30_cnss_glass: 22, b30_res165: 24, b30_gouvernement: 44, b30_white_tower: 22, b30_three_pillars: 24, b30_copper_glass: 22, b30_africell_tower: 24, b30_afriland: 22, b30_matrix: 24, b30_mandela_apt: 24, b30_rotana: 44, b30_believe: 22, b30_sabena: 34, b30_orange_tower: 22, b30_chancellerie: 28, b30_regideso: 32, b30_dentisterie_chantier: 28, b30_blue_curve: 22, b30_scpt: 36, b30_sozacom: 38, b30_solenac: 24, b30_memling: 26, b30_bcdc_tower: 36, b30_palais_justice: 60, b30_bold_chantier: 24, b30_ferris_wheel: 46 }[p.kind] ?? 30 })),
+    ...(R.places ?? []).filter(p => p.kind !== 'tanks' && p.kind !== 'pont_matete').map(p => ({ side: p.side, z: g(p.s), d: { petro: 24, lds_church: 18, kimbanseke_commune: 18, masina_commune: 18, vodacom_shop: 12, orange_shop: 13, airtel_shop: 9, atm: 7, mosque: 16, mbujimayi_kananga: 15, ecole_luka: 18, stade_masina: (p.length ?? 36) / 2 + 3, hospital: 16, school: 15, church: 14, shekinah: 42, shekinah_old: 22, commercial: 12, lumumba_monument: 8, apocalypse: 68, regideso: 20, kinmarche: 32, transco_depot: 46, fuel: 22, b30_kintambo: 38, b30_rev_kim: 28, b30_mural: 38, b30_ggmart: 34, b30_chantier: 22, b30_jac: 32, b30_batetela: 26, b30_cnss_glass: 22, b30_res165: 24, b30_gouvernement: 44, b30_white_tower: 22, b30_three_pillars: 24, b30_copper_glass: 22, b30_africell_tower: 24, b30_afriland: 22, b30_matrix: 24, b30_mandela_apt: 24, b30_rotana: 44, b30_believe: 22, b30_sabena: 34, b30_orange_tower: 22, b30_chancellerie: 28, b30_regideso: 32, b30_dentisterie_chantier: 28, b30_blue_curve: 22, b30_scpt: 36, b30_sozacom: 38, b30_solenac: 24, b30_memling: 26, b30_bcdc_tower: 36, b30_palais_justice: 60, b30_bold_chantier: 24, b30_ferris_wheel: 34 }[p.kind] ?? 30 })),
     ...(HAS_MATETE ? [-1, 1].map(side => ({ side, z: (MATETE_ZONE[side][0] + MATETE_ZONE[side][1]) / 2, d: (MATETE_ZONE[side][0] - MATETE_ZONE[side][1]) / 2 + 4 })) : []),
     ...(IS_TOWER ? [{ side: 1, z: (ECH_ZONE[0] + ECH_ZONE[1]) / 2, d: (ECH_ZONE[0] - ECH_ZONE[1]) / 2 },
       ...ECH_ZONES_L.map(([a, c]) => ({ side: -1, z: (a + c) / 2, d: (a - c) / 2 }))] : []),
