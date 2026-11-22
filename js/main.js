@@ -175,10 +175,7 @@ const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 3600);
 globalThis.TAXIKIN_KV = !!CURRENT.attachKv && want('kv');   // (world.js : le décor du carrefour Kasa-Vubu laisse la place à la vraie avenue)
 globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les entrées « Rocade Sud-Est » laissent la place à la vraie route)
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
-const FETCHED = new Map();   // (routes attachées : modules déjà demandés, voir prefetchRoad)
 mark('avant la construction de la ville');
-for (const [k, at] of [['30juin', CURRENT.attach], ['pl', CURRENT.attachPL], ['uni', CURRENT.attachUni], ['bp', CURRENT.attachBp], ['kv', CURRENT.attachKv], ['roc', CURRENT.attachRoc], ['mm', TAXIKIN_MM && CURRENT.attachMm]])
-  if (at && want(k)) prefetchRoad(at.route).catch(() => {});   // (l'erreur réelle remonte au loadRoad)
 const world = W1.buildWorld(scene);
 mark('ville principale construite');
 await new Promise(r => setTimeout(r, 0));
@@ -197,14 +194,10 @@ const ROAD1 = { W: W1, RT: RT1, group: scene, world, rho: 0, Hud, Traffic, Passe
   endName: (CURRENT.finish ?? CURRENT.end).name, startMsg: WALL_MSG.start, title: CURRENT.title };
 let ROAD2 = null, ROAD3 = null, ROAD4 = null, ROAD5 = null, ROAD6 = null, ROAD7 = null, ROAD8 = null, JOIN_W = null;
 /** Charge une autre copie des modules pour un trajet attaché et la construit dans un groupe de la scène. */
-/** Lance le téléchargement et l'analyse des modules d'une route attachée (en parallèle, pendant que la ville principale se construit). */
-function prefetchRoad(route) {
-  if (!FETCHED.has(route)) FETCHED.set(route, Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js?route=${route}`))));
-  return FETCHED.get(route);
-}
 async function loadRoad(route) {
+  const q = `?route=${route}`;
   mark(`route attachée ${route} : début`);
-  const [W, RT, T, P, L, H] = await prefetchRoad(route);
+  const [W, RT, T, P, L, H] = await Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`)));
   mark(`route attachée ${route} : fichiers chargés`);
   await new Promise(r => setTimeout(r, 0));
   const group = new THREE.Group();
@@ -543,12 +536,8 @@ const DAY = { urgent: 0 };                       // (partagé par la circulation
 // Le chargement du véhicule (taxi collectif) : partagé par les clients de toutes les routes, les clients restent à bord d'une route à l'autre
 const GROUP_MAX = { berline: 2, bus: 4, moto: 1, perso: 1, athlete: 1 };
 const BOARD = IT ? newBoard(VEH.places, VEH.fare, GROUP_MAX[VEH_ID]) : newBoard();
-/** Circulation, lueurs de nuit, clients, piétons et gens des quartiers d'une route. */
-const LIFE_KEYS = ['traffic', 'glow', 'passengers', 'life', 'qlife'];
-function buildLife(r) {
-  if (r.lifeBuilt) return;
-  r.lifeBuilt = true;
-  for (const k of LIFE_KEYS) Object.defineProperty(r, k, { value: undefined, writable: true, configurable: true, enumerable: true });   // (fin de la construction paresseuse)
+for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
+  if (!r) continue;
   mark('vie de la route : début');
   r.traffic = new r.Traffic(r.group);
   mark('  circulation créée');
@@ -564,14 +553,6 @@ function buildLife(r) {
   r.life.traffic = r.traffic;                   // (l'auteur, 13/11 : les piétons attendent les véhicules, contournent les clients)
   r.life.passengers = r.passengers;
   r.qlife = new QuartierLife(r.group, r.W.quartierPaths?.() ?? [], r.W.quartierRoads?.() ?? []);   // (l'auteur, 14/11 : les gens, les motos et les voitures des quartiers)
-}
-// Les routes rattachées ne construisent leur vie qu'au premier besoin (le taxi s'en approche, ou le jeu la consulte) ou au repos, l'une après l'autre,
-// quelques secondes après le départ ; seule la route de départ est prête tout de suite.
-buildLife(ROAD1);
-{
-  const others = [ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8].filter(Boolean);
-  for (const r of others) for (const k of LIFE_KEYS) Object.defineProperty(r, k, { configurable: true, enumerable: true, get() { buildLife(r); return r[k]; } });
-  others.forEach((r, n) => setTimeout(() => buildLife(r), 8000 + n * 2500));
 }
 mark('vie de toutes les routes créée');
 let A = ROAD1;                                   // route où roule le taxi
@@ -901,13 +882,13 @@ function startShift() {
   if (A !== ROAD1) switchRoad(ROAD1, 0, 0, 0, true);
   Object.assign(taxi, { ...startCoords(), heading: 0, speed: 0, steer: 0, level: null, y: 0 });
   flyWarned.clear();
-  if (ROAD2?.lifeBuilt) ROAD2.passengers.reset();
-  if (ROAD3?.lifeBuilt) ROAD3.passengers.reset();
-  if (ROAD4?.lifeBuilt) ROAD4.passengers.reset();
-  if (ROAD5?.lifeBuilt) ROAD5.passengers.reset();
-  if (ROAD6?.lifeBuilt) ROAD6.passengers.reset();
-  if (ROAD7?.lifeBuilt) ROAD7.passengers.reset();
-  if (ROAD8?.lifeBuilt) ROAD8.passengers.reset();
+  ROAD2?.passengers.reset();
+  ROAD3?.passengers.reset();
+  ROAD4?.passengers.reset();
+  ROAD5?.passengers.reset();
+  ROAD6?.passengers.reset();
+  ROAD7?.passengers.reset();
+  ROAD8?.passengers.reset();
   // Test : ?att=5000 démarre sur le trajet attaché (Boulevard du 30 Juin), à s = 5 000 m, vers la Gare
   const att = Number(new URLSearchParams(location.search).get('att'));
   if (ROAD2 && att > 0) switchRoad(ROAD2, LANE_R, -ROAD2.RT.toGame(att), 0);
@@ -2647,7 +2628,7 @@ function nightFrame() {
   beam.rotation.x = taxiMesh.rotation.x;
   TAXI_GLOW.mesh = taxiMesh; TAXI_GLOW.len = VEH.l; TAXI_GLOW.wid = VEH.w;
   for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
-    if (!r?.lifeBuilt) continue;
+    if (!r?.glow) continue;
     r.glow.update(r === A && VEH_ID !== 'athlete' ? [TAXI_GLOW, ...r.traffic.list, ...r.traffic.crossing] : [...r.traffic.list, ...r.traffic.crossing], nightK);
   }
 }
