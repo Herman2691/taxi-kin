@@ -24,7 +24,20 @@ import { ROUTES, CURRENT, ITINERAIRES, VEHICULES, COURSES } from './routes.js';
 import { THANKS } from './credits.js';
 // Mesure du chargement (adresse + ?mesure) : temps depuis le début de la navigation, dans la console (lignes « MESURE »)
 const MESURE = new URLSearchParams(location.search).has('mesure');
-const mark = n => { if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
+let mesureBox = null;
+const mark = n => {
+  if (!MESURE) return;
+  const ligne = `MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`;
+  console.log(ligne);
+  // Affichage à l'écran (téléphone : pas de console) : on peut en prendre une capture
+  if (!mesureBox && document.body) {
+    mesureBox = document.createElement('pre');
+    mesureBox.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;margin:0;padding:6px;max-width:100vw;max-height:60vh;overflow:auto;background:rgba(0,0,0,.8);color:#7f7;font:10px/1.25 monospace;pointer-events:none';
+    document.body.appendChild(mesureBox);
+  }
+  if (mesureBox) { mesureBox.textContent += ligne + '
+'; mesureBox.scrollTop = 1e9; }
+};
 mark('fichiers de code chargés et évalués (world.js compris)');
 
 // Fonctions de la route où roule le taxi : celles du trajet principal, ou celles du trajet attaché (ATT) quand le taxi y
