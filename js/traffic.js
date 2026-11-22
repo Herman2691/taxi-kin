@@ -161,7 +161,9 @@ export class Traffic {
     for (const k of TRAFFIC_MIX?.our ?? MIX_OUR) this.add(scene, 1, k);
     for (const k of TRAFFIC_MIX?.onc ?? MIX_ONC) this.add(scene, -1, k);
     this.jamActive = false;
-    if (JAMS.some(j => j.lvl > 1)) for (const side of [1, -1]) for (let i = 0; i < JAM_FLEET[side]; i++) { const v = this.add(scene, side, JAM_MIX[(i * 7 + (side > 0 ? 0 : 3)) % JAM_MIX.length]); v.jam = true; this.hideJam(v); }
+    // la file de l'embouteillage (155 véhicules cachés) ne se construit plus au chargement : par petits paquets quand le navigateur est au repos, le reste à l'entrée de la zone
+    this.jamTodo = JAMS.some(j => j.lvl > 1) ? [1, -1].flatMap(side => Array.from({ length: JAM_FLEET[side] }, (_, i) => [side, i])) : [];
+    if (this.jamTodo.length) setTimeout(() => this.idleJam(), 6000);
     // Carrefours à feux : des voitures sortent de la rue et traversent le boulevard pendant le vert de la rue.
     // dir -1 : de la droite vers la gauche, dir +1 : de la gauche vers la droite (seulement s'il y a une rue de ce côté)
     this.crossing = [];
@@ -188,6 +190,19 @@ export class Traffic {
       }
     }
     this.resetCrossing();
+  }
+
+  /** Construit n véhicules de la file d'embouteillage (tous si n est omis). */
+  buildJam(n = Infinity) {
+    while (n-- > 0 && this.jamTodo.length) {
+      const [side, i] = this.jamTodo.shift();
+      const v = this.add(this.scene, side, JAM_MIX[(i * 7 + (side > 0 ? 0 : 3)) % JAM_MIX.length]); v.jam = true; this.hideJam(v);
+    }
+  }
+  idleJam() {
+    if (!this.jamTodo.length) return;
+    this.buildJam(6);
+    setTimeout(() => this.idleJam(), 400);
   }
 
   resetCrossing() {
@@ -287,6 +302,7 @@ export class Traffic {
   inJamNow(z) { return this.jamActive && JAMS.some(j => j.on && j.lvl > 1 && z < j.z0 && z > j.z1); }
   hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.mesh.visible = false; }
   startJam(taxi) {
+    this.buildJam();
     this.jamActive = true;
     for (const v of this.list) if (v.jam) { this.place(v, taxi.z, 0, taxi); put(v, v.side === 1 ? 0 : Math.PI); }
   }
