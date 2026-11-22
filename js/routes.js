@@ -1237,7 +1237,7 @@ export const ROUTES = {
       { kind: 'b30_solenac', s: 7060, side: -1, name: 'SOLENAC · SUPERMARCHÉ', sub: 'Boulevard du 30 Juin · Gombe' },
       { kind: 'b30_memling', s: 7129, side: 1, name: 'HÔTEL MEMLING', sub: 'Avenue du Tchad · Gombe' },
       { kind: 'b30_bcdc_tower', s: 7165, side: -1, name: 'TOUR EQUITY BCDC', sub: 'Siège Social · Place du 27 Octobre' },
-      { kind: 'b30_palais_justice', s: 7275, side: 1, name: 'PALAIS DE LA JUSTICE · BOTOUR', sub: 'Boulevard du 30 Juin · Gombe' },
+      { kind: 'b30_palais_justice', s: 7275, side: 1, name: 'IMMEUBLE ONATRA', sub: 'Boulevard du 30 Juin · Place de la Gare' },   // (l'auteur, 22/11 : l'immeuble ONATRA, avant la Place de la Gare)
       { kind: 'airtel_shop', s: 7315, side: -1 },
       { kind: 'b30_bold_chantier', s: 7420, side: 1, name: 'IMMEUBLE BOLD · AGUA', sub: 'Grands Panneaux · Place de la Gare' },
       { kind: 'b30_ferris_wheel', s: 7510, side: -1, name: 'LA GRANDE ROUE DE KINSHASA', sub: 'Parc d\'Attraction · Place de la Gare Centrale' },
