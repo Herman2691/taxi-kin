@@ -176,6 +176,8 @@ globalThis.TAXIKIN_KV = !!CURRENT.attachKv && want('kv');   // (world.js : le d�
 globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les entrées « Rocade Sud-Est » laissent la place à la vraie route)
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
 mark('avant la construction de la ville');
+for (const [k, at] of [['30juin', CURRENT.attach], ['pl', CURRENT.attachPL], ['uni', CURRENT.attachUni], ['bp', CURRENT.attachBp], ['kv', CURRENT.attachKv], ['roc', CURRENT.attachRoc], ['mm', TAXIKIN_MM && CURRENT.attachMm]])
+  if (at && want(k)) prefetchRoad(at.route).catch(() => {});   // (l'erreur réelle remonte au loadRoad)
 const world = W1.buildWorld(scene);
 mark('ville principale construite');
 await new Promise(r => setTimeout(r, 0));
@@ -194,10 +196,15 @@ const ROAD1 = { W: W1, RT: RT1, group: scene, world, rho: 0, Hud, Traffic, Passe
   endName: (CURRENT.finish ?? CURRENT.end).name, startMsg: WALL_MSG.start, title: CURRENT.title };
 let ROAD2 = null, ROAD3 = null, ROAD4 = null, ROAD5 = null, ROAD6 = null, ROAD7 = null, ROAD8 = null, JOIN_W = null;
 /** Charge une autre copie des modules pour un trajet attaché et la construit dans un groupe de la scène. */
+const FETCHED = new Map();
+/** Lance le téléchargement et l'analyse des modules d'une route attachée (en parallèle, pendant que la ville principale se construit). */
+function prefetchRoad(route) {
+  if (!FETCHED.has(route)) FETCHED.set(route, Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js?route=${route}`))));
+  return FETCHED.get(route);
+}
 async function loadRoad(route) {
-  const q = `?route=${route}`;
   mark(`route attachée ${route} : début`);
-  const [W, RT, T, P, L, H] = await Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`)));
+  const [W, RT, T, P, L, H] = await prefetchRoad(route);
   mark(`route attachée ${route} : fichiers chargés`);
   await new Promise(r => setTimeout(r, 0));
   const group = new THREE.Group();
