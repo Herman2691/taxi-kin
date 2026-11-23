@@ -2,6 +2,7 @@
 import { Radio } from './radio.js';
 import { buildCockpit } from './cockpit.js';
 import { Lunettes } from './lunettes.js';
+import { releaseCpuCopies } from './memoire.js';
 import * as THREE from 'three';
 import * as W1 from './world.js';
 import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue, setReceveurLive, RECEVEUR_POSTE } from './models.js';
@@ -177,6 +178,7 @@ globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les 
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
 mark('avant la construction de la ville');
 const world = W1.buildWorld(scene);
+releaseCpuCopies(scene);                         // (téléphone : libère la copie mémoire des sommets du décor, voir memoire.js)
 mark('ville principale construite');
 await new Promise(r => setTimeout(r, 0));
 const lunettes = new Lunettes(renderer);          // mode lunettes (téléphone glissé dans des lunettes)
@@ -203,6 +205,7 @@ async function loadRoad(route) {
   const group = new THREE.Group();
   scene.add(group);
   const built = W.buildWorld(group, { env: false, fog: scene.fog });
+  releaseCpuCopies(group);
   mark(`route attachée ${route} : construite`);
   return { W, RT, group, world: built, Hud: H.Hud,
     Traffic: T.Traffic, Passengers: P.Passengers, StreetLife: L.StreetLife, endName: ROUTES[route].end.name, startMsg: 'Fin de la route', title: ROUTES[route].title };
