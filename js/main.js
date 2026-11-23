@@ -30,10 +30,10 @@ let derniereEtape = null;
 try { derniereEtape = localStorage.getItem('taxikin_etape'); localStorage.setItem('taxikin_etape', ''); } catch { /* stockage indisponible */ }
 if (derniereEtape && derniereEtape !== 'OK') {
   const avis = document.createElement('div');
-  avis.style.cssText = 'position:fixed;left:6px;right:6px;top:6px;z-index:99999;padding:8px 10px;background:rgba(160,20,20,.92);color:#fff;font:12px/1.3 sans-serif;border-radius:8px;pointer-events:none';
-  avis.textContent = `Le chargement précédent s’est arrêté après : ${derniereEtape}`;
+  avis.style.cssText = 'position:fixed;left:6px;right:6px;top:6px;z-index:99999;padding:8px 10px;background:rgba(160,20,20,.92);color:#fff;font:bold 20px/1.3 sans-serif;border-radius:8px';
+  avis.textContent = `Le chargement précédent s’est arrêté après : ${derniereEtape} (touche pour fermer)`;
+  avis.onclick = () => avis.remove();
   document.body.appendChild(avis);
-  setTimeout(() => avis.remove(), 25000);
 }
 const mark = n => {
   if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`);
