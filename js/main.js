@@ -25,7 +25,21 @@ import { ROUTES, CURRENT, ITINERAIRES, VEHICULES, COURSES } from './routes.js';
 import { THANKS } from './credits.js';
 // Mesure du chargement (adresse + ?mesure) : temps depuis le début de la navigation, dans la console (lignes « MESURE »)
 const MESURE = new URLSearchParams(location.search).has('mesure');
-const mark = n => { if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
+// Témoin de coupure (téléphone : Safari ferme la page sans message) : la dernière étape atteinte est gardée ; à la réouverture on l'affiche en haut de l'écran
+let derniereEtape = null;
+try { derniereEtape = localStorage.getItem('taxikin_etape'); localStorage.setItem('taxikin_etape', ''); } catch { /* stockage indisponible */ }
+if (derniereEtape && derniereEtape !== 'OK') {
+  const avis = document.createElement('div');
+  avis.style.cssText = 'position:fixed;left:6px;right:6px;top:6px;z-index:99999;padding:8px 10px;background:rgba(160,20,20,.92);color:#fff;font:12px/1.3 sans-serif;border-radius:8px;pointer-events:none';
+  avis.textContent = `Le chargement précédent s’est arrêté après : ${derniereEtape}`;
+  document.body.appendChild(avis);
+  setTimeout(() => avis.remove(), 25000);
+}
+const mark = n => {
+  if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`);
+  try { localStorage.setItem('taxikin_etape', `${n.trim()} (${Math.round(performance.now() / 1000)} s)`); } catch { /* stockage indisponible */ }
+};
+addEventListener('pagehide', () => { try { localStorage.setItem('taxikin_etape', 'OK'); } catch { /* stockage indisponible */ } });   // (sortie normale : pas de coupure à signaler)
 mark('fichiers de code chargés et évalués (world.js compris)');
 
 // Fonctions de la route où roule le taxi : celles du trajet principal, ou celles du trajet attaché (ATT) quand le taxi y
