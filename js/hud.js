@@ -15,6 +15,12 @@ export class Hud {
     this.cache = {};
     this.toastTime = 0;
 
+    // Tous les messages dans une colonne à droite : le milieu de la route reste dégagé (surtout sur téléphone)
+    const col = document.createElement('div');
+    col.id = 'side-msgs';
+    for (const id of ['prompt', 'bubbles', 'choice', 'toast', 'btn-flee', 'btn-descendre']) { const n = $(id); if (n) col.append(n); }
+    $('hud')?.append(col);
+
     const track = this.el.track;
     let labels = 0;
     for (const lm of GOALS) {
