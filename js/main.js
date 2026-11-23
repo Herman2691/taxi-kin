@@ -492,9 +492,11 @@ function receveursProches() {
   }
 }
 let taxiMesh = makeVehicle(VEH_ID);
-scene.add(camera);                               // (le poste de conduite de la vue intérieure est accroché à la caméra)
+const camRig = new THREE.Group();                // repère du poste de conduite : suit le véhicule ; en VR la tête (camera) tourne dedans librement
+scene.add(camRig);
+camRig.add(camera);
 let cockpit = buildCockpit(VEH_ID);
-camera.add(cockpit.group);
+camRig.add(cockpit.group);
 taxiMesh.rotation.order = 'YXZ';
 scene.add(taxiMesh);
 // Le faisceau des phares du joueur (nuit.js) : posé chaque image à la place du véhicule, dans le groupe de sa route ; visible aussi en vue intérieure
@@ -516,9 +518,9 @@ function setVehicle(id, two = false) {
   const parent = taxiMesh.parent;
   parent?.remove(taxiMesh);
   taxiMesh = makeVehicle(id, two);
-  camera.remove(cockpit.group);
+  camRig.remove(cockpit.group);
   cockpit = buildCockpit(id);
-  camera.add(cockpit.group);
+  camRig.add(cockpit.group);
   taxiMesh.rotation.order = 'YXZ';
   (parent ?? scene).add(taxiMesh);
   beam.parent?.remove(beam);
@@ -1162,13 +1164,59 @@ function drawMenu() {
 }
 $('btn-flee').addEventListener('click', startFight);
 addEventListener('keydown', e => { if (e.code === 'KeyF' && G.state === 'play') startFight(); });
-$('btn-vr').addEventListener('click', async () => {
-  await lunettes.enable();
+const VR_DEPTHS = [[0, '2D'], [0.028, 'Doux'], [0.042, 'Normal'], [0.06, 'Fort']];
+const syncVrUi = (L = lunettes.layout()) => {
+  const rl = $('vr-ret-l'), rr = $('vr-ret-r');
+  if (rl && rr) {
+    rl.style.left = `${L.cxL}px`;
+    rr.style.left = `${L.cxR}px`;
+  }
+  if ($('vr-ipd-v')) $('vr-ipd-v').textContent = `${Math.round(lunettes.ipdScale * 100)}%`;
+  if ($('vr-zoom-v')) $('vr-zoom-v').textContent = `${Math.round(lunettes.zoom * 100)}%`;
+  if ($('vr-3d-v')) {
+    const cur = VR_DEPTHS.reduce((a, b) => (Math.abs(b[0] - lunettes.eyeSep) < Math.abs(a[0] - lunettes.eyeSep) ? b : a), VR_DEPTHS[2]);
+    $('vr-3d-v').textContent = cur[1];
+  }
+};
+lunettes.onLayout = syncVrUi;
+async function openVrMode(startNew = false) {
+  await lunettes.enable({ calibrating: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));   // (stéréo = 2 rendus/image : garde le jeu fluide)
   G.cam = 1;
-  startShift();
-  hud.toast('Lunettes : penche la tête pour tourner, regarde en bas pour freiner, touche l’écran pour t’arrêter.', 6);
+  if (startNew || G.state === 'menu') startShift();
+  else { G.state = 'play'; show('play'); }
+  $('vr-cal').hidden = false;
+  syncVrUi();
+}
+function closeVrMode() {
+  $('vr-cal').hidden = true;
+  lunettes.disable();
+  applyQuality();
+  G.cam = 0;
+  if (G.state === 'play') pause();
+}
+$('btn-vr').addEventListener('click', () => openVrMode(true));
+$('btn-vr-cal')?.addEventListener('click', () => openVrMode(false));
+$('vr-go')?.addEventListener('click', () => {
+  $('vr-cal').hidden = true;
+  lunettes.setCalibrating(false);
+  if (G.state === 'pause') resume();
 });
-lunettes.onExit = () => { G.cam = 0; if (G.state === 'play') pause(); };
+$('vr-recenter')?.addEventListener('click', () => lunettes.recenter());
+$('vr-close')?.addEventListener('click', closeVrMode);
+$('vr-ipd-m')?.addEventListener('click', () => lunettes.setSetting('ipdScale', +(lunettes.ipdScale - 0.04).toFixed(2)));
+$('vr-ipd-p')?.addEventListener('click', () => lunettes.setSetting('ipdScale', +(lunettes.ipdScale + 0.04).toFixed(2)));
+$('vr-zoom-m')?.addEventListener('click', () => lunettes.setSetting('zoom', +(lunettes.zoom - 0.04).toFixed(2)));
+$('vr-zoom-p')?.addEventListener('click', () => lunettes.setSetting('zoom', +(lunettes.zoom + 0.04).toFixed(2)));
+const stepDepth = dir => {
+  let idx = VR_DEPTHS.findIndex(d => Math.abs(d[0] - lunettes.eyeSep) < 0.008);
+  if (idx < 0) idx = 2;
+  idx = Math.max(0, Math.min(VR_DEPTHS.length - 1, idx + dir));
+  lunettes.setSetting('eyeSep', VR_DEPTHS[idx][0]);
+};
+$('vr-3d-m')?.addEventListener('click', () => stepDepth(-1));
+$('vr-3d-p')?.addEventListener('click', () => stepDepth(1));
+lunettes.onExit = () => { $('vr-cal').hidden = true; applyQuality(); G.cam = 0; if (G.state === 'play') pause(); };
 drawMenu();
 $('rule-versement').textContent = fmtFC(VERSEMENT);
 $('btn-again').addEventListener('click', startShift);
@@ -2774,38 +2822,47 @@ function updateCamera(dt, snap = false) {
     beside(-e.z, e.x, taxi.y + e.y + bob, tmpPos);
     beside(-l.z, l.x, taxi.y + l.y + bob * 0.5, tmpLook);
   } else {
-    // à la place du chauffeur (à gauche dans la berline et le 207) ; la tête bouge un peu avec la route, et le choc la secoue
+    // à la place du chauffeur (à gauche dans la berline et le 207) ; en VR on coupe les secousses artificielles (confort anti-nausée)
     const e = cockpit.eye, h = taxi.heading, sp = Math.abs(taxi.speed);
     G.bob = (G.bob ?? 0) + dt * (2 + sp * 0.5);
-    const shake = (G.shake = Math.max(0, (G.shake ?? 0) - dt * 2)) * 0.06;
-    const bob = Math.sin(G.bob * 2.3) * 0.006 * Math.min(1, sp / 8) + (Math.random() - 0.5) * shake;
+    const shake = lunettes.on ? 0 : (G.shake = Math.max(0, (G.shake ?? 0) - dt * 2)) * 0.06;
+    const bob = lunettes.on ? 0 : Math.sin(G.bob * 2.3) * 0.006 * Math.min(1, sp / 8) + (Math.random() - 0.5) * shake;
     const ox = Math.cos(h) * e.x, oz = Math.sin(h) * e.x, fx = Math.sin(h) * -e.z, fz = -Math.cos(h) * -e.z;
     const k0 = stretchX(taxi.x, taxi.z);
     worldVec(taxi.x + (ox + fx) / k0, e.y + taxi.y + bob, taxi.z + oz + fz, tmpPos);
-    worldVec(taxi.x + (ox + fx) / k0 + Math.sin(h) * 20 / k0, e.y - 0.25 + aheadH(20) + bob * 0.5, taxi.z + oz + fz - Math.cos(h) * 20, tmpLook);
+    worldVec(taxi.x + (ox + fx) / k0 + Math.sin(h) * 20 / k0, e.y - (lunettes.on ? 0 : 0.25) + aheadH(20) + bob * 0.5, taxi.z + oz + fz - Math.cos(h) * 20, tmpLook);
   }
   A.group.localToWorld(tmpPos);
   A.group.localToWorld(tmpLook);
   const inside = G.cam === 1 && G.state !== 'menu' && !G.accident && !G.wewaFall;
   cockpit.group.visible = inside;
-  if (inside) cockpit.spin.rotation.z = -taxi.steer * (VEH_ID === 'moto' ? 0.5 : 2.2);
-  // (le plan proche : 0,3 m seulement pour la vue intérieure ; plus loin dehors, la profondeur est plus précise et les surfaces lointaines ne scintillent plus sur téléphone)
+  if (inside) {
+    cockpit.spin.rotation.z = -taxi.steer * (VEH_ID === 'moto' ? 0.5 : 2.2);
+    const hClk = Math.floor(G.minutes / 60) % 24, mClk = Math.floor(G.minutes % 60);
+    const clk = `${String(hClk).padStart(2, '0')}:${String(mClk).padStart(2, '0')}`;
+    cockpit.updateHud?.({ show: lunettes.on, speed: taxi.speed, fuel: G.fuel, cash: G.cash, clock: clk, info: passengers.prompt || G.terminus || '', stopped: lunettes.stopped });
+  }
+  // (le plan proche : 0,15 m en VR/cabine ; 0,3 m en vue intérieure ; 1,2 m dehors)
   const cab = G.cam === 2 && !!cabin.eye && G.state !== 'menu' && !G.accident && !G.wewaFall;
-  const fov = inside ? 74 : cab ? 84 : innerWidth / innerHeight < 1.3 ? 72 : 62, near = inside ? 0.3 : cab ? 0.15 : 1.2;
+  const fov = inside ? 74 : cab ? 84 : innerWidth / innerHeight < 1.3 ? 72 : 62, near = lunettes.on ? 0.15 : inside ? 0.3 : cab ? 0.15 : 1.2;
   if (camera.fov !== fov || camera.near !== near) { camera.fov = fov; camera.near = near; camera.updateProjectionMatrix(); }
-  const k = snap ? 1 : 1 - Math.exp(-dt * (G.cam === 0 ? 6 : 30));
+  const k = snap || lunettes.on ? 1 : 1 - Math.exp(-dt * (G.cam === 0 ? 6 : 30));
   camPos.lerp(tmpPos, k);
   camLook.lerp(tmpLook, k);
-  camera.position.copy(camPos);
-  camera.lookAt(camLook);
+  camRig.position.copy(camPos);
+  camRig.lookAt(camLook);
+  camera.position.set(0, 0, 0);
   if (lunettes.on && G.cam === 1 && !G.accident) lunettes.applyHead(camera);
+  else camera.quaternion.identity();
 }
 
 function menuCamera(t) {
   const a = t * 0.12 + 0.6;
-  worldVec(taxi.x + Math.sin(a) * 11, 4, taxi.z + Math.cos(a) * 11, camera.position);
-  camera.lookAt(worldVec(taxi.x, 1, taxi.z, tmpLook));
-  camPos.copy(camera.position);
+  worldVec(taxi.x + Math.sin(a) * 11, 4, taxi.z + Math.cos(a) * 11, camRig.position);
+  camRig.lookAt(worldVec(taxi.x, 1, taxi.z, tmpLook));
+  camera.position.set(0, 0, 0);
+  camera.quaternion.identity();
+  camPos.copy(camRig.position);
   camLook.copy(tmpLook);
 }
 
@@ -2986,6 +3043,6 @@ setTimeout(() => {
   }
 }, 500);
 
-// Initialisation
-goStep(1);
+// Initialisation : si arrivé depuis le bouton VR du menu (?vr=1), ouvrir directement l'étape 4 (bouton lunettes VR prêt en un clic)
+goStep(PARAMS.get('vr') === '1' ? 4 : 1);
 
