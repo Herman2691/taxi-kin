@@ -68,10 +68,9 @@ BONES.forEach(([, parent, off], i) => {
 });
 
 __mark('personnages : début du chargement des modèles');
-const _gltfLoader = new GLTFLoader();
 await Promise.all(MODEL_FILES.map(async name => {
   try {
-    const g = await _gltfLoader.loadAsync(new URL(`../data/personnages/${name}.glb`, import.meta.url).href);
+    const g = await new GLTFLoader().loadAsync(new URL(`../data/personnages/${name}.glb`, import.meta.url).href);
     MODELS[name] = readModel(name, g);
   } catch (e) { console.warn('personnage', name, 'absent, ancien corps gardé', e); }
 }));
@@ -687,18 +686,12 @@ export function solveGrip(ch, target) {
   F.add(hand);
   ch.mesh.updateMatrixWorld(true);
   let best = null;
-  const evalAt = (x, z, f) => {
+  for (let x = -0.4; x <= 2.2; x += 0.05) for (let z = -1.3; z <= 0.7; z += 0.05) for (let f = 0; f <= 2.4; f += 0.05) {
     U.rotation.set(x, 0, z); F.rotation.set(f, 0, 0);
     U.updateMatrixWorld(true);
     const cost = v.setFromMatrixPosition(hand.matrixWorld).distanceTo(T) + 0.03 * (Math.abs(z + 0.3) + Math.abs(f - 1.1));
     if (!best || cost < best[0]) best = [cost, x, z, f];
-  };
-  for (let x = -0.4; x <= 2.2; x += 0.25) for (let z = -1.3; z <= 0.7; z += 0.25) for (let f = 0; f <= 2.4; f += 0.25) evalAt(x, z, f);
-  const [, bx, bz, bf] = best;
-  const x0 = Math.max(-0.4, bx - 0.25), x1 = Math.min(2.2, bx + 0.25);
-  const z0 = Math.max(-1.3, bz - 0.25), z1 = Math.min(0.7, bz + 0.25);
-  const f0 = Math.max(0, bf - 0.25), f1 = Math.min(2.4, bf + 0.25);
-  for (let x = x0; x <= x1 + 1e-6; x += 0.05) for (let z = z0; z <= z1 + 1e-6; z += 0.05) for (let f = f0; f <= f1 + 1e-6; f += 0.05) evalAt(x, z, f);
+  }
   F.remove(hand);
   U.rotation.set(0, 0, 0); F.rotation.set(0, 0, 0);
   return best.slice(1);
@@ -747,18 +740,13 @@ export function bakeStatic(o, mode, origin, farDist = 14) {
     const hand = new THREE.Object3D(); hand.position.set(0, -0.37, 0); ch.b['foreArm.L'].add(hand);
     const g = new THREE.Vector3(...o.ride.grip), v = new THREE.Vector3();
     let best = null;
-    const evalArm = (au, af, sp) => {
+    for (let au = 0.2; au < 1.5; au += 0.05) for (let af = -0.3; af < 1.2; af += 0.05) for (const sp of [0.1, 0.2, 0.3, 0.4]) {
       o.ride.arm = [au, af, sp];
       ch.pose(mode, 0);
       ch.mesh.updateMatrixWorld(true);
       const e = hand.getWorldPosition(v).distanceTo(g);
       if (!best || e < best[0]) best = [e, au, af, sp];
-    };
-    for (let au = 0.2; au < 1.5; au += 0.2) for (let af = -0.3; af < 1.2; af += 0.2) for (const sp of [0.1, 0.2, 0.3, 0.4]) evalArm(au, af, sp);
-    const [, bau, baf] = best;
-    const au0 = Math.max(0.2, bau - 0.2), au1 = Math.min(1.49, bau + 0.2);
-    const af0 = Math.max(-0.3, baf - 0.2), af1 = Math.min(1.19, baf + 0.2);
-    for (let au = au0; au <= au1 + 1e-6; au += 0.05) for (let af = af0; af <= af1 + 1e-6; af += 0.05) for (const sp of [0.1, 0.2, 0.3, 0.4]) evalArm(au, af, sp);
+    }
     o.ride.arm = best.slice(1);
     ch.b['foreArm.L'].remove(hand);
   }
@@ -786,63 +774,21 @@ export function bakeStatic(o, mode, origin, farDist = 14) {
 }
 const q2 = new THREE.Vector3();
 
-const _bmTmp = new THREE.Matrix4(), _nmTmp = new THREE.Matrix3();
-let _bmArr = new Float32Array(16 * 16);
-
-/** Positions et normales (repère du monde) d'un SkinnedMesh dans sa pose actuelle (matrices d'os précalculées). */
+/** Positions et normales (repère du monde) d'un SkinnedMesh dans sa pose actuelle. */
 function skinnedWorld(sm) {
   sm.skeleton.update();
-  const bones = sm.skeleton.bones, invs = sm.skeleton.boneInverses, nb = bones.length;
-  if (_bmArr.length < nb * 16) _bmArr = new Float32Array(nb * 16);
-  const bind = sm.bindMatrix, bindInv = sm.bindMatrixInverse;
-  for (let b = 0; b < nb; b++) {
-    _bmTmp.multiplyMatrices(bones[b].matrixWorld, invs[b]).premultiply(bindInv).multiply(bind);
-    _bmTmp.toArray(_bmArr, b * 16);
-  }
-  const wm = sm.matrixWorld.elements;
-  const w00 = wm[0], w01 = wm[4], w02 = wm[8], w03 = wm[12];
-  const w10 = wm[1], w11 = wm[5], w12 = wm[9], w13 = wm[13];
-  const w20 = wm[2], w21 = wm[6], w22 = wm[10], w23 = wm[14];
-  _nmTmp.getNormalMatrix(sm.matrixWorld);
-  const ne = _nmTmp.elements;
-  const n00 = ne[0], n01 = ne[3], n02 = ne[6];
-  const n10 = ne[1], n11 = ne[4], n12 = ne[7];
-  const n20 = ne[2], n21 = ne[5], n22 = ne[8];
-
-  const src = sm.geometry;
-  const pArr = src.attributes.position.array, nArr = src.attributes.normal.array;
-  const siArr = src.attributes.skinIndex.array, swArr = src.attributes.skinWeight.array;
-  const n = src.attributes.position.count, pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
-  const bm = _bmArr;
-
-  for (let i = 0, i3 = 0, i4 = 0; i < n; i++, i3 += 3, i4 += 4) {
-    const px = pArr[i3], py = pArr[i3 + 1], pz = pArr[i3 + 2];
-    const nx = nArr[i3], ny = nArr[i3 + 1], nz = nArr[i3 + 2];
-    let sx = 0, sy = 0, sz = 0, rnx = 0, rny = 0, rnz = 0;
-    for (let k = 0; k < 4; k++) {
-      const w = swArr[i4 + k];
-      if (!w) continue;
-      const o = siArr[i4 + k] * 16;
-      sx += w * (bm[o] * px + bm[o + 4] * py + bm[o + 8] * pz + bm[o + 12]);
-      sy += w * (bm[o + 1] * px + bm[o + 5] * py + bm[o + 9] * pz + bm[o + 13]);
-      sz += w * (bm[o + 2] * px + bm[o + 6] * py + bm[o + 10] * pz + bm[o + 14]);
-      rnx += w * (bm[o] * nx + bm[o + 4] * ny + bm[o + 8] * nz);
-      rny += w * (bm[o + 1] * nx + bm[o + 5] * ny + bm[o + 9] * nz);
-      rnz += w * (bm[o + 2] * nx + bm[o + 6] * ny + bm[o + 10] * nz);
-    }
-    pos[i3] = w00 * sx + w01 * sy + w02 * sz + w03;
-    pos[i3 + 1] = w10 * sx + w11 * sy + w12 * sz + w13;
-    pos[i3 + 2] = w20 * sx + w21 * sy + w22 * sz + w23;
-    const rl = Math.hypot(rnx, rny, rnz) || 1;
-    rnx /= rl; rny /= rl; rnz /= rl;
-    let wnx = n00 * rnx + n01 * rny + n02 * rnz;
-    let wny = n10 * rnx + n11 * rny + n12 * rnz;
-    let wnz = n20 * rnx + n21 * rny + n22 * rnz;
-    const wl = Math.hypot(wnx, wny, wnz) || 1;
-    nor[i3] = wnx / wl; nor[i3 + 1] = wny / wl; nor[i3 + 2] = wnz / wl;
+  const src = sm.geometry, n = src.attributes.position.count, pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+  const nm = new THREE.Matrix3().getNormalMatrix(sm.matrixWorld);
+  for (let i = 0; i < n; i++) {
+    sm.getVertexPosition(i, _sp);                                          // (pose appliquée, repère du maillage)
+    q2.fromBufferAttribute(src.attributes.position, i).addScaledVector(_sn.fromBufferAttribute(src.attributes.normal, i), 0.02);
+    sm.applyBoneTransform(i, q2);                                          // même point décalé le long de la normale : la différence donne la normale posée
+    q2.sub(_sp).normalize().applyMatrix3(nm).normalize().toArray(nor, i * 3);
+    _sp.applyMatrix4(sm.matrixWorld).toArray(pos, i * 3);
   }
   return { pos, nor };
 }
+const _sp = new THREE.Vector3(), _sn = new THREE.Vector3();
 
 // ---------- Figures fixes du décor avec les modèles MakeHuman ----------
 // Les foules, élèves et postes de police sont fusionnés dans le décor (un seul matériau, des couleurs par sommet) : on pose le squelette une fois,
@@ -859,20 +805,6 @@ function atlasPixels(M) {
   return _atlas[M.name];
 }
 const _lin = new Float32Array(256).map((_, i) => Math.pow(i / 255, 2.2));
-function bakeTexColors(M) {
-  if (!M._bakeTex) {
-    const A = atlasPixels(M), uv = M.geos[2].attributes.uv, n = uv.count, out = new Float32Array(n * 3);
-    const ua = uv.array;
-    for (let i = 0, i2 = 0, i3 = 0; i < n; i++, i2 += 2, i3 += 3) {
-      const px = Math.min(A.w - 1, Math.max(0, Math.floor(ua[i2] * A.w)));
-      const py = Math.min(A.h - 1, Math.max(0, Math.floor(ua[i2 + 1] * A.h)));
-      const k = (py * A.w + px) * 4;
-      out[i3] = _lin[A.d[k]]; out[i3 + 1] = _lin[A.d[k + 1]]; out[i3 + 2] = _lin[A.d[k + 2]];
-    }
-    M._bakeTex = out;
-  }
-  return M._bakeTex;
-}
 function bakeModelled(builder, o, mode, x, z, ry, t) {
   const M = MODELS[o.model];
   let P = _poser[o.model];
@@ -893,10 +825,20 @@ function bakeModelled(builder, o, mode, x, z, ry, t) {
   ch.mesh.scale.set(h * (1 + (g - 1) * 0.7), h, h * (1 + (g - 1) * 0.5));
   applyPose(ch.b, mode, t, 1, o);
   ch.mesh.updateMatrixWorld(true);
-  const src = sm.geometry, { pos, nor } = skinnedWorld(sm);
-  const zc = zoneColors(M.geos[2].attributes._zone, o, M).array, bt = bakeTexColors(M), col = new Float32Array(pos.length);
-  for (let i = 0; i < col.length; i++) col[i] = zc[i] * bt[i];
-  builder.addColored(pos, nor, col, src.index?.array);
+  const src = sm.geometry, { pos, nor } = skinnedWorld(sm), n = pos.length / 3;
+  const zc = zoneColors(M.geos[2].attributes._zone, o, M).array, A = atlasPixels(M), uv = src.attributes.uv, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const px = Math.min(A.w - 1, Math.max(0, Math.floor(uv.getX(i) * A.w))), py = Math.min(A.h - 1, Math.max(0, Math.floor(uv.getY(i) * A.h))), k = (py * A.w + px) * 4;
+    col[i * 3] = zc[i * 3] * _lin[A.d[k]]; col[i * 3 + 1] = zc[i * 3 + 1] * _lin[A.d[k + 1]]; col[i * 3 + 2] = zc[i * 3 + 2] * _lin[A.d[k + 2]];
+  }
+  let geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(src.index);
+  geo = nonIndexed(geo);
+  builder.parts.push(geo);
   for (const p of parts(o, true)) {                                         // béret, gilet, foulard... : pièces rigides posées sur leur os
     p.geo.applyMatrix4(_m.copy(ch.bones[p.bone].matrixWorld));
     builder.addRaw(p.geo, p.color);

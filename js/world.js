@@ -1029,7 +1029,7 @@ const onBpStub = (x, z) => !!BP_R1 && (onRibbon(BP_R1, x, z) || onRibbon(BP_R2, 
 const SEC_R = LIM && IS_TOWER ? (() => {
   const out = [], rad = a => a * Math.PI / 180, zPb1 = ECH.pb0 - 50;
   const pbR = [[ROAD_EDGE + 4, ECH.pb0], [ROAD_EDGE + 4.5, ECH.pb0 - 16], [PB_X, zPb1 + 18], [PB_X, zPb1]];
-  out.push(ribbon([[ROAD_EDGE - 1, ECH.pb0 + 6], ...Array.from({ length: 13 }, (_, i) => bez(pbR, i / 12))], 5));
+  out.push(ribbon([[ROAD_EDGE - 1, ECH.pb0 + 6], ...Array.from({ length: 13 }, (_, i) => bez(pbR, i / 12))], 8));   // (large : pas de mur invisible entre la chaussée et le petit boulevard dessiné)
   out.push(ribbon([[PB_X, zPb1], [PB_X, Z16 - 5.5]], 4.4));
   out.push(ribbon(Array.from({ length: 13 }, (_, i) => bez([[PB_X, Z16 - 5.5], [PB_X, Z16 - 21.5], [LIM_PB_X, Z16 - 34.5], [LIM_PB_X, Z16 - 50.5]], i / 12)), 4.4));
   out.push(ribbon([[-(ROAD_EDGE - 1), ECH.pbL + 6], ...Array.from({ length: 13 }, (_, i) => bez(PBL_PTS, i / 12))], 5));

@@ -24,19 +24,7 @@ import { ROUTES, CURRENT, ITINERAIRES, VEHICULES, COURSES } from './routes.js';
 import { THANKS } from './credits.js';
 // Mesure du chargement (adresse + ?mesure) : temps depuis le début de la navigation, dans la console (lignes « MESURE »)
 const MESURE = new URLSearchParams(location.search).has('mesure');
-let mesureBox = null;
-const mark = n => {
-  if (!MESURE) return;
-  const ligne = `MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`;
-  console.log(ligne);
-  // Affichage à l'écran (téléphone : pas de console) : on peut en prendre une capture
-  if (!mesureBox && document.body) {
-    mesureBox = document.createElement('pre');
-    mesureBox.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;margin:0;padding:6px;max-width:100vw;max-height:60vh;overflow:auto;background:rgba(0,0,0,.8);color:#7f7;font:10px/1.25 monospace;pointer-events:none';
-    document.body.appendChild(mesureBox);
-  }
-  if (mesureBox) { mesureBox.textContent += ligne + '\n'; mesureBox.scrollTop = 1e9; }
-};
+const mark = n => { if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 mark('fichiers de code chargés et évalués (world.js compris)');
 
 // Fonctions de la route où roule le taxi : celles du trajet principal, ou celles du trajet attaché (ATT) quand le taxi y
@@ -187,22 +175,6 @@ const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 3600);
 globalThis.TAXIKIN_KV = !!CURRENT.attachKv && want('kv');   // (world.js : le décor du carrefour Kasa-Vubu laisse la place à la vraie avenue)
 globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les entrées « Rocade Sud-Est » laissent la place à la vraie route)
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
-// Précharge en parallèle tous les modules des routes attachées nécessaires pendant la construction de la route principale
-const ROAD_MODS = new Map();
-const prefetchRoad = route => {
-  if (!ROAD_MODS.has(route)) {
-    const q = `?route=${route}`;
-    ROAD_MODS.set(route, Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`))));
-  }
-  return ROAD_MODS.get(route);
-};
-if (CURRENT.attach && want('30juin')) prefetchRoad(CURRENT.attach.route);
-if (CURRENT.attachPL && want('pl')) prefetchRoad(CURRENT.attachPL.route);
-if (CURRENT.attachUni && want('uni')) prefetchRoad(CURRENT.attachUni.route);
-if (CURRENT.attachBp && want('bp')) prefetchRoad(CURRENT.attachBp.route);
-if (CURRENT.attachKv && want('kv')) prefetchRoad(CURRENT.attachKv.route);
-if (CURRENT.attachRoc && want('roc')) prefetchRoad(CURRENT.attachRoc.route);
-if (globalThis.TAXIKIN_MM) prefetchRoad(CURRENT.attachMm.route);
 mark('avant la construction de la ville');
 const world = W1.buildWorld(scene);
 mark('ville principale construite');
@@ -223,8 +195,9 @@ const ROAD1 = { W: W1, RT: RT1, group: scene, world, rho: 0, Hud, Traffic, Passe
 let ROAD2 = null, ROAD3 = null, ROAD4 = null, ROAD5 = null, ROAD6 = null, ROAD7 = null, ROAD8 = null, JOIN_W = null;
 /** Charge une autre copie des modules pour un trajet attaché et la construit dans un groupe de la scène. */
 async function loadRoad(route) {
+  const q = `?route=${route}`;
   mark(`route attachée ${route} : début`);
-  const [W, RT, T, P, L, H] = await prefetchRoad(route);
+  const [W, RT, T, P, L, H] = await Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`)));
   mark(`route attachée ${route} : fichiers chargés`);
   await new Promise(r => setTimeout(r, 0));
   const group = new THREE.Group();
@@ -563,10 +536,9 @@ const DAY = { urgent: 0 };                       // (partagé par la circulation
 // Le chargement du véhicule (taxi collectif) : partagé par les clients de toutes les routes, les clients restent à bord d'une route à l'autre
 const GROUP_MAX = { berline: 2, bus: 4, moto: 1, perso: 1, athlete: 1 };
 const BOARD = IT ? newBoard(VEH.places, VEH.fare, GROUP_MAX[VEH_ID]) : newBoard();
-/** Crée la circulation, les clients, les piétons et les lueurs d'une route à la demande (évite de tout construire au démarrage). */
-function ensureLife(r) {
-  if (!r || r.traffic) return;
-  mark(`vie de la route (${r.title}) : début`);
+for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
+  if (!r) continue;
+  mark('vie de la route : début');
   r.traffic = new r.Traffic(r.group);
   mark('  circulation créée');
   r.traffic.day = DAY;
@@ -581,10 +553,8 @@ function ensureLife(r) {
   r.life.traffic = r.traffic;                   // (l'auteur, 13/11 : les piétons attendent les véhicules, contournent les clients)
   r.life.passengers = r.passengers;
   r.qlife = new QuartierLife(r.group, r.W.quartierPaths?.() ?? [], r.W.quartierRoads?.() ?? []);   // (l'auteur, 14/11 : les gens, les motos et les voitures des quartiers)
-  if (r !== ROAD1) r.passengers.reset();
 }
-ensureLife(ROAD1);
-mark('vie de la route principale créée');
+mark('vie de toutes les routes créée');
 let A = ROAD1;                                   // route où roule le taxi
 let { traffic, passengers, life } = ROAD1;
 const input = new Input();
@@ -912,7 +882,13 @@ function startShift() {
   if (A !== ROAD1) switchRoad(ROAD1, 0, 0, 0, true);
   Object.assign(taxi, { ...startCoords(), heading: 0, speed: 0, steer: 0, level: null, y: 0 });
   flyWarned.clear();
-  for (const r of [ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) r?.passengers?.reset();
+  ROAD2?.passengers.reset();
+  ROAD3?.passengers.reset();
+  ROAD4?.passengers.reset();
+  ROAD5?.passengers.reset();
+  ROAD6?.passengers.reset();
+  ROAD7?.passengers.reset();
+  ROAD8?.passengers.reset();
   // Test : ?att=5000 démarre sur le trajet attaché (Boulevard du 30 Juin), à s = 5 000 m, vers la Gare
   const att = Number(new URLSearchParams(location.search).get('att'));
   if (ROAD2 && att > 0) switchRoad(ROAD2, LANE_R, -ROAD2.RT.toGame(att), 0);
@@ -1791,7 +1767,7 @@ function handleTraffic(dt) {
   for (const other of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
     if (!other || other === A || other.nearZ === null || other.nearZ === undefined) continue;
     const proxy = { x: 999, z: other.nearZ, speed: 0, heading: 0, bw: 2, bl: 4, level: 'pont', core: true };
-    if (!other.nearActive) { ensureLife(other); other.nearActive = true; other.traffic.reset(proxy); }
+    if (!other.nearActive) { other.nearActive = true; other.traffic.reset(proxy); }
     other.traffic.update(dt, proxy, G.time);
   }
   const hit = traffic.update(dt, taxi, G.time);
@@ -2367,7 +2343,6 @@ function motionHeading(road, x, z, h) {
   return Math.atan2(bx.x - a.x, -(bx.z - a.z)) - road.rho;
 }
 function switchRoad(to, x, z, heading, quiet = false, name = null) {
-  ensureLife(to);
   if (to !== A) A.life?.hideAll?.();            // (l'auteur, 08/11 : les piétons de la route quittée restaient figés sur la chaussée)
   A = to;
   ({ FINISH_LEN, FUELS, FLYOVERS, inFlyover, SIGNALS, signalState, blockedAt, roadAxisAt, nextLevel, surfaceH,
