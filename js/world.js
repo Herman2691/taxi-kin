@@ -10,6 +10,7 @@ import { Builder, VC_MAT, createMinibus, createHatchback, createMoto, createCity
 import { bakeCharacter, outfit, Character } from './characters.js';
 import { toGame, GAME_LEN, bendGeometry, bendRigid, place, worldVec, setSpread, realX, toWorld, frameAt, extYaw, EXT_ARCS } from './route.js';
 import { CURRENT as R, ROUTES, ATTACHED } from './routes.js';
+import { MOBILE } from './memoire.js';
 const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 __mark('world.js : début');
 
@@ -1438,11 +1439,15 @@ const LIM_OSM = R.limete?.buildings
 
 function canvasTexture(w, h, draw) {
   const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  draw(c.getContext('2d'), w, h);
+  // téléphone : grandes images dessinées à la moitié de la taille (4 fois moins de mémoire), le dessin s'adapte tout seul
+  const k = MOBILE && w >= 512 ? 0.5 : 1;
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const cx = c.getContext('2d');
+  if (k !== 1) cx.scale(k, k);
+  draw(cx, w, h);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
+  t.anisotropy = MOBILE ? 2 : 8;
   return t;
 }
 

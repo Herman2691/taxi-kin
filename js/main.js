@@ -2,7 +2,7 @@
 import { Radio } from './radio.js';
 import { buildCockpit } from './cockpit.js';
 import { Lunettes } from './lunettes.js';
-import { releaseCpuCopies } from './memoire.js';
+import { releaseCpuCopies, watchScene } from './memoire.js';
 import * as THREE from 'three';
 import * as W1 from './world.js';
 import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue, setReceveurLive, RECEVEUR_POSTE } from './models.js';
@@ -177,6 +177,7 @@ globalThis.TAXIKIN_KV = !!CURRENT.attachKv && want('kv');   // (world.js : le d�
 globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les entrées « Rocade Sud-Est » laissent la place à la vraie route)
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
 mark('avant la construction de la ville');
+watchScene(scene);                               // (téléphone : sommets du décor réduits dès qu'ils sont ajoutés, voir memoire.js)
 const world = W1.buildWorld(scene);
 releaseCpuCopies(scene);                         // (téléphone : libère la copie mémoire des sommets du décor, voir memoire.js)
 mark('ville principale construite');
@@ -204,6 +205,7 @@ async function loadRoad(route) {
   await new Promise(r => setTimeout(r, 0));
   const group = new THREE.Group();
   scene.add(group);
+  watchScene(group);
   const built = W.buildWorld(group, { env: false, fog: scene.fog });
   releaseCpuCopies(group);
   mark(`route attachée ${route} : construite`);
