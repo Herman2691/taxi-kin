@@ -15,7 +15,7 @@ export function buildCockpit(id) {
     const spin = new THREE.Group();
     group.add(spin);
     group.visible = false;
-    return { group, spin, eye, wipers: null, updateHud: () => {} };
+    return { group, spin, eye, wipers: null };
   }
   if (id === 'moto') {
     eye = { x: 0, y: 1.5, z: -0.1 };
@@ -97,61 +97,6 @@ export function buildCockpit(id) {
     wipers.visible = false;
     group.add(wipers);
   }
-  // Écran 3D de tableau de bord pour le mode VR (lisible des deux yeux sans gêner la route)
-  const hudC = document.createElement('canvas');
-  hudC.width = 320; hudC.height = 128;
-  const hudCtx = hudC.getContext('2d');
-  const hudTex = new THREE.CanvasTexture(hudC);
-  hudTex.colorSpace = THREE.SRGBColorSpace;
-  const hudMat = new THREE.MeshBasicMaterial({ map: hudTex, transparent: true, depthTest: false });
-  const hudW = id === 'moto' ? 0.24 : 0.34, hudH = hudW * 0.4;
-  const hudMesh = new THREE.Mesh(new THREE.PlaneGeometry(hudW, hudH), hudMat);
-  if (id === 'moto') { hudMesh.position.set(0, -0.26, -0.82); hudMesh.rotation.x = -0.25; }
-  else { hudMesh.position.set(0, -0.34, -0.82); hudMesh.rotation.x = -0.18; }
-  hudMesh.renderOrder = 15;
-  hudMesh.frustumCulled = false;
-  hudMesh.visible = false;
-  group.add(hudMesh);
-  let lastKey = '';
-  const updateHud = ({ show = false, speed = 0, fuel = 100, cash = 0, clock = '06:00', info = '', stopped = false } = {}) => {
-    hudMesh.visible = show;
-    if (!show) return;
-    const kmh = Math.round(Math.abs(speed) * 3.6);
-    const f = Math.round(fuel);
-    const key = `${kmh}|${f}|${Math.round(cash)}|${clock}|${stopped ? 1 : 0}|${info}`;
-    if (key === lastKey) return;
-    lastKey = key;
-    const x = hudCtx;
-    x.clearRect(0, 0, 320, 128);
-    x.fillStyle = 'rgba(12, 18, 28, 0.84)';
-    x.fillRect(0, 0, 320, 128);
-    x.strokeStyle = stopped ? '#ff5a52' : '#f5c400';
-    x.lineWidth = 4;
-    x.strokeRect(2, 2, 316, 124);
-    x.fillStyle = '#fff';
-    x.font = 'bold 42px system-ui, sans-serif';
-    x.textAlign = 'left'; x.textBaseline = 'top';
-    x.fillText(`${kmh}`, 14, 10);
-    x.font = '600 16px system-ui, sans-serif';
-    x.fillStyle = '#b9c6d6';
-    x.fillText('km/h', 96, 30);
-    x.textAlign = 'right';
-    x.fillStyle = '#f5c400';
-    x.font = 'bold 22px system-ui, sans-serif';
-    x.fillText(`${Math.round(cash).toLocaleString('fr-FR')} FC`, 306, 12);
-    x.fillStyle = '#cbd5e1';
-    x.font = '600 17px system-ui, sans-serif';
-    x.fillText(`${clock} · ${stopped ? 'ARRÊTÉ' : 'EN ROUTE'}`, 306, 40);
-    x.fillStyle = 'rgba(255,255,255,0.18)';
-    x.fillRect(14, 68, 292, 12);
-    x.fillStyle = f < 20 ? '#ff5252' : '#3ccf6e';
-    x.fillRect(14, 68, Math.max(0, Math.min(292, 2.92 * f)), 12);
-    x.textAlign = 'left';
-    x.fillStyle = '#fff';
-    x.font = '600 19px system-ui, sans-serif';
-    x.fillText((info || 'Regarde droit devant · Penche la tête pour tourner').slice(0, 32), 14, 92, 292);
-    hudTex.needsUpdate = true;
-  };
   group.visible = false;
-  return { group, spin, eye, wipers, updateHud };
+  return { group, spin, eye, wipers };
 }

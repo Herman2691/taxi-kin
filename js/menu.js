@@ -217,15 +217,14 @@ function drawMenu() {
 }
 
 // ---------- Départ : le jeu se charge alors, avec exactement l'itinéraire, la variante, le sens et le véhicule choisis ----------
-function go(vrMode = false) {
+function go(sansDepart = false) {
   const url = new URL('jeu.html', location.href);
   url.searchParams.set('route', IT.route);
   url.searchParams.set('trajet', IT.id);
   if (IT.variant) url.searchParams.set('var', IT.variant);
   url.searchParams.set('sens', SENS);
   url.searchParams.set('veh', VEH_ID);
-  if (vrMode) url.searchParams.set('vr', '1');
-  else url.searchParams.set('autostart', '1');
+  if (!sansDepart) url.searchParams.set('autostart', '1');       // (sinon : le jeu s'ouvre sur son menu, pour le mode lunettes VR qui demande un geste de l'utilisateur)
   store('quality', $('sel-quality').value);
   store('radioOn', $('sel-radio').value);
   $('btn-start').disabled = true;

@@ -541,20 +541,8 @@ h3.step { margin: 12px 0 6px; font-size: 14px; color: var(--yellow); letter-spac
 #songs-list li button.del { background: transparent; border: 0; color: var(--muted); font-size: 15px; padding: 4px 6px; }
 .songs-add { display: block; text-align: center; margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px dashed rgba(245,196,0,.6); color: var(--yellow); font-weight: 800; cursor: pointer; }
 .songs-note { font-size: 11px; color: var(--muted); margin: 8px 0 0; }
-/* Mode lunettes : rien par-dessus l'image des deux yeux (sauf l'outil de calibrage #vr-cal) */
+/* Mode lunettes : rien par-dessus l'image des deux yeux */
 body.vr #hud, body.vr #bubbles, body.vr #touch, body.vr #choice, body.vr #songs, body.vr #countdown { display: none !important; }
-#vr-cal { position: fixed; inset: 0; z-index: 95; pointer-events: none; color: #fff; font: 600 13px/1.3 system-ui, sans-serif; }
-#vr-cal .vr-mid { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: rgba(245, 196, 0, .75); }
-#vr-cal .vr-ret { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 34px; height: 34px; border: 2px solid rgba(255,255,255,.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #f5c400; text-shadow: 0 1px 4px #000; }
-#vr-cal .vr-bar { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: min(96vw, 680px); background: rgba(12, 18, 28, .92); border: 1px solid rgba(245, 196, 0, .55); border-radius: 14px; padding: 8px 12px; pointer-events: auto; display: flex; flex-direction: column; gap: 6px; }
-#vr-cal .vr-title { text-align: center; font-size: 12px; color: #f5c400; }
-#vr-cal .vr-ctrls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-#vr-cal .vr-grp { display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,.07); padding: 4px 8px; border-radius: 10px; }
-#vr-cal .vr-grp span { font-size: 11px; color: #cbd5e1; }
-#vr-cal .vr-grp b { min-width: 44px; text-align: center; font-size: 12px; color: #fff; }
-#vr-cal .vr-grp button { width: 28px; height: 28px; border-radius: 7px; border: 0; background: #f5c400; color: #111; font-weight: 900; font-size: 16px; cursor: pointer; }
-#vr-cal .vr-acts { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
-#vr-cal .vr-acts button { padding: 7px 14px; font-size: 13px; border-radius: 10px; width: auto; margin: 0; }
 
 /* Panneau de l'itinéraire, à gauche (l'auteur, 08/11) : le trajet, l'avenue où l'on est, les prochains lieux ; toucher pour le réduire */
 #itin {
