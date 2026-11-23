@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { outfit, bakeStatic, hasModel, Character, solveGrip } from './characters.js';
 import { nonIndexed } from './geo.js';
+import { MOBILE } from './memoire.js';
 const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 __mark('models.js : début');
 
@@ -27,6 +28,32 @@ function paint(geo, color) {
   return geo;
 }
 
+/** Téléphone : les pièces attendent leur fusion en octets (normales Int8, couleurs Uint8, sans UV) : 18 octets par sommet au lieu de 44 (tout le décor attend avant d'être fusionné). */
+function pack(g) {
+  if (!MOBILE) return g;
+  const n = g.attributes.normal, c = g.attributes.color;
+  if (n?.array instanceof Float32Array && !n.isInterleavedBufferAttribute) { const a = n.array, o = new Int8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = Math.round(a[i] * 127); g.setAttribute('normal', new THREE.BufferAttribute(o, 3, true)); }
+  if (c?.array instanceof Float32Array && !c.isInterleavedBufferAttribute) { const a = c.array, o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = Math.round(Math.min(1, Math.max(0, a[i])) * 255); g.setAttribute('color', new THREE.BufferAttribute(o, 3, true)); }
+  g.deleteAttribute('uv');
+  return g;
+}
+/** Remet les pièces au même format (nombres à virgule) avant la fusion : tout le reste du code attend ce format. */
+function unpack(parts) {
+  if (!MOBILE) return;
+  const anyUv = parts.some(g => g.attributes.uv);
+  for (const g of parts) {
+    for (const k of ['normal', 'color']) {
+      const a = g.attributes[k];
+      if (a && !(a.array instanceof Float32Array) && !a.isInterleavedBufferAttribute) {
+        const o = new Float32Array(a.array.length), d = k === 'normal' ? 127 : 255;
+        for (let i = 0; i < o.length; i++) o[i] = a.array[i] / d;
+        g.setAttribute(k, new THREE.BufferAttribute(o, a.itemSize));
+      }
+    }
+    if (anyUv && !g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+  }
+}
+
 /** Assemble des primitives colorées puis les fusionne. */
 export class Builder {
   constructor() { this.parts = []; }
@@ -34,14 +61,14 @@ export class Builder {
     _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz, 'YXZ')), ONE);
     const g = geo.index ? nonIndexed(geo) : geo;
     if (g !== geo) geo.dispose();
-    this.parts.push(paint(g.applyMatrix4(_m), color));
+    this.parts.push(pack(paint(g.applyMatrix4(_m), color)));
     return this;
   }
   /** Ajoute une géométrie déjà placée (sans transformation). */
   addRaw(geo, color) {
     const g = geo.index ? nonIndexed(geo) : geo;
     if (g !== geo) geo.dispose();
-    this.parts.push(paint(g, color));
+    this.parts.push(pack(paint(g, color)));
     return this;
   }
   // Les pièces longues sont subdivisées pour suivre les courbes du boulevard une fois pliées.
@@ -55,6 +82,7 @@ export class Builder {
     return this.add(new THREE.IcosahedronGeometry(r, r > 1.2 ? 1 : 0).scale(sx, sy, sz), color, x, y, z);
   }
   geometry() {
+    unpack(this.parts);
     const g = mergeGeometries(this.parts);
     this.parts.forEach(p => p.dispose());
     return g;
