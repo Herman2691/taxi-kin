@@ -37,8 +37,24 @@ export class Builder {
     this._no = null;
     this._c = null;
     this._uv = null;
+    this._extra = [];
+    const self = this;
+    // Compatibilité avec le code qui lit `b.parts.length`, fait `b.parts.push(geo)` ou itère `for (const g of lb.parts)` (world.js)
+    this.parts = {
+      get length() { return self._n + self._extra.length; },
+      push(g) { self._extra.push(g); },
+      [Symbol.iterator]() {
+        const list = self._n || self._extra.length ? [self.geometry()] : [];
+        return list[Symbol.iterator]();
+      },
+    };
   }
-  get empty() { return this._n === 0; }
+  get empty() { return this._n === 0 && this._extra.length === 0; }
+  _enableUV() {
+    if (this._keepUV) return;
+    this._keepUV = true;
+    if (this._cap) this._uv = new Float32Array(this._cap * 2);
+  }
   _reserve(add) {
     const need = this._n + add;
     if (need <= this._cap) return;
@@ -56,6 +72,7 @@ export class Builder {
     this._cap = cap;
   }
   add(geo, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
+    if (geo.type === 'PlaneGeometry' && geo.attributes.uv) this._enableUV();
     const pos = geo.attributes.position.array;
     const nor = geo.attributes.normal?.array;
     const uv = this._keepUV ? geo.attributes.uv?.array : null;
@@ -216,19 +233,33 @@ export class Builder {
     return this.add(new THREE.IcosahedronGeometry(r, r > 1.2 ? 1 : 0).scale(sx, sy, sz), color, x, y, z);
   }
   geometry() {
-    const g = new THREE.BufferGeometry(), n = this._n;
+    const n = this._n, extra = this._extra;
+    let g = null;
     if (n) {
+      g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(this._p.slice(0, n * 3), 3));
       g.setAttribute('normal', new THREE.BufferAttribute(this._no.slice(0, n * 3), 3));
       g.setAttribute('color', new THREE.BufferAttribute(this._c.slice(0, n * 3), 3));
       if (this._keepUV && this._uv) g.setAttribute('uv', new THREE.BufferAttribute(this._uv.slice(0, n * 2), 2));
-    } else {
+    }
+    this._p = this._no = this._c = this._uv = null;
+    this._n = this._cap = 0;
+    if (extra.length) {
+      const list = g ? [g, ...extra] : extra;
+      // Normalise les attributs avant mergeGeometries (les géométries de _extra peuvent ou non avoir uv)
+      const wantUV = list.every(q => !!q.attributes.uv);
+      if (!wantUV) for (const q of list) if (q.attributes.uv) q.deleteAttribute('uv');
+      const merged = mergeGeometries(list);
+      for (const q of list) q.dispose();
+      extra.length = 0;
+      return merged;
+    }
+    if (!g) {
+      g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
       g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(0), 3));
       g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(0), 3));
     }
-    this._p = this._no = this._c = this._uv = null;
-    this._n = this._cap = 0;
     return g;
   }
   mesh(mat = VC_MAT) {
