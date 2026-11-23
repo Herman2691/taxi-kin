@@ -61,6 +61,10 @@ const consigne = p => [
 
 module.exports = async (req, res) => {
   res.setHeader('cache-control', 'no-store');
+  // (le jeu est aussi sur GitHub Pages : il appelle cette fonction depuis une autre adresse)
+  res.setHeader('access-control-allow-origin', '*');
+  res.setHeader('access-control-allow-headers', 'content-type');
+  if (req.method === 'OPTIONS') return res.status(204).end();
   // Diagnostic : quelles clés le serveur voit (jamais leurs valeurs)
   if (req.method === 'GET') return res.status(200).json({ providers: PROVIDERS.map(p => ({ name: p.name, key: !!process.env[p.key] })) });
   if (req.method !== 'POST') return res.status(405).json({ text: null, error: 'POST seulement' });

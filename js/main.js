@@ -1432,6 +1432,43 @@ function clientVoices(dt) {
     G.talkCd = d ? d + 50 + Math.random() * 60 : 5;
     if (d && mock) say('Bino bato, bozali kosala makambo ! — Ah, vous les clients !', 'receveur', 3);
   }
+  aiRider(dt);
+}
+
+// ---------- Un client qui parle grâce à une IA (api/chat.js sur Vercel : Groq, Gemini, OpenRouter, Mistral ; les clés restent sur le serveur) ----------
+// Le client à bord fait de temps en temps une remarque sur la route, la pluie, la conduite. Il ne demande aucune réponse (rien à taper en conduisant).
+// Si le serveur ne répond pas (hors ligne, limite atteinte…), le client ne dit rien de plus : le jeu continue. Désactivable avec ?ia=0.
+const AI_URL = /vercel\.app$/.test(location.hostname) ? '/api/chat' : 'https://taxi-kin.vercel.app/api/chat';
+const AI_ON = PARAMS.get('ia') !== '0' && /^https?:$/.test(location.protocol);
+const AI_NAMES = ['Mama Nzuzi', 'Papa Kasongo', 'Jean-Pierre', 'Chantal', 'Fiston', 'Mireille', 'Papa Mukendi', 'Grâce', 'Bienvenu', 'Mama Rose', 'Patrick', 'Espérance'];
+const AI_TRAITS = ['bavard et curieux', 'pressé et un peu nerveux', 'calme et poli', 'drôle, il plaisante tout le temps', 'fatigué après le travail', 'fier de son quartier', 'inquiet, il a peur des accidents', 'bon vivant, il aime la musique'];
+const ai = { cd: 40, busy: false, fails: 0, pause: 0, pers: null, hist: [] };
+function aiRider(dt) {
+  if (!AI_ON || G.state !== 'play' || !BOARD.riders.length) { ai.pers = null; return; }
+  if (ai.pause > 0) { ai.pause -= dt; return; }
+  if (ai.busy || Math.abs(taxi.speed) < 3 || lunettes.on || (ai.cd -= dt) > 0) return;
+  const who = BOARD.riders[0];
+  if (!ai.pers || ai.pers.who !== who) {
+    ai.pers = { who, name: AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)], trait: AI_TRAITS[Math.floor(Math.random() * AI_TRAITS.length)] };
+    ai.hist = [];
+  }
+  ai.cd = 45 + Math.random() * 40;
+  ai.busy = true;
+  const near = ($('itin-near')?.textContent ?? '').replace('📍', '').trim();
+  const kmh = Math.round(Math.abs(taxi.speed) * 3.6);
+  const mins = Math.floor((G.minutes ?? 480) % 1440);
+  const situation = `Le taxi roule à ${kmh} km/h${near ? `, ${near}` : ''}${rainK > 0.1 ? ', sous la pluie' : ''}${G.accident ? ', juste après un accident' : ''}. Il est ${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')}. Fais une petite remarque au chauffeur.`;
+  fetch(AI_URL, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(10000),
+    body: JSON.stringify({ message: situation, history: ai.hist, persona: { role: VEH_ID === 'bus' ? 'passager du bus' : 'client du taxi', name: ai.pers.name, trait: ai.pers.trait, place: near || avenueName(), weather: rainK > 0.1 ? 'pluie' : 'sec' } }),
+  }).then(r => r.json()).then(o => {
+    if (!o.text) throw new Error('pas de réponse');
+    ai.fails = 0;
+    ai.hist.push({ role: 'user', content: situation }, { role: 'assistant', content: o.text });
+    if (ai.hist.length > 6) ai.hist.splice(0, 2);
+    if (G.state === 'play' && BOARD.riders.includes(ai.pers?.who)) say(o.text, 'client', Math.min(6, 2.5 + o.text.length / 28));
+    if (MESURE) console.log(`MESURE IA ${o.provider} ${o.ms} ms ${o.tried?.length ? JSON.stringify(o.tried) : ''}`);
+  }).catch(() => { if (++ai.fails >= 3) { ai.fails = 0; ai.pause = 600; } }).finally(() => { ai.busy = false; });
 }
 
 /** Le receveur du 207 crie la destination quand le véhicule s'arrête près de clients ; il annonce aussi les places qui restent. */
