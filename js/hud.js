@@ -5,6 +5,21 @@ const $ = id => document.getElementById(id);
 export const fmtFC = n => `${Math.round(n).toLocaleString('fr-FR')} FC`;
 const pct = z => `${Math.min(100, Math.max(0, -z / GOALS_LEN * 100))}%`;
 
+// Écran toujours allumé pendant le jeu (surtout en lunettes : on ne touche plus l'écran, le téléphone s'endormirait).
+// Le verrou saute quand on quitte la page ou verrouille l'écran : on le redemande au retour et au premier toucher.
+let wake = null;
+async function keepAwake() {
+  try {
+    if (wake || document.visibilityState !== 'visible' || !navigator.wakeLock) return;
+    wake = await navigator.wakeLock.request('screen');
+    wake.addEventListener('release', () => { wake = null; });
+  } catch { wake = null; }
+}
+document.addEventListener('visibilitychange', keepAwake);
+addEventListener('pointerdown', keepAwake);
+addEventListener('touchend', keepAwake);
+keepAwake();
+
 export class Hud {
   constructor() {
     this.el = {
