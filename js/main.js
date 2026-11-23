@@ -495,6 +495,9 @@ let taxiMesh = makeVehicle(VEH_ID);
 const camRig = new THREE.Group();                // repère du poste de conduite : suit le véhicule ; en VR la tête (camera) tourne dedans librement
 scene.add(camRig);
 camRig.add(camera);
+/** Un simple groupe (pas une caméra) tourne son axe +Z vers la cible : pour que la caméra (qui regarde vers -Z) voie la cible, on vise le point symétrique derrière. */
+const _rl = new THREE.Vector3();
+const rigLookAt = target => camRig.lookAt(_rl.copy(camRig.position).multiplyScalar(2).sub(target));
 let cockpit = buildCockpit(VEH_ID);
 camRig.add(cockpit.group);
 taxiMesh.rotation.order = 'YXZ';
@@ -2688,7 +2691,7 @@ function update(dt) {
 // ---------- La pluie (pluie.js) : les gouttes suivent la caméra ; le ciel, la route mouillée, le bruit et les essuie-glaces suivent l'averse ----------
 let rainK = 0;
 function rainTick(dt) {
-  rain.update(dt, G.time, camera.position);
+  rain.update(dt, G.time, camRig.position);
   const k = rain.k;
   if (Math.abs(k - rainK) > 0.015 || (k === 0 && rainK !== 0)) {
     if (k > 0.1 && rainK <= 0.1) hud.note('Il commence à pleuvoir : roule doucement.', 2);
@@ -2887,7 +2890,7 @@ function updateCamera(dt, snap = false) {
   camPos.lerp(tmpPos, k);
   camLook.lerp(tmpLook, k);
   camRig.position.copy(camPos);
-  camRig.lookAt(camLook);
+  rigLookAt(camLook);
   camera.position.set(0, 0, 0);
   if (lunettes.on && G.cam === 1 && !G.accident) lunettes.applyHead(camera);
   else camera.quaternion.identity();
@@ -2896,7 +2899,7 @@ function updateCamera(dt, snap = false) {
 function menuCamera(t) {
   const a = t * 0.12 + 0.6;
   worldVec(taxi.x + Math.sin(a) * 11, 4, taxi.z + Math.cos(a) * 11, camRig.position);
-  camRig.lookAt(worldVec(taxi.x, 1, taxi.z, tmpLook));
+  rigLookAt(worldVec(taxi.x, 1, taxi.z, tmpLook));
   camera.position.set(0, 0, 0);
   camera.quaternion.identity();
   camPos.copy(camRig.position);
