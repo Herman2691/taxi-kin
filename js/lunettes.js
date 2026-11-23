@@ -13,7 +13,7 @@ export class Lunettes {
     this.renderer = renderer;
     this.on = false;
     this.stereo = new StereoEffect(renderer);
-    this.stereo.setEyeSeparation(0.03);          // (6,4 cm donnait une vision double sur le guidon et le tableau de bord : 3 cm)
+    this.stereo.setEyeSeparation(0);          // (même image dans les deux yeux : à 6,4 puis 3 cm, l'auteur voyait deux boulevards qui se croisent ; les lunettes de téléphone n'ont pas de réglage d'écartement)
     this.head = new THREE.Quaternion();
     this.rel = new THREE.Euler(0, 0, 0, 'YXZ');
     this.yaw0 = null;
