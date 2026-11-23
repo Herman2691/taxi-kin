@@ -161,10 +161,16 @@ export class Traffic {
     for (const k of TRAFFIC_MIX?.our ?? MIX_OUR) this.add(scene, 1, k);
     for (const k of TRAFFIC_MIX?.onc ?? MIX_ONC) this.add(scene, -1, k);
     this.jamActive = false;
-    if (JAMS.some(j => j.lvl > 1)) for (const side of [1, -1]) for (let i = 0; i < JAM_FLEET[side]; i++) { const v = this.add(scene, side, JAM_MIX[(i * 7 + (side > 0 ? 0 : 3)) % JAM_MIX.length]); v.jam = true; this.hideJam(v); }
-    // Carrefours à feux : des voitures sortent de la rue et traversent le boulevard pendant le vert de la rue.
-    // dir -1 : de la droite vers la gauche, dir +1 : de la gauche vers la droite (seulement s'il y a une rue de ce côté)
+    this.jamBuilt = false;
+    // Carrefours à feux et rues d'entrée : créés seulement quand le taxi approche d'un carrefour (allège le démarrage)
     this.crossing = [];
+    this.crossingBuilt = !(SIGNALS.length || ONEWAY_IN.length);
+  }
+
+  ensureCrossing() {
+    if (this.crossingBuilt) return;
+    this.crossingBuilt = true;
+    const scene = this.scene;
     for (const sg of SIGNALS) {
       for (const dir of [-1, 1]) {
         if (!sg.streets[-dir] || sg.streets[-dir].oneway === 'in') continue;   // personne ne sort d'une rue d'entrée
@@ -177,7 +183,6 @@ export class Traffic {
         }
       }
     }
-    // Rues à sens unique d'entrée : des voitures quittent le boulevard (voie de droite) et y tournent, sans feu
     for (const r of ONEWAY_IN) {
       const path = turnPath(r), ref = { z: r.z, w: 0 };
       for (let i = 0; i < 2; i++) {
@@ -233,6 +238,10 @@ export class Traffic {
 
   /** Voitures qui sortent de la rue : attente au feu, traversée, puis retour au départ (cachées en attendant). */
   updateCrossing(dt, st, taxi) {
+    if (!this.crossingBuilt) {
+      if (SIGNALS.some(sg => Math.abs(sg.z - taxi.z) < 500) || ONEWAY_IN.some(r => Math.abs(r.z - taxi.z) < 500)) this.ensureCrossing();
+      else return null;
+    }
     let hit = null;
     for (const c of this.crossing) {
       const P = c.path;
@@ -286,7 +295,17 @@ export class Traffic {
   /** Les véhicules de l'embouteillage grave : cachés très loin tant que le taxi n'est pas dans la zone. */
   inJamNow(z) { return this.jamActive && JAMS.some(j => j.on && j.lvl > 1 && z < j.z0 && z > j.z1); }
   hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.mesh.visible = false; }
+  ensureJamFleet() {
+    if (this.jamBuilt) return;
+    this.jamBuilt = true;
+    for (const side of [1, -1]) for (let i = 0; i < JAM_FLEET[side]; i++) {
+      const v = this.add(this.scene, side, JAM_MIX[(i * 7 + (side > 0 ? 0 : 3)) % JAM_MIX.length]);
+      v.jam = true;
+      this.hideJam(v);
+    }
+  }
   startJam(taxi) {
+    this.ensureJamFleet();
     this.jamActive = true;
     for (const v of this.list) if (v.jam) { this.place(v, taxi.z, 0, taxi); put(v, v.side === 1 ? 0 : Math.PI); }
   }

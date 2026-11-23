@@ -162,9 +162,10 @@ export function routeAt(wx, wz, zFrom, zTo) {
 
 // Écartement des deux chaussées (Échangeur de Limete) : spreadOf(z) donne de combien chaque chaussée
 // s'éloigne de l'axe. Tout ce qui est à plus de SPREAD_CORE de l'axe suit sa chaussée ; le terre-plein s'élargit.
-let spreadOf = () => 0;
+const ZERO_SPREAD = () => 0;
+let spreadOf = ZERO_SPREAD;
 const SPREAD_CORE = 0.9;
-export function setSpread(fn) { spreadOf = fn ?? (() => 0); }
+export function setSpread(fn) { spreadOf = fn ?? ZERO_SPREAD; }
 export const spreadAt = z => spreadOf(z);
 function spreadX(x, z) {
   const S = spreadOf(z);
@@ -210,12 +211,15 @@ export function worldVec(x, y, z, v = new THREE.Vector3()) {
 export function bendRigid(geo, zRef) {
   const p = sample(-zRef), c = Math.cos(p.th), s = Math.sin(p.th);
   const pos = geo.attributes.position, nor = geo.attributes.normal;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), dz = pos.getZ(i) - zRef;
-    pos.setXYZ(i, p.x + x * c - dz * s, pos.getY(i), p.z + x * s + dz * c);
-    if (nor) {
-      const nx = nor.getX(i), nz = nor.getZ(i);
-      nor.setXYZ(i, nx * c - nz * s, nor.getY(i), nx * s + nz * c);
+  const pa = pos.array, na = nor?.array, len = pa.length;
+  for (let k = 0; k < len; k += 3) {
+    const x = pa[k], dz = pa[k + 2] - zRef;
+    pa[k] = p.x + x * c - dz * s;
+    pa[k + 2] = p.z + x * s + dz * c;
+    if (na) {
+      const nx = na[k], nz = na[k + 2];
+      na[k] = nx * c - nz * s;
+      na[k + 2] = nx * s + nz * c;
     }
   }
   pos.needsUpdate = true;
@@ -228,12 +232,29 @@ export function bendRigid(geo, zRef) {
 /** Plie une géométrie construite en coordonnées route le long du tracé (positions + normales). */
 export function bendGeometry(geo, raw = false) {
   const pos = geo.attributes.position, nor = geo.attributes.normal;
-  for (let i = 0; i < pos.count; i++) {
-    const th = toWorld(pos.getX(i), pos.getZ(i), _w, raw);
-    pos.setXYZ(i, _w.x, pos.getY(i), _w.z);
-    if (nor) {
-      const nx = nor.getX(i), nz = nor.getZ(i), c = Math.cos(th), s = Math.sin(th);
-      nor.setXYZ(i, nx * c - nz * s, nor.getY(i), nx * s + nz * c);
+  const pa = pos.array, na = nor?.array, len = pa.length;
+  const useSpread = !raw && spreadOf !== ZERO_SPREAD;
+  const invStep = 1 / STEP, maxF = N - 1.001;
+  for (let k = 0; k < len; k += 3) {
+    let x = pa[k];
+    const z = pa[k + 2];
+    if (useSpread) {
+      const S = spreadOf(z);
+      if (S) x = Math.abs(x) >= SPREAD_CORE ? x + Math.sign(x) * S : x * (SPREAD_CORE + S) / SPREAD_CORE;
+    }
+    let f = (-z - S_MIN) * invStep;
+    if (f < 0) f = 0; else if (f > maxF) f = maxF;
+    const i = f | 0, t = f - i;
+    const px = PX[i] + (PX[i + 1] - PX[i]) * t;
+    const pz = PZ[i] + (PZ[i + 1] - PZ[i]) * t;
+    const th = TH[i] + (TH[i + 1] - TH[i]) * t;
+    const c = Math.cos(th), s = Math.sin(th);
+    pa[k] = px + c * x;
+    pa[k + 2] = pz + s * x;
+    if (na) {
+      const nx = na[k], nz = na[k + 2];
+      na[k] = nx * c - nz * s;
+      na[k + 2] = nx * s + nz * c;
     }
   }
   pos.needsUpdate = true;

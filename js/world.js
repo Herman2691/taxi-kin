@@ -13,6 +13,24 @@ import { CURRENT as R, ROUTES, ATTACHED } from './routes.js';
 const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 __mark('world.js : début');
 
+// Préchargement en parallèle de toutes les données/images du trajet, avec cache partagé entre copies du module (routes attachées)
+const _loadImage = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+const _fetchJson = url => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
+const _ASSETS = (globalThis.TAXIKIN_ASSETS ??= {});
+const _cached = (k, fn) => (_ASSETS[k] ??= fn());
+const _mobOn = new URLSearchParams(globalThis.location?.search ?? '').get('moboma') === '0' ? null : (R.moboma ?? null);
+const [_MAS_OSM, _MOB_OSM, _PL_LINKS, _ASPHALT, _STRIPS, _PHOTO_BOARDS, _MOB_LOGO, _LIM_OSM] = await Promise.all([
+  R.masina?.osm ? _fetchJson(new URL(`../${R.masina.osm}`, import.meta.url)) : null,
+  _mobOn?.osm ? _fetchJson(new URL(`../${_mobOn.osm}`, import.meta.url)) : null,
+  (R.pl || R.attachPL) ? _cached('pl_links', () => _fetchJson(new URL('../data/poidslourds_links.json', import.meta.url))) : null,
+  _cached('asphalt', () => _loadImage(new URL('../data/tex/asphalt.jpg', import.meta.url).href).catch(() => null)),
+  _cached('strips', () => fetch(new URL('../data/tex/strips/strips.json', import.meta.url)).then(r => (r.ok ? r.json() : {})).catch(() => ({}))),
+  Promise.all((R.photoBoards ?? []).map(async p => ({ ...p, image: await _loadImage(new URL(`../${p.img}`, import.meta.url).href).catch(() => null) }))),
+  _mobOn ? _cached('mob_logo', () => _loadImage(new URL('../data/tex/moboma/logo_passio.jpg', import.meta.url).href).catch(() => null)) : null,
+  R.limete?.buildings ? _fetchJson(new URL(`../${R.limete.buildings}`, import.meta.url)) : null,
+]);
+__mark('world.js : données et textures chargées');
+
 const g = sReal => -Math.round(toGame(sReal));      // position de jeu d'un point situé à sReal m du départ
 const POPULAR = R.style === 'popular';
 const MONUMENTAL = R.style === 'monumental';
@@ -308,7 +326,7 @@ const LIM_PB_X = ROAD_EDGE + 32, LIM_LAWN = 12;    // axe des petits boulevards 
 // goudron, les avenues de quartier en terre qui croisent Kulumba (courts tronçons dans leur vraie direction, fermés par une
 // maison au fond), la rue Imbali le long du chemin de fer. dead : [début, fin] en cul-de-sac.
 const MAS = R.masina ?? null;
-const MAS_OSM = MAS?.osm ? await fetch(new URL(`../${MAS.osm}`, import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null) : null;
+const MAS_OSM = _MAS_OSM;
 const MAS_K = R.scale, MAS_W = 9, MAS_SW = 6, MAS_SL = 34;   // échelle des écarts ; largeur de Kulumba ; avenues de quartier
 // La rivière Bonamak du boulevard s'arrête à 120 m, avant Kulumba : en vrai, Kulumba n'a pas de pont à cet endroit (l'auteur
 // en cite trois : sur Bosango près du Marché Hindou, après l'Avenue Congo, et sur le Mokali après Kibunda)
@@ -454,8 +472,8 @@ export function masinaRoadName(x, z) {
 // Tracé : data/moboma_osm.json (tools/moboma_osm.py), à l'échelle du boulevard (comme Masina). Les entrées sur le boulevard sont dans routes.js
 // sideRoads (moboma : clé de la rue, link : seulement l'embouchure) ; une rue qui arrive au boulevard sans entrée (Maison communale, station,
 // Kin Marché, arrêts) s'arrête derrière les façades. Routes : { key, name, w, paved, pts (coordonnées route), dead : [début, fin] en cul-de-sac }.
-const MOB = new URLSearchParams(globalThis.location?.search ?? '').get('moboma') === '0' ? null : (R.moboma ?? null);   // (?moboma=0 : sans le quartier, pour comparer)
-const MOB_OSM = MOB?.osm ? await fetch(new URL(`../${MOB.osm}`, import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null) : null;
+const MOB = _mobOn;   // (?moboma=0 : sans le quartier, pour comparer)
+const MOB_OSM = _MOB_OSM;
 const MOB_ROADS = [];
 export const MOB_ROADS_ = MOB_ROADS;                // (tests : main.js ?debug=1)
 export const MOB_LOG = {};                          // (tests : repères sans place, maisons du cœur des îlots)
@@ -887,9 +905,7 @@ function ribbonSeg(Q, x, z) {
 // ---------- Liaisons Lumumba ↔ Route Poids Lourds (14e, 15e, 16e, 17e Rues, Av. de l'Aérodrome) ----------
 // Elles prolongent les rues de Limete, qui s'arrêtent à 90 m du petit boulevard, jusqu'aux rues d'entrée de la Route Poids Lourds. Le
 // tracé (data/poidslourds_links.json, tools/poids_lourds_links.js) est dans le repère de la Route Poids Lourds, où le taxi les parcourt.
-const PL_LINK_DATA = R.pl || R.attachPL
-  ? await fetch(new URL('../data/poidslourds_links.json', import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null)
-  : null;
+const PL_LINK_DATA = _PL_LINKS;
 /** Repère du trajet principal : bouts de rue de Limete où le taxi passe sur la liaison (a → b : en s'éloignant du boulevard). */
 export const PL_STUBS = R.attachPL && LIM ? (() => {
   const r15 = LIM_ST.find(r => r.name === '15e RUE'), r14 = LIM_ST.find(r => r.name === '14e RUE' && r.side > 0), a15 = r15.ang * Math.PI / 180;
@@ -1420,21 +1436,12 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const chance = p => Math.random() < p;
 
 // ---------- Textures ----------
-// Images tirées des vidéos des créateurs qui ont donné leur accord (voir js/credits.js)
-const loadImage = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-const ASPHALT = await loadImage(new URL('../data/tex/asphalt.jpg', import.meta.url).href).catch(() => null);
-// Bandes photographiques des façades (tools/strips.py) ; sans elles, le décor reste entièrement modélisé
-__mark('world.js : avant les textures de bandes');
-const STRIPS = await fetch(new URL('../data/tex/strips/strips.json', import.meta.url)).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
-// Grands panneaux publicitaires avec une photo (routes.js photoBoards) ; sans l'image, le panneau n'est pas construit
-const PHOTO_BOARDS = await Promise.all((R.photoBoards ?? []).map(async p =>
-  ({ ...p, image: await loadImage(new URL(`../${p.img}`, import.meta.url).href).catch(() => null) })));
-// Le logo des Passionistes (photo de l'auteur, Kingasani/logo ITPPassio) : sur l'ITP Passio, le groupe scolaire Passio et le couvent (Moboma)
-const MOB_LOGO = MOB ? await loadImage(new URL('../data/tex/moboma/logo_passio.jpg', import.meta.url).href).catch(() => null) : null;
-// Bâtiments réels de Limete, 16e Rue → 1re Rue (OpenStreetMap, tools/limete_buildings.py) ; sans eux, façades génériques
-const LIM_OSM = R.limete?.buildings
-  ? await fetch(new URL(`../${R.limete.buildings}`, import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null)
-  : null;
+// Images tirées des vidéos des créateurs qui ont donné leur accord (voir js/credits.js) — déjà chargées en parallèle en haut du module
+const ASPHALT = _ASPHALT;
+const STRIPS = _STRIPS;
+const PHOTO_BOARDS = _PHOTO_BOARDS;
+const MOB_LOGO = _MOB_LOGO;
+const LIM_OSM = _LIM_OSM;
 
 function canvasTexture(w, h, draw) {
   const c = document.createElement('canvas');
@@ -1606,7 +1613,7 @@ class Chunks {
   build(scene, material = VC_MAT, cast = true, raw = false) {   // raw : sans écartement des chaussées (ce qui est posé sur le terre-plein)
     this.meshes = [];
     for (const [k, b] of this.map) {
-      if (!b.parts.length) continue;
+      if (b.empty) continue;
       const geo = b.geometry();
       if (this.scan) obstMark(geo);                       // (les obstacles du bord de la route : voir obstacleAt)
       const m = new THREE.Mesh(bendGeometry(raise(geo), raw), material);
@@ -1690,7 +1697,7 @@ class Signs {
   // zRef : panneau posé en bloc avec un objet (bendRigid) au lieu d'être plié le long de la route
   add(key, makeTexture, w, h, x, y, z, ry, basic = false, zRef = null) {
     const k = zRef === null ? key : `${key}@${zRef}`;
-    if (!this.groups.has(k)) this.groups.set(k, { tex: makeTexture(), b: new Builder(), basic, zRef });
+    if (!this.groups.has(k)) this.groups.set(k, { tex: makeTexture(), b: new Builder(true), basic, zRef });
     this.groups.get(k).b.add(new THREE.PlaneGeometry(w, h), 0xffffff, x, y, z, 0, ry, 0);
   }
   build(scene, raw = false) {   // raw : ne suit pas l'écartement des chaussées (parc de l'Échangeur)
@@ -1715,7 +1722,7 @@ class Rigid {
   }
   build(scene) {
     for (const [z, b] of this.map) {
-      if (!b.parts.length) continue;
+      if (b.empty) continue;
       const m = new THREE.Mesh(bendRigid(b.geometry(), z), VC_MAT);
       m.castShadow = m.receiveShadow = true;
       scene.add(m);
@@ -1780,9 +1787,18 @@ const LIFT_X = ROAD_EDGE + 2.5;                    // la chaussée, les bordures
 /** Monte sur le remblai du Pont Matete les sommets situés à moins de `xMax` de l'axe (coordonnées route). */
 function raise(geo, xMax = LIFT_X) {
   if (!HAS_MATETE) return geo;
-  const p = geo.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    if (Math.abs(p.getX(i)) <= xMax) p.setY(i, p.getY(i) + roadH(p.getZ(i)));
+  const p = geo.attributes.position, a = p.array, len = a.length;
+  const up0 = MAT.up0, up1 = MAT.up1, down0 = MAT.down0, down1 = MAT.down1, H = MAT.H;
+  const invUp = 1 / (up0 - up1), invDown = 1 / (down0 - down1);
+  for (let k = 0; k < len; k += 3) {
+    const z = a[k + 2];
+    if (z >= up0 || z <= down1) continue;
+    const x = a[k];
+    if (x > xMax || x < -xMax) continue;
+    let h = H;
+    if (z > up1) { const t = (up0 - z) * invUp; h = H * t * t * (3 - 2 * t); }
+    else if (z < down0) { const t = (z - down1) * invDown; h = H * t * t * (3 - 2 * t); }
+    a[k + 1] += h;
   }
   return geo;
 }
@@ -5876,7 +5892,7 @@ function addSendweFork(chunks, details, signs, rigid) {
   // (prolongement : le boulevard Lumumba passe sous la chaussée là où il la recouvre encore)
   const lb = EXT ? new Builder() : b;
   for (const [P, n] of [[Lm, 16], [L2, 10]]) bezierRoad(lb, P, 14, n, { ...NOCURB, dash: !EXT });
-  if (EXT) for (const g of lb.parts) b.parts.push(g.translate(0, -0.05, 0));
+  if (EXT) b.appendBuilder(lb, -0.05);
   const sR = off(S, ROAD_EDGE + 0.15), sL = off(S, -ROAD_EDGE - 0.15), lL = off(Lm, -7.15), lR = off(Lm, 7.15);
   for (const [pts, t0] of [...(EXT ? [] : [[sL, 0], [sR, 0.45], [off(S2, ROAD_EDGE + 0.15), 0], [off(S2, -ROAD_EDGE - 0.15), 0]]),
     [lR, 0.45], [lL, 0.45], [off(L2, 7.15), 0], [off(L2, -7.15), 0]]) strip(pts, 0.3, 0.22, 0.11, CURB_LIGHT, t0, 32, CURB_DARK);
@@ -6528,7 +6544,7 @@ function addLimete(chunks, details, curbs, signs, scene) {
     signs.add(`bb${bi % BILLBOARDS.length}`, () => signTexture(t, sub, bg, fg), 8.6, 2.7, x, 8.4, z - 0.05, 0);
   }
 
-  if (glow.parts.length) {
+  if (!glow.empty) {
     const m = new THREE.Mesh(bendGeometry(glow.geometry()), new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     m.castShadow = true;
     scene.add(m);
@@ -7666,17 +7682,17 @@ class PlateAtlas {
   }
   build(scene) {
     if (!this.parts.length) return;
-    const COLS = 4, CW = 256, CH = 64, H = 2 ** Math.ceil(Math.log2(Math.ceil(this.names.length / COLS) * CH));
+    const COLS = 8, CW = 192, CH = 48, H = 2 ** Math.ceil(Math.log2(Math.ceil(this.names.length / COLS) * CH));
     const tex = canvasTexture(COLS * CW, H, x => {
       this.names.forEach((n, i) => {
         const cx = (i % COLS) * CW, cy = Math.floor(i / COLS) * CH;
         x.fillStyle = this.bg; x.fillRect(cx, cy, CW, CH);
-        x.strokeStyle = this.fg; x.lineWidth = 4; x.strokeRect(cx + 5, cy + 5, CW - 10, CH - 10);
-        x.fillStyle = this.fg; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = 'bold 30px sans-serif';
-        x.fillText(n, cx + CW / 2, cy + CH / 2 + 2, CW - 26);
+        x.strokeStyle = this.fg; x.lineWidth = 3; x.strokeRect(cx + 4, cy + 4, CW - 8, CH - 8);
+        x.fillStyle = this.fg; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = 'bold 22px sans-serif';
+        x.fillText(n, cx + CW / 2, cy + CH / 2 + 1, CW - 20);
       });
     });
-    const b = new Builder();
+    const b = new Builder(true);
     for (const p of this.parts) {
       const geo = new THREE.PlaneGeometry(p.w, p.h), uv = geo.attributes.uv;
       const u0 = (p.i % COLS) / COLS, dv = CH / H, v0 = 1 - (Math.floor(p.i / COLS) + 1) * dv;
@@ -10520,7 +10536,7 @@ class TexWalls {
     if (!this.g.has(key)) {
       const tex = canvasTexture(256, 128, draw);
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      this.g.set(key, { tex, b: new Builder() });
+      this.g.set(key, { tex, b: new Builder(true) });
     }
     const geo = new THREE.PlaneGeometry(w, h), uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / tw, uv.getY(i) * h / th);

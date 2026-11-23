@@ -27,26 +27,187 @@ function paint(geo, color) {
   return geo;
 }
 
-/** Assemble des primitives colorées puis les fusionne. */
+/** Assemble des primitives colorées directement dans des tableaux typés (zéro BoxGeometry/mergeGeometries intermédiaires). */
 export class Builder {
-  constructor() { this.parts = []; }
+  constructor(keepUV = false) {
+    this._keepUV = keepUV;
+    this._n = 0;
+    this._cap = 0;
+    this._p = null;
+    this._no = null;
+    this._c = null;
+    this._uv = null;
+  }
+  get empty() { return this._n === 0; }
+  _reserve(add) {
+    const need = this._n + add;
+    if (need <= this._cap) return;
+    let cap = this._cap ? this._cap * 2 : 256;
+    while (cap < need) cap *= 2;
+    const grow = (old, stride) => {
+      const next = new Float32Array(cap * stride);
+      if (old) next.set(old.subarray(0, this._n * stride));
+      return next;
+    };
+    this._p = grow(this._p, 3);
+    this._no = grow(this._no, 3);
+    this._c = grow(this._c, 3);
+    if (this._keepUV) this._uv = grow(this._uv, 2);
+    this._cap = cap;
+  }
   add(geo, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-    _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz, 'YXZ')), ONE);
-    const g = geo.index ? nonIndexed(geo) : geo;
-    if (g !== geo) geo.dispose();
-    this.parts.push(paint(g.applyMatrix4(_m), color));
+    const pos = geo.attributes.position.array;
+    const nor = geo.attributes.normal?.array;
+    const uv = this._keepUV ? geo.attributes.uv?.array : null;
+    const idx = geo.index?.array;
+    const count = idx ? idx.length : geo.attributes.position.count;
+    if (!count) { geo.dispose(); return this; }
+    this._reserve(count);
+    _c.set(color);
+    const cr = _c.r, cg = _c.g, cb = _c.b;
+    const dp = this._p, dn = this._no, dc = this._c, du = this._uv;
+    let d3 = this._n * 3, d2 = this._n * 2;
+    const rot = rx !== 0 || ry !== 0 || rz !== 0;
+    if (!rot) {
+      if (idx) {
+        for (let i = 0; i < count; i++, d3 += 3) {
+          const s3 = idx[i] * 3;
+          dp[d3] = pos[s3] + x; dp[d3 + 1] = pos[s3 + 1] + y; dp[d3 + 2] = pos[s3 + 2] + z;
+          if (nor) { dn[d3] = nor[s3]; dn[d3 + 1] = nor[s3 + 1]; dn[d3 + 2] = nor[s3 + 2]; }
+          dc[d3] = cr; dc[d3 + 1] = cg; dc[d3 + 2] = cb;
+          if (du) { if (uv) { const s2 = idx[i] * 2; du[d2] = uv[s2]; du[d2 + 1] = uv[s2 + 1]; } d2 += 2; }
+        }
+      } else {
+        for (let i = 0; i < count; i++, d3 += 3) {
+          const s3 = i * 3;
+          dp[d3] = pos[s3] + x; dp[d3 + 1] = pos[s3 + 1] + y; dp[d3 + 2] = pos[s3 + 2] + z;
+          if (nor) { dn[d3] = nor[s3]; dn[d3 + 1] = nor[s3 + 1]; dn[d3 + 2] = nor[s3 + 2]; }
+          dc[d3] = cr; dc[d3 + 1] = cg; dc[d3 + 2] = cb;
+          if (du) { if (uv) { const s2 = i * 2; du[d2] = uv[s2]; du[d2 + 1] = uv[s2 + 1]; } d2 += 2; }
+        }
+      }
+    } else {
+      const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry), cz = Math.cos(rz), sz = Math.sin(rz);
+      const m00 = cy * cz + sy * sx * sz, m01 = -cy * sz + sy * sx * cz, m02 = sy * cx;
+      const m10 = cx * sz,                m11 = cx * cz,                  m12 = -sx;
+      const m20 = -sy * cz + cy * sx * sz, m21 = sy * sz + cy * sx * cz,  m22 = cy * cx;
+      for (let i = 0; i < count; i++, d3 += 3) {
+        const vi = idx ? idx[i] : i, s3 = vi * 3;
+        const px = pos[s3], py = pos[s3 + 1], pz = pos[s3 + 2];
+        dp[d3] = m00 * px + m01 * py + m02 * pz + x;
+        dp[d3 + 1] = m10 * px + m11 * py + m12 * pz + y;
+        dp[d3 + 2] = m20 * px + m21 * py + m22 * pz + z;
+        if (nor) {
+          const nx = nor[s3], ny = nor[s3 + 1], nz = nor[s3 + 2];
+          dn[d3] = m00 * nx + m01 * ny + m02 * nz;
+          dn[d3 + 1] = m10 * nx + m11 * ny + m12 * nz;
+          dn[d3 + 2] = m20 * nx + m21 * ny + m22 * nz;
+        }
+        dc[d3] = cr; dc[d3 + 1] = cg; dc[d3 + 2] = cb;
+        if (du) { if (uv) { const s2 = vi * 2; du[d2] = uv[s2]; du[d2 + 1] = uv[s2 + 1]; } d2 += 2; }
+      }
+    }
+    this._n += count;
+    geo.dispose();
     return this;
   }
   /** Ajoute une géométrie déjà placée (sans transformation). */
   addRaw(geo, color) {
-    const g = geo.index ? nonIndexed(geo) : geo;
-    if (g !== geo) geo.dispose();
-    this.parts.push(paint(g, color));
+    return this.add(geo, color, 0, 0, 0, 0, 0, 0);
+  }
+  /** Ajoute un maillage déjà coloré par sommet (ex. personnage MakeHuman figé). */
+  addColored(pos, nor, col, idx) {
+    const count = idx ? idx.length : pos.length / 3;
+    if (!count) return this;
+    this._reserve(count);
+    const dp = this._p, dn = this._no, dc = this._c;
+    let d3 = this._n * 3;
+    if (idx) {
+      for (let i = 0; i < count; i++, d3 += 3) {
+        const s3 = idx[i] * 3;
+        dp[d3] = pos[s3]; dp[d3 + 1] = pos[s3 + 1]; dp[d3 + 2] = pos[s3 + 2];
+        dn[d3] = nor[s3]; dn[d3 + 1] = nor[s3 + 1]; dn[d3 + 2] = nor[s3 + 2];
+        dc[d3] = col[s3]; dc[d3 + 1] = col[s3 + 1]; dc[d3 + 2] = col[s3 + 2];
+      }
+    } else {
+      dp.set(pos, d3); dn.set(nor, d3); dc.set(col, d3);
+    }
+    this._n += count;
+    return this;
+  }
+  /** Fusionne un autre Builder dans celui-ci, avec un éventuel décalage en Y. */
+  appendBuilder(other, dy = 0) {
+    const n = other._n;
+    if (!n) return this;
+    this._reserve(n);
+    const d3 = this._n * 3, len = n * 3;
+    this._p.set(other._p.subarray(0, len), d3);
+    if (dy) for (let i = d3 + 1, end = d3 + len; i < end; i += 3) this._p[i] += dy;
+    this._no.set(other._no.subarray(0, len), d3);
+    this._c.set(other._c.subarray(0, len), d3);
+    if (this._keepUV && other._uv) this._uv.set(other._uv.subarray(0, n * 2), this._n * 2);
+    this._n += n;
+    other._p = other._no = other._c = other._uv = null; other._n = other._cap = 0;
     return this;
   }
   // Les pièces longues sont subdivisées pour suivre les courbes du boulevard une fois pliées.
   box(w, h, d, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-    return this.add(new THREE.BoxGeometry(w, h, d, 1, 1, Math.max(1, Math.ceil(d / 8))), color, x, y, z, rx, ry, rz);
+    const segZ = Math.max(1, Math.ceil(d / 8));
+    const add = 12 + 24 * segZ;
+    this._reserve(add);
+    _c.set(color);
+    const cr = _c.r, cg = _c.g, cb = _c.b;
+    const dp = this._p, dn = this._no, dc = this._c;
+    const hx = w * 0.5, hy = h * 0.5, hz = d * 0.5, dz = d / segZ;
+    let o = this._n * 3;
+    if (rx === 0 && ry === 0 && rz === 0) {
+      const x0 = x - hx, x1 = x + hx, y0 = y - hy, y1 = y + hy, z0f = z - hz, z1f = z + hz;
+      const quad = (ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz_, nx, ny, nz) => {
+        dp[o] = ax; dp[o + 1] = ay; dp[o + 2] = az; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = bx; dp[o + 1] = by; dp[o + 2] = bz; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = cx; dp[o + 1] = cy; dp[o + 2] = cz; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = ax; dp[o + 1] = ay; dp[o + 2] = az; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = cx; dp[o + 1] = cy; dp[o + 2] = cz; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = dx; dp[o + 1] = dy; dp[o + 2] = dz_; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+      };
+      quad(x0, y0, z1f, x1, y0, z1f, x1, y1, z1f, x0, y1, z1f, 0, 0, 1);    // +Z
+      quad(x1, y0, z0f, x0, y0, z0f, x0, y1, z0f, x1, y1, z0f, 0, 0, -1);   // -Z
+      for (let i = 0; i < segZ; i++) {
+        const za = z0f + i * dz, zb = i === segZ - 1 ? z1f : za + dz;
+        quad(x1, y0, zb, x1, y0, za, x1, y1, za, x1, y1, zb, 1, 0, 0);      // +X
+        quad(x0, y0, za, x0, y0, zb, x0, y1, zb, x0, y1, za, -1, 0, 0);     // -X
+        quad(x0, y1, zb, x1, y1, zb, x1, y1, za, x0, y1, za, 0, 1, 0);      // +Y
+        quad(x0, y0, za, x1, y0, za, x1, y0, zb, x0, y0, zb, 0, -1, 0);     // -Y
+      }
+    } else {
+      const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry), cz = Math.cos(rz), sz = Math.sin(rz);
+      const m00 = cy * cz + sy * sx * sz, m01 = -cy * sz + sy * sx * cz, m02 = sy * cx;
+      const m10 = cx * sz,                m11 = cx * cz,                  m12 = -sx;
+      const m20 = -sy * cz + cy * sx * sz, m21 = sy * sz + cy * sx * cz,  m22 = cy * cx;
+      const quadR = (ax, ay, az, bx, by, bz, cx_, cy_, cz_, dx, dy, dz_, nx, ny, nz) => {
+        const axw = m00 * ax + m01 * ay + m02 * az + x, ayw = m10 * ax + m11 * ay + m12 * az + y, azw = m20 * ax + m21 * ay + m22 * az + z;
+        const bxw = m00 * bx + m01 * by + m02 * bz + x, byw = m10 * bx + m11 * by + m12 * bz + y, bzw = m20 * bx + m21 * by + m22 * bz + z;
+        const cxw = m00 * cx_ + m01 * cy_ + m02 * cz_ + x, cyw = m10 * cx_ + m11 * cy_ + m12 * cz_ + y, czw = m20 * cx_ + m21 * cy_ + m22 * cz_ + z;
+        const dxw = m00 * dx + m01 * dy + m02 * dz_ + x, dyw = m10 * dx + m11 * dy + m12 * dz_ + y, dzw = m20 * dx + m21 * dy + m22 * dz_ + z;
+        dp[o] = axw; dp[o + 1] = ayw; dp[o + 2] = azw; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = bxw; dp[o + 1] = byw; dp[o + 2] = bzw; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = cxw; dp[o + 1] = cyw; dp[o + 2] = czw; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = axw; dp[o + 1] = ayw; dp[o + 2] = azw; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = cxw; dp[o + 1] = cyw; dp[o + 2] = czw; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+        dp[o] = dxw; dp[o + 1] = dyw; dp[o + 2] = dzw; dn[o] = nx; dn[o + 1] = ny; dn[o + 2] = nz; dc[o] = cr; dc[o + 1] = cg; dc[o + 2] = cb; o += 3;
+      };
+      quadR(-hx, -hy, hz, hx, -hy, hz, hx, hy, hz, -hx, hy, hz, m02, m12, m22);         // +Z
+      quadR(hx, -hy, -hz, -hx, -hy, -hz, -hx, hy, -hz, hx, hy, -hz, -m02, -m12, -m22);  // -Z
+      for (let i = 0; i < segZ; i++) {
+        const za = -hz + i * dz, zb = i === segZ - 1 ? hz : za + dz;
+        quadR(hx, -hy, zb, hx, -hy, za, hx, hy, za, hx, hy, zb, m00, m10, m20);         // +X
+        quadR(-hx, -hy, za, -hx, -hy, zb, -hx, hy, zb, -hx, hy, za, -m00, -m10, -m20);  // -X
+        quadR(-hx, hy, zb, hx, hy, zb, hx, hy, za, -hx, hy, za, m01, m11, m21);         // +Y
+        quadR(-hx, -hy, za, hx, -hy, za, hx, -hy, zb, -hx, -hy, zb, -m01, -m11, -m21);  // -Y
+      }
+    }
+    this._n += add;
+    return this;
   }
   cyl(rt, rb, h, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, seg = 10) {
     return this.add(new THREE.CylinderGeometry(rt, rb, h, seg), color, x, y, z, rx, ry, rz);
@@ -55,8 +216,19 @@ export class Builder {
     return this.add(new THREE.IcosahedronGeometry(r, r > 1.2 ? 1 : 0).scale(sx, sy, sz), color, x, y, z);
   }
   geometry() {
-    const g = mergeGeometries(this.parts);
-    this.parts.forEach(p => p.dispose());
+    const g = new THREE.BufferGeometry(), n = this._n;
+    if (n) {
+      g.setAttribute('position', new THREE.BufferAttribute(this._p.slice(0, n * 3), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(this._no.slice(0, n * 3), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(this._c.slice(0, n * 3), 3));
+      if (this._keepUV && this._uv) g.setAttribute('uv', new THREE.BufferAttribute(this._uv.slice(0, n * 2), 2));
+    } else {
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(0), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(0), 3));
+    }
+    this._p = this._no = this._c = this._uv = null;
+    this._n = this._cap = 0;
     return g;
   }
   mesh(mat = VC_MAT) {
@@ -667,17 +839,17 @@ export function createTanker() {
   }, [decalMesh(decalMat('SEP', '#f2f3f4', '#d0202a'), [[0.9, 0.3, 0, 1.62, -L / 2 + 0.36, Math.PI]]),
     decalMesh(decalMat('SEP CONGO', '#f2f3f4', '#d0202a'), [[2.2, 0.42, 1.11, 2.25, L / 2 - 3.2, Math.PI / 2], [2.2, 0.42, -1.11, 2.25, L / 2 - 3.2, -Math.PI / 2]])]);
 }
-// Conducteur et passager de wewa (corps MakeHuman, tools/wewa_mh.py), figés assis ; sans le fichier, le jeu garde des silhouettes simples
-const WEWA = await new GLTFLoader().loadAsync(new URL('../data/personnages/wewa.glb', import.meta.url).href).then(g => {
+// Les occupants du wewa avec les modèles MakeHuman du dossier Herman (data/personnages/*.glb, comme les piétons) : figés à califourchon à leur première apparition,
+// quelques conducteurs (gilet jaune à bandes grises, numéro noir dans le dos, casque, chacun son numéro) et quelques passagers, tirés au sort sur chaque moto
+const RIDE_OK = hasModel('homme');
+// Conducteur et passager de wewa (ancien fichier wewa.glb) : chargé seulement en secours si homme.glb est absent
+const WEWA = RIDE_OK ? null : await new GLTFLoader().loadAsync(new URL('../data/personnages/wewa.glb', import.meta.url).href).then(g => {
   const o = {};
   g.scene.traverse(m => { if (m.isMesh) o[m.name] = m.geometry; });
   return o;
 }).catch(() => null);
-__mark('models.js : wewa.glb chargé');
+__mark('models.js : wewa prêt');
 const PEOPLE_MAT = new THREE.MeshLambertMaterial({ vertexColors: true });
-// Les occupants du wewa avec les modèles MakeHuman du dossier Herman (data/personnages/*.glb, comme les piétons) : figés à califourchon à leur première apparition,
-// quelques conducteurs (gilet jaune à bandes grises, numéro noir dans le dos, casque, chacun son numéro) et quelques passagers, tirés au sort sur chaque moto
-const RIDE_OK = hasModel('homme');
 const _riders = { drv: [], pas: [] };
 const DRV_NUMS = [], PAS_N = 6;
 function ridePeople(look) {
