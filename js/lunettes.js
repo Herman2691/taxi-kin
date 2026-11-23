@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { StereoEffect } from 'three/addons/effects/StereoEffect.js';
 
+const SEP_DEFAULT = 0, SEP_MAX = 0.08, SEP_STEP = 0.005;   // écart des yeux en m (0 à 8 cm, par pas de 0,5 cm)
 const CRUISE = 9;                                  // m/s (environ 32 km/h) : la vitesse où le véhicule avance seul
 const zee = new THREE.Vector3(0, 0, 1), q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), eul = new THREE.Euler();
 
@@ -13,7 +14,13 @@ export class Lunettes {
     this.renderer = renderer;
     this.on = false;
     this.stereo = new StereoEffect(renderer);
-    this.stereo.setEyeSeparation(0);          // (même image dans les deux yeux : à 6,4 puis 3 cm, l'auteur voyait deux boulevards qui se croisent ; les lunettes de téléphone n'ont pas de réglage d'écartement)
+    // Écart entre les deux images (relief), réglé par le joueur : les lunettes de téléphone n'ont pas de réglage d'écartement, et un mauvais écart
+    // donne deux routes qui se croisent. 0 = même image dans les deux yeux (aucun relief, aucune vision double).
+    this.sep = SEP_DEFAULT;
+    try { const v = parseFloat(localStorage.getItem('taxikin_eyesep')); if (Number.isFinite(v)) this.sep = Math.min(SEP_MAX, Math.max(0, v)); } catch { /* stockage indisponible */ }
+    this.stereo.setEyeSeparation(this.sep);
+    this.padT = 0;
+    this.buildSetting();
     this.head = new THREE.Quaternion();
     this.rel = new THREE.Euler(0, 0, 0, 'YXZ');
     this.yaw0 = null;
@@ -36,6 +43,32 @@ export class Lunettes {
     let downT = 0, timer = null;
     this.onDown = () => { downT = performance.now(); timer = setTimeout(() => { timer = null; this.disable(); this.onExit?.(); }, 2000); };
     this.onUp = () => { if (!timer) return; clearTimeout(timer); timer = null; if (performance.now() - downT < 600) this.stopped = !this.stopped; };
+  }
+
+  /** Règle l'écart des yeux (relief) et le retient pour les prochaines parties. */
+  setSep(v) {
+    this.sep = Math.round(Math.min(SEP_MAX, Math.max(0, v)) * 1000) / 1000;
+    this.stereo.setEyeSeparation(this.sep);
+    try { localStorage.setItem('taxikin_eyesep', String(this.sep)); } catch { /* stockage indisponible */ }
+    if (this.label) this.label.textContent = `${(this.sep * 100).toFixed(1).replace('.', ',')} cm`;
+  }
+  /** Le réglage dans le menu, à côté du bouton des lunettes : − / + , et la valeur. */
+  buildSetting() {
+    const btn = document.getElementById('btn-vr');
+    if (!btn || document.getElementById('vr-sep')) return;
+    const box = document.createElement('div');
+    box.id = 'vr-sep';
+    box.style.cssText = 'display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;flex-wrap:wrap';
+    const mk = (t, d) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.setAttribute('aria-label', d > 0 ? 'Plus de relief' : 'Moins de relief');
+      b.style.cssText = 'min-width:44px;height:38px;border:0;border-radius:8px;background:rgba(255,255,255,.14);color:#fff;font-size:20px;font-weight:800';
+      b.addEventListener('click', () => this.setSep(this.sep + d * SEP_STEP)); return b; };
+    const txt = document.createElement('span');
+    txt.textContent = 'Lunettes : relief (écart des yeux)';
+    this.label = document.createElement('b');
+    this.label.style.minWidth = '56px'; this.label.style.textAlign = 'center';
+    box.append(txt, mk('−', -1), this.label, mk('+', 1));
+    btn.after(box);
+    this.setSep(this.sep);
   }
 
   /** Démande l'accès aux capteurs (iPhone), passe en plein écran et en paysage. À appeler après un geste du joueur. */
@@ -69,6 +102,8 @@ export class Lunettes {
   input(speed) {
     const pad = navigator.getGamepads?.().find(p => p && p.connected);
     if (pad) {
+      const now = performance.now();       // (croix directionnelle gauche / droite : moins / plus de relief, 4 pas par seconde au plus)
+      if (now - this.padT > 250 && (pad.buttons[14]?.pressed || pad.buttons[15]?.pressed)) { this.padT = now; this.setSep(this.sep + (pad.buttons[15]?.pressed ? SEP_STEP : -SEP_STEP)); }
       const ax = Math.abs(pad.axes[0]) > 0.15 ? pad.axes[0] : 0;
       return { steer: ax, throttle: (pad.buttons[7]?.value ?? 0) > 0.2 || pad.buttons[0]?.pressed ? 1 : 0, brake: (pad.buttons[6]?.value ?? 0) > 0.2 || pad.buttons[1]?.pressed ? 1 : 0 };
     }
@@ -79,5 +114,5 @@ export class Lunettes {
   }
 
   setSize(w, h) { this.stereo.setSize(w, h); }
-  render(scene, camera) { camera.focus = 3.5; this.stereo.render(scene, camera); }   // (profondeur où les deux images se superposent : 3,5 m au lieu de 10 m)
+  render(scene, camera) { camera.focus = 6; this.stereo.render(scene, camera); }   // (profondeur où les deux images se superposent)
 }
