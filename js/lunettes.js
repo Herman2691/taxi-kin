@@ -13,7 +13,7 @@ export class Lunettes {
     this.renderer = renderer;
     this.on = false;
     this.stereo = new StereoEffect(renderer);
-    this.stereo.setEyeSeparation(0.064);
+    this.stereo.setEyeSeparation(0.03);          // (6,4 cm donnait une vision double sur le guidon et le tableau de bord : 3 cm)
     this.head = new THREE.Quaternion();
     this.rel = new THREE.Euler(0, 0, 0, 'YXZ');
     this.yaw0 = null;
@@ -79,5 +79,5 @@ export class Lunettes {
   }
 
   setSize(w, h) { this.stereo.setSize(w, h); }
-  render(scene, camera) { this.stereo.render(scene, camera); }
+  render(scene, camera) { camera.focus = 3.5; this.stereo.render(scene, camera); }   // (profondeur où les deux images se superposent : 3,5 m au lieu de 10 m)
 }
