@@ -185,7 +185,7 @@ export class Passengers {
   }
   dispose(ch) {
     ch.mesh.parent?.remove(ch.mesh);
-    ch.mesh.traverse(o => { if (o.isSkinnedMesh) o.geometry.dispose(); });
+    ch.release();   // (téléphone Android : le jeu se figeait après quelques arrêts ; voir Character.release)
   }
   /** Le client descend : il sort par la portière côté trottoir, monte sur le trottoir et s'éloigne. */
   alight(r) {

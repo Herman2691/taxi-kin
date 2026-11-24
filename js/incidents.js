@@ -57,7 +57,7 @@ export class Incidents {
       else a.ch.pose(a.down ? 'idle' : a.mode, a.down ? 0 : time + (a.phase ?? 0));
       if (k >= 1 && a.then) { const f = a.then; a.then = null; a.path = null; f(); }
     } else a.ch.pose(a.down ? 'idle' : a.mode, a.down ? 0 : time + (a.phase ?? 0));
-    this.c.place(a.ch.mesh, a.x, a.z, a.yaw, (this.c.W().pedHeight?.(a.x, a.z) ?? 0) + (a.down ? 0.25 : 0));   // (sur le terre-plein, il est dessus ; à terre : +0.25)
+    this.c.place(a.ch.mesh, a.x + (a.ox ?? 0), a.z + (a.oz ?? 0), a.yaw, (this.c.W().pedHeight?.(a.x, a.z) ?? 0) + (a.down ? 0.25 : 0));   // (sur le terre-plein, il est dessus ; à terre : +0.25)
     a.ch.mesh.rotation.x = a.down ? -Math.PI / 2 : 0;
   }
   face(a, b) { a.yaw = Math.atan2(-(b.x - a.x), (b.z - a.z)) + Math.PI; }
@@ -261,7 +261,7 @@ export class Incidents {
       F.t += dt;
       const t = F.t, v = F.v;
       if (F.group !== curGroup || t > 12.2) {
-        for (const a of F.actors) { F.group.remove(a.ch.mesh); a.ch.mesh.traverse(o => { if (o.isSkinnedMesh) o.geometry.dispose(); }); }
+        for (const a of F.actors) { F.group.remove(a.ch.mesh); a.ch.release(); }
         this.releaseCar(v);
         this.fallenMotos.splice(i, 1);
         continue;
@@ -298,7 +298,7 @@ export class Incidents {
     const S = this.cur;
     if (!S) return;
     const g = this.c.group(), T = this.c.traffic();
-    for (const a of S.actors) { g.remove(a.ch.mesh); a.ch.mesh.traverse(o => { if (o.isSkinnedMesh) o.geometry.dispose(); }); }
+    for (const a of S.actors) { g.remove(a.ch.mesh); a.ch.release(); }
     for (const m of S.props) g.remove(m);
     for (const v of S.cars ?? []) this.releaseCar(v);
     T.blocks = T.blocks.filter(b => b !== S.block);
@@ -343,7 +343,8 @@ export class Incidents {
     const W = this.c.W(), zI = taxi.z - 150;
     if (W.inFlyover(zI, 60) || W.inRiver?.(zI, 40) || W.inRaised?.(zI, 40) || W.SIGNALS.some(s => Math.abs(s.z - zI) < 90) || (W.inHighway?.(zI))) { this.next = 25; return; }
     const kul = (W.KULUNA_ZONES ?? []).some(q => zI < q.z0 && zI > q.z1);
-    if (kul && Math.random() < 0.7) this.startKuluna(zI); else this.startAccident(zI);
+    // (l'auteur, 24/11 : « ça ne doit pas être à chaque parcours ») : au plus une fois par partie, et seulement une fois sur quatre
+    if (kul && !this.kulunaDone && Math.random() < 0.25) { this.kulunaDone = true; this.startKuluna(zI); } else this.startAccident(zI);
   }
 
   /** Les gens d'une scène sont solides : le véhicule du joueur s'arrête contre eux (sans les renverser). */
@@ -432,6 +433,7 @@ export class Incidents {
     }
     if (S.back && t > S.calmT + 11 && S.cars) { for (const v of S.cars) this.releaseCar(v); S.cars = null; this.c.traffic().blocks = this.c.traffic().blocks.filter(b => b !== S.block); }
     if (!S.polOut && t > 110 && !S.back) S.calmT = t - 8;               // (sécurité : la police n'a pas pu venir)
+    if (!S.caught && !S.allIn) this.duel(S, t, time);
     for (const a of S.actors) if (a.ch.mesh.visible) this.move(a, t, time);
     if ((S.polBack && t > S.polBack + 4 && !S.cars) || t > 160) this.finish();
   }
@@ -448,6 +450,7 @@ export class Incidents {
       // (l'auteur, 10/11 : « ils bloquent la route ») : deux par voie, sur les quatre voies, face à face
       const to = [X[Math.floor(k / 2)] + (k % 2 ? 0.6 : -0.6), zI + (Math.floor(k / 2) % 2 ? 1.6 : -0.4)];
       y.spd = 3.2; y.path = [from, to, 0.2 + k * 0.15, 1.6 + k * 0.15]; y.mode = 'fight'; y.phase = k % 2 ? 0.45 : 0;
+      y.ch.arm(Math.random() < 0.4 ? 'baton' : 'machete');   // (l'auteur, 24/11 : « ils doivent vraiment se battre avec les machettes, des bâtons »)
       return y;
     });
     S.officers = Array.from({ length: 4 }, (_, i) => { const o = this.actor(outfit('police'), W.MEDIAN + 0.25, zI + 40 + i); o.ch.mesh.visible = false; return o; });
@@ -455,6 +458,28 @@ export class Incidents {
     S.callAt = 95 + Math.random() * 40;
     this.c.toast('Kuluna ! Des jeunes se battent sur le boulevard : la route est bloquée.', 4.5);
     this.c.say('Kuluna ! Bakangi nzela ! — Les Kuluna bloquent la route !', 'client', 4);
+  }
+  /** Les jeunes se battent deux par deux, face à face : chacun son tour arme son coup, frappe ; l'autre pare ou est touché, recule, et finit par tomber un moment. */
+  duel(S, t, time) {
+    const P = 2.6;
+    S.youths.forEach((y, k) => {
+      const o = S.youths[k ^ 1];
+      if (!y.ch.mesh.visible || !o || y.path && t < y.path[3]) return;                    // (il arrive encore en marchant)
+      if (y.downUntil && t < y.downUntil) { y.down = true; y.ox = y.oz = 0; return; }
+      if (y.down) { y.down = false; y.hits = 0; y.downUntil = 0; }
+      this.face(y, o);
+      const p = k >> 1, ph = time + p * 0.7 + (k & 1) * 0.0, turn = Math.floor(ph / P), u = (ph % P) / P;
+      const att = (turn + (k & 1)) % 2 === 0, landed = (turn + p) % 3 !== 0;
+      const dx = o.x - y.x, dz = o.z - y.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+      let step = 0;
+      if (att) { y.mode = 'melee'; y.ch.outfit.u = u; step = u < 0.5 ? -0.12 * u : -0.06 + (u < 0.68 ? (u - 0.5) * 2.2 : 0.4 - (u - 0.68) * 1.2); }   // recule en armant, se fend en frappant
+      else if (landed) {
+        y.mode = 'recoil'; y.ch.outfit.u = Math.max(0, (u - 0.55) / 0.45); step = -0.55 * Math.sin(Math.min(1, y.ch.outfit.u) * Math.PI);
+        if (u > 0.9 && !y.counted) { y.counted = true; y.hits = (y.hits ?? 0) + 1; if (y.hits >= 3) y.downUntil = t + 2.6 + Math.random() * 1.5; }
+      } else { y.mode = 'melee'; y.ch.outfit.u = 0.2; step = -0.1; }                    // pare
+      if (u < 0.1) y.counted = false;
+      y.ox = ux * step; y.oz = uz * step;
+    });
   }
   kuluna(S, dt, taxi) {
     const t = S.t, time = this.c.time(), W = this.c.W(), X = W.LANE_X;
@@ -469,7 +494,7 @@ export class Incidents {
     if (!S.caught && S.polOut && S.officers.some(o => o.ch.mesh.visible && Math.abs(o.z - S.zI) < 9)) {
       S.caught = t;
       S.waiting = S.youths.filter(y => y.ch.mesh.visible);
-      for (const y of S.waiting) { y.mode = 'idle'; y.path = null; y.then = null; }
+      for (const y of S.waiting) { y.mode = 'idle'; y.path = null; y.then = null; y.ox = y.oz = 0; y.down = false; y.ch.outfit.u = 0; }
       S.seats = new Map(S.units.map(u => [u, 0]));
       this.c.toast('La police arrête les Kuluna : ils montent un par un dans les jeeps.', 4);
       this.c.say('Bokanga maboko na sima ! — Les mains dans le dos !', 'police', 3);
@@ -500,7 +525,7 @@ export class Incidents {
     // (sécurité : la police n'a pas pu venir) : les jeunes finissent par partir sur les trottoirs
     if (!S.polOut && t > S.callAt + 90 && !S.allIn) {
       S.allIn = t; S.polBack = t;
-      S.youths.forEach((y, i) => { y.mode = 'idle'; this.route(y, [[y.x, y.z], [W.ROAD_EDGE + 7, y.z - 25 + Math.random() * 10]], t + i * 0.2, 2.2, () => { y.ch.mesh.visible = false; }); });
+      S.youths.forEach((y, i) => { y.mode = 'idle'; y.ox = y.oz = 0; y.down = false; this.route(y, [[y.x, y.z], [W.ROAD_EDGE + 7, y.z - 25 + Math.random() * 10]], t + i * 0.2, 2.2, () => { y.ch.mesh.visible = false; }); });
       if (S.block) { this.c.traffic().blocks = this.c.traffic().blocks.filter(b => b !== S.block); S.block = null; }
     }
     for (const a of S.actors) if (a.ch.mesh.visible) this.move(a, t, time);

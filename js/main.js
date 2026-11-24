@@ -182,6 +182,19 @@ await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 // ---------- Rendu ----------
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// Téléphone : le jeu se figeait (musique qui continue) → on affiche la cause à l'écran au lieu d'un gel muet
+const panne = txt => {
+  if (document.getElementById('panne')) return;
+  const d = document.createElement('div');
+  d.id = 'panne';
+  d.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:99999;padding:8px 10px;background:rgba(160,20,20,.92);color:#fff;font:bold 16px/1.3 sans-serif;border-radius:8px';
+  d.textContent = txt;
+  d.onclick = () => d.remove();
+  document.body.appendChild(d);
+};
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); panne('Le téléphone a coupé l’affichage (mémoire). Touche pour fermer, puis recharge la page.'); });
+canvas.addEventListener('webglcontextrestored', () => location.reload());
+addEventListener('error', e => panne(`Erreur : ${e.message} (${(e.filename ?? '').split('/').pop()}:${e.lineno})`));
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;   // couleurs moins « plastique »
 renderer.toneMappingExposure = 1.1;
@@ -2858,7 +2871,7 @@ function frame(now) {
 
   if (G.state === 'play') {
     if (portraitTouch.matches) pause();
-    else update(dt);
+    else try { update(dt); } catch (err) { panne(`Erreur : ${err.message} — ${(err.stack ?? '').split('\n')[1]?.split('/').pop() ?? ''}`); console.error(err); }
   }
 
   place(taxiMesh, taxi.x, taxi.z, taxi.heading, taxi.y + (G.wewaFall ? Math.abs(G.wewaFall.curRoll ?? 0) * 0.14 : 0));

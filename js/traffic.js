@@ -52,6 +52,19 @@ function makeMesh(kind) {
   }
 }
 
+/** Glissement latéral vers la voie cible : le véhicule pivote vers là où il va (cap = atan(vitesse latérale / vitesse), lissé), il ne glisse pas de côté.
+ *  base = cap de la chaussée (0 vers -z, π vers +z). */
+function steerX(v, dt, base, maxRate = 2.2) {
+  const dx = v.targetX - v.x;
+  const rate = Math.min(maxRate, 0.5 + Math.abs(v.speed) * 0.22);
+  let lat = 0;
+  if (Math.abs(dx) > 0.02) { lat = Math.sign(dx) * Math.min(Math.abs(dx) / Math.max(dt, 1e-3), rate); v.x += lat * dt; }
+  const want = Math.max(-0.32, Math.min(0.32, Math.atan2(lat, Math.max(Math.abs(v.speed), 2.5))));
+  const sgn = base === 0 ? -1 : 1;   // vers +x : cap négatif sur la chaussée 0, positif sur la chaussée π
+  v.yawS = (v.yawS ?? 0) + (sgn * want - (v.yawS ?? 0)) * Math.min(1, dt * 6);
+  return base + v.yawS;
+}
+
 /** Place le véhicule, sur la rampe du saut-de-mouton s'il roule sur les voies intérieures. */
 function put(v, yaw) {
   const up = Math.abs(v.x) < RAMP_X;
@@ -506,9 +519,7 @@ export class Traffic {
     if (gap < 16) target = Math.min(target, Math.max(0, lead + (gap - 5) * 0.6));
     v.speed += Math.sign(target - v.speed) * Math.min(Math.abs(target - v.speed), (target > v.speed ? (v.kind === 'moto' ? 5 : 3.5) : 9) * dt);
     v.z += v.speed * dt;
-    const dx = v.targetX - v.x;
-    if (dx) v.x += Math.sign(dx) * Math.min(Math.abs(dx), (v.kind === 'moto' ? 3.2 : 2.2) * dt);
-    put(v, Math.PI - Math.sign(dx) * Math.min(Math.abs(dx), 1) * 0.12);
+    put(v, steerX(v, dt, Math.PI, v.kind === 'moto' ? 3.2 : 2.2));
   }
 
   /** Accident : une ambulance arrive derrière le taxi, sirène allumée, et le dépasse. */
@@ -623,11 +634,11 @@ export class Traffic {
         }
         v.speed += Math.sign(target - v.speed) * Math.min(Math.abs(target - v.speed), (target > v.speed ? 3 : 9) * dt);
         v.z += v.speed * dt;
-        { const dxl = v.targetX - v.x; if (dxl) v.x += Math.sign(dxl) * Math.min(Math.abs(dxl), 2.2 * dt); }   // (en sens inverse aussi, on change de voie : chantier)
+        const yawL = steerX(v, dt, Math.PI);   // (en sens inverse aussi, on change de voie : chantier)
         // (l'auteur, 13/11 : « rien ne doit passer transparent ») : jamais dans le véhicule de devant, ni dans le taxi
         if (lo) { const m = lo.z - (lo.len + v.len) / 2 - 0.4; if (v.z > m) { v.z = m; v.speed = Math.min(v.speed, lo.speed); } }
         if (taxiAhead) { const m = taxi.z - (tl(taxi) + v.len) / 2 - 0.4; if (v.z > m) { v.z = m; v.speed = Math.min(v.speed, Math.max(0, -Math.cos(taxi.heading ?? 0) * taxi.speed)); } }
-        put(v, Math.PI);
+        put(v, yawL);
         // (l'auteur, 08/11 : « les véhicules de sens contraire me passent transparents ») : le taxi les touche aussi (avenues sans séparateur)
         if (sameLevel(taxi, v) && Math.abs(taxi.x - v.x) < (tw(taxi) + v.wid) / 2 && Math.abs(taxi.z - v.z) < (tl(taxi) + v.len) / 2) hit = v;
         continue;
@@ -701,9 +712,7 @@ export class Traffic {
       // (l'auteur, 13/11 : « rien ne doit passer transparent ») : jamais dans le véhicule de devant, ni dans le taxi
       if (lo) { const m = lo.z + (lo.len + v.len) / 2 + 0.4; if (v.z < m) { v.z = m; v.speed = Math.min(v.speed, lo.speed); } }
       if (taxiAhead) { const m = taxi.z + (tl(taxi) + v.len) / 2 + 0.4; if (v.z < m) { v.z = m; v.speed = Math.min(v.speed, Math.max(0, Math.cos(taxi.heading ?? 0) * taxi.speed)); } }
-      const dx = v.targetX - v.x;
-      if (dx) v.x += Math.sign(dx) * Math.min(Math.abs(dx), (v.kind === 'moto' ? 3.2 : 2.2) * dt);
-      put(v, Math.sign(dx) * Math.min(Math.abs(dx), 1) * 0.12);
+      put(v, steerX(v, dt, 0, v.kind === 'moto' ? 3.2 : 2.2));
 
       if (sameLevel(taxi, v) && Math.abs(taxi.x - v.x) < (tw(taxi) + v.wid) / 2 && Math.abs(taxi.z - v.z) < (tl(taxi) + v.len) / 2) hit = v;
     }

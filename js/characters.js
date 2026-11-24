@@ -408,6 +408,33 @@ export class Character {
 
   /** Un outil tenu dans la main droite (pelle, panneau) : un maillage accroché à l'avant-bras, qui suit l'animation. */
   hold(mesh) { this.b['foreArm.R'].add(mesh); mesh.position.set(0, this.model ? -0.37 : -0.3, 0); return mesh; }
+  /** Une arme dans la main droite ('machete' ou 'baton') ; la pose 'melee' sait l'utiliser. */
+  arm(kind) {
+    this.outfit.weapon = kind;
+    const mat = new THREE.MeshLambertMaterial({ color: kind === 'baton' ? 0x6b4a2a : 0x9aa0a6 });
+    const g = new THREE.Group();
+    if (kind === 'baton') g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 1.05, 6).translate(0, -0.3, 0), mat));
+    else {
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 0.075).translate(0, -0.36, 0), mat));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.035).translate(0, -0.03, 0), new THREE.MeshLambertMaterial({ color: 0x1a1a1a })));
+    }
+    return this.hold(g);
+  }
+  /** Libère ce qui appartient à ce personnage. Les sommets du modèle MakeHuman sont PARTAGÉS entre tous les personnages : un dispose() complet les retirerait
+   *  de la carte graphique pour tous (téléphone : gel du jeu) ; on ne libère que les couleurs, les pièces propres et la texture des os. */
+  release() {
+    const shared = this.model?.geos ?? [];
+    this.mesh.traverse(o => {
+      if (!o.isSkinnedMesh) return;
+      const g = o.geometry;
+      if (shared.some(s => s.attributes.position === g.attributes.position)) {
+        for (const k of ['position', 'normal', 'uv', 'skinIndex', 'skinWeight']) g.deleteAttribute(k);
+        g.index = null;
+      }
+      g.dispose();
+      o.skeleton?.dispose();
+    });
+  }
   /** Applique une animation. mode : 'walk' | 'idle' | 'wave' | 'sit'. t en secondes, speed en m/s. */
   pose(mode, t, speed = 1.1) {
     applyPose(this.b, mode, t + this.phase, speed, this.outfit);
@@ -513,6 +540,43 @@ function applyPose(b, mode, t, speed, o) {
     b['upperArm.R'].rotation.set(0.9 + pR * 0.7, 0, 0.15);
     b['foreArm.L'].rotation.x = 1.3 - pL * 1.1;
     b['foreArm.R'].rotation.x = 1.3 - pR * 1.1;
+  } else if (mode === 'melee' || mode === 'recoil') {
+    // combat à l'arme blanche (Kuluna) : o.u = progression du coup 0..1 ; o.weapon = 'machete' (coup d'en haut, en diagonale) ou 'baton' (balayage de côté)
+    const u = Math.max(0, Math.min(1, o.u ?? 0)), baton = o.weapon === 'baton';
+    b['thigh.L'].rotation.set(0.35, 0, -0.14);
+    b['thigh.R'].rotation.set(-0.25, 0, 0.14);
+    b['shin.L'].rotation.x = -0.5;
+    b['shin.R'].rotation.x = -0.3;
+    if (mode === 'melee') {
+      const wind = Math.min(1, u / 0.5), hit = u < 0.5 ? 0 : Math.min(1, (u - 0.5) / 0.18), back = u < 0.68 ? 0 : (u - 0.68) / 0.32;   // armer, frapper (vite), revenir
+      const e = wind * wind * (3 - 2 * wind), s = hit * (2 - hit) * (1 - back);
+      b.hips.position.y = 0.89 - s * 0.05;
+      b.hips.rotation.y = baton ? 0.5 * e - 1.1 * s * (1 - back) : 0.2 * e - 0.5 * s;
+      b.spine.rotation.x = 0.1 - e * 0.22 + s * 0.55;                  // se cambre pour armer, se jette en avant pour frapper
+      b.chest.rotation.y = baton ? -(0.9 * e) + 1.5 * s : 0.45 * e - 0.7 * s;
+      if (baton) {
+        b['upperArm.R'].rotation.set(1.35 * e + 0.4 * s, -0.9 * e + 1.7 * s, 0.7);   // le bâton part de derrière l'épaule et balaye à l'horizontale
+        b['foreArm.R'].rotation.x = 0.9 - 0.5 * s;
+      } else {
+        b['upperArm.R'].rotation.set(0.9 + 1.75 * e - 2.05 * s, 0.1, 0.35 - 0.7 * s);   // la machette monte au-dessus de la tête, puis tombe en diagonale
+        b['foreArm.R'].rotation.x = 1.35 - 1.2 * s + 0.3 * e;
+      }
+      b['upperArm.L'].rotation.set(1.0 - 0.3 * s, 0, -0.2);   // la main libre protège le visage
+      b['foreArm.L'].rotation.x = 1.5;
+      b.head.rotation.x = 0.1; b.head.rotation.y = -b.chest.rotation.y * 0.4;
+    } else {
+      // l'adversaire est touché ou pare : il recule, se tord, les bras levés devant la tête
+      const k = Math.sin(Math.min(1, u * 1.4) * Math.PI);
+      b.hips.position.y = 0.86;
+      b.spine.rotation.x = -0.35 * k + 0.12;
+      b.spine.rotation.z = 0.22 * k;
+      b.chest.rotation.y = -0.4 * k;
+      b.head.rotation.x = -0.28 * k;
+      b['upperArm.L'].rotation.set(1.9, 0, -0.35);
+      b['upperArm.R'].rotation.set(1.9, 0, 0.35);
+      b['foreArm.L'].rotation.x = 1.9;
+      b['foreArm.R'].rotation.x = 1.9;
+    }
   } else if (mode === 'sit') {
     b.hips.position.y = 0.48;
     b['thigh.L'].rotation.set(1.45, 0, -0.18);
