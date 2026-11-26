@@ -2982,7 +2982,7 @@ if (PARAMS.get('essai') === 'bouchon') {
   console.log('BOUCHON hors zone (taxi à 2,5 km) : actif ' + traffic.jamActive + ', visibles de l\'embouteillage ' + traffic.list.filter(v => v.jam && v.mesh.visible).length);
 }
 // ===== MENU WIZARD 4 ÉTAPES (version corrigée) =====
-let STEP = 1;
+var STEP = 1;   // (var : toMenu() appelle goStep() avant cette ligne ; avec let : « Cannot access STEP before initialization »)
 
 function goStep(n) {
   STEP = n;
