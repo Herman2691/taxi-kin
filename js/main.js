@@ -29,6 +29,7 @@ const MESURE = new URLSearchParams(location.search).has('mesure');
 let derniereEtape = null;
 try { derniereEtape = localStorage.getItem('taxikin_etape'); localStorage.setItem('taxikin_etape', ''); } catch { /* stockage indisponible */ }
 // (l'auteur, 26/11 : le bandeau rouge « chargement précédent… » est retiré ; l'étape reste notée par mark() pour les mesures)
+{ const v = document.getElementById('ver'); if (v) v.textContent += ` · monde ${W1.WORLD_VER ?? 'ancien'}`; }   // (version du monde chargé, vue en bas à gauche)
 const mark = n => {
   if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`);
   try { localStorage.setItem('taxikin_etape', `${n.trim()} (${Math.round(performance.now() / 1000)} s)`); } catch { /* stockage indisponible */ }

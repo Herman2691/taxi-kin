@@ -20,6 +20,7 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
+export const WORLD_VER = 'd2';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 export const ROUTE_LEN = Math.round(GAME_LEN) - R.end.trim;   // portique d'arrivée
 export const MEDIAN = R.twoLane ? 0.12 : R.rocade ? 0.3 : 1.2;   // demi-largeur du terre-plein (route à deux bandes : simple ligne ; Rocade : double ligne)
 export const LANE_W = 3.5;
@@ -9337,6 +9338,7 @@ function addSideLamp(b, side, z) {
 
 /** Grand panneau sur deux pieds, face au taxi (et au dos pour l'autre sens). */
 function addExtBillboard(b, signs, side, z, title, sub, bg, fg = '#ffffff', { x = FRONT - 3.5, w = 8, h = 2.8, y = 6.4, tall = false } = {}) {
+  return;   // (l'auteur, 26/11 : plus aucun panneau publicitaire de couleur)
   const X = side * x;
   if (tall) {                                             // panneau vertical sur un mât (Samsung)
     b.box(0.5, 5, 0.5, 0x6c7680, X, 2.5, z).box(3.4, 6, 0.3, 0x2a2f36, X, 8, z);
@@ -11684,7 +11686,7 @@ export function buildWorld(scene, opts = {}) {
     addAirport(chunks.at(0), signs);
     // Clôture continue à droite : de 10 m avant le parvis de l'aéroport (z = -58) jusqu'à 20 m avant la Station Cobil de Siforco (g(4064) + 35)
     addAirportFence(chunks, details, -58, g(4064) + 35);
-    addPromoBillboards(scene, chunks);
+    // addPromoBillboards(scene, chunks);   // (l'auteur, 26/11 : plus aucun grand panneau)
   }
   else if (!START_ATTACHED) addCrossStreet(chunks.at(24), details, signs, 24, R.landmarks[0][0], 'crossStart');
   __mark('ouvrage 7 : else if (!START_ATTACHED) addCrossSt');
