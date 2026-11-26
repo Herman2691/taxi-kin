@@ -2101,9 +2101,9 @@ function addFlyover(scene, signs, f, roadMats) {
   for (const s of [-1, 1]) {
     if (ASANEF) {                                         // muret bas et glissière métallique (double onde) sur poteaux
       lift.add(fine(0.16, 0.02, len), 0xf4f4f0, s * (RAMP_X - 0.55), 0.075, zc)
-        .add(fine(0.42, 0.5, len), 0xc9c3b6, s * (RAMP_X - 0.18), 0.25, zc)
-        .add(fine(0.1, 0.34, len), 0xb8bec4, s * (RAMP_X - 0.3), 0.82, zc);
-      for (let z = f.z0; z > f.z1; z -= 2) lift.add(new THREE.BoxGeometry(0.1, 0.8, 0.1), 0x8e949a, s * (RAMP_X - 0.2), 0.7, z);
+        .add(fine(0.42, 0.92, len), 0xc9c3b6, s * (RAMP_X - 0.18), 0.46, zc)           // (l'auteur, 26/11 : « c'est une bordure, pas un truc transparent ») : muret plein, sans jour
+        .add(fine(0.1, 0.34, len), 0xb8bec4, s * (RAMP_X - 0.3), 1.1, zc);
+      for (let z = f.z0; z > f.z1; z -= 2) lift.add(new THREE.BoxGeometry(0.1, 0.5, 0.1), 0x8e949a, s * (RAMP_X - 0.2), 1.0, z);
     } else {
     lift.add(fine(0.16, 0.02, len), 0xf4f4f0, s * (RAMP_X - 0.55), 0.075, zc)           // ligne blanche de rive
       .add(fine(0.42, 0.92, len), 0xe2ded4, s * (RAMP_X - 0.18), 0.46, zc)              // muret garde-corps béton
