@@ -28,13 +28,7 @@ const MESURE = new URLSearchParams(location.search).has('mesure');
 // Témoin de coupure (téléphone : Safari ferme la page sans message) : la dernière étape atteinte est gardée ; à la réouverture on l'affiche en haut de l'écran
 let derniereEtape = null;
 try { derniereEtape = localStorage.getItem('taxikin_etape'); localStorage.setItem('taxikin_etape', ''); } catch { /* stockage indisponible */ }
-if (derniereEtape && derniereEtape !== 'OK') {
-  const avis = document.createElement('div');
-  avis.style.cssText = 'position:fixed;left:6px;right:6px;top:6px;z-index:99999;padding:8px 10px;background:rgba(160,20,20,.92);color:#fff;font:bold 20px/1.3 sans-serif;border-radius:8px';
-  avis.textContent = `Le chargement précédent s’est arrêté après : ${derniereEtape} (touche pour fermer)`;
-  avis.onclick = () => avis.remove();
-  document.body.appendChild(avis);
-}
+// (l'auteur, 26/11 : le bandeau rouge « chargement précédent… » est retiré ; l'étape reste notée par mark() pour les mesures)
 const mark = n => {
   if (MESURE) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`);
   try { localStorage.setItem('taxikin_etape', `${n.trim()} (${Math.round(performance.now() / 1000)} s)`); } catch { /* stockage indisponible */ }
@@ -1197,6 +1191,12 @@ retro.show(store('retro') !== 'off');
 const setRetro = on => { retro.show(on); store('retro', on ? 'on' : 'off'); $('btn-retro').classList.toggle('off', !on); };
 $('btn-retro').classList.toggle('off', !retro.on);
 $('btn-retro').addEventListener('click', () => { setRetro(!retro.on); $('more').hidden = true; });
+// (l'auteur, 26/11 : « l'écran est trop encombré à gauche ») : le panneau client + confort et le tableau du terminus se cachent, et se remettent, par le menu ≡
+for (const [id, cls, key] of [['btn-hcourse', 'hide-course', 'hcourse'], ['btn-hitin', 'hide-itin', 'hitin']]) {
+  const set = hide => { document.body.classList.toggle(cls, hide); $(id).classList.toggle('off', hide); store(key, hide ? 'off' : 'on'); };
+  set(store(key) === 'off');
+  $(id).addEventListener('click', () => { set(!document.body.classList.contains(cls)); $('more').hidden = true; });
+}
 retro.glass?.addEventListener('click', () => setRetro(false));
 G.glance = 0;
 for (const [id, dir] of [['glance-l', -1], ['glance-r', 1]]) {
@@ -1859,6 +1859,13 @@ function handleTraffic(dt) {
     strength = 4;
   }
   if (hit.kind === 'moto' && !hit.fallen) strength = Math.max(strength, 3.2);
+  // (l'auteur, 26/11 : demi-tour ou contresens, « il pousse le véhicule au lieu d'avoir l'accident ») : tout contact qui n'est pas dans le même sens que la
+  // circulation (de travers, à contresens) est un vrai choc ; et pendant le délai entre deux chocs, le taxi s'arrête au lieu de pousser la voiture.
+  const sameWay = Math.cos(taxi.heading) * (hit.side === -1 ? -1 : 1) > 0.5 && Math.abs(Math.sin(taxi.heading)) < 0.5;
+  if (!sameWay) {
+    strength = Math.max(strength, 4);
+    if (G.crashCd > 0) { taxi.speed *= 0.3; if (hit.speed !== undefined) hit.speed = 0; }
+  }
   if (VEH_ID === 'moto' && !G.wewaFall && strength > 1.8) { crash(strength); startWewaFall(hit); return; }
   if ((G.crashCd <= 0 || hit.kind === 'moto') && strength > 2.5) { crash(strength); incidents.onCrash(hit, strength); }
 }

@@ -89,7 +89,16 @@ export class Incidents {
    *  de la jeep k. */
   callPolice(S, crews) {
     const T = this.c.traffic(), taxi = this.c.taxi, X = this.c.W().LANE_X;
+    const used = new Set();
     S.units = crews.map((officers, k) => {
+      // (l'auteur, 26/11 : « des jeeps de la circulation sont là mais ne font rien ») : une voiture de police qui roule déjà vers la scène, derrière elle, y vient
+      const own = T.list.find(o => o.kind === 'police' && o.side === 1 && !o.keep && !o.chase && !o.fallen && o.mesh.visible && o.z > S.zI + 25 && o.z < S.zI + 260 && !used.has(o));
+      if (own) {
+        used.add(own);
+        this.clearCargo(own);
+        Object.assign(own, { speed: Math.max(own.speed ?? 0, 10), keep: true, urgent: 999, chase: null, flee: 0, stop: 0 });
+        return { v: own, officers, still: 0, braking: false, out: 0, back: 0 };
+      }
       const v = T.jeep(k, taxi);
       this.clearCargo(v);                                                  // (ceux qu'elle avait emmenés la dernière fois sont descendus)
       // (toujours de derrière la scène : derrière le taxi s'il attend dans la file, sinon derrière la scène elle-même)
@@ -379,7 +388,7 @@ export class Incidents {
     const zOk = [0, -15, -30, 15].map(d => zI + d).find(z => T.laneFree(X[1], z, a, null, 12, 1) && T.laneFree(X[2], z + 3.2, b, null, 12, 1));
     if (zOk === undefined) { this.next = 25; return; }
     zI = zOk;
-    this.cur = { kind: 'accident', t: 0, zI, isMoto, actors: [], props: [], cars, block: { z: zI + 9, side: 1 }, police: null };
+    this.cur = { kind: 'accident', t: 0, zI, isMoto, actors: [], props: [], cars, block: { z: zI + 9, side: 1, x0: X[1] - 1.3, x1: X[2] + 1.3 }, police: null };
     this.holdCar(a, X[1], zI, 0.1);
     this.holdCar(b, X[2], zI + 3.2, -0.3);
     if (isMoto) this.knockMoto(b, 1.42);
@@ -417,7 +426,7 @@ export class Incidents {
     if (t > 0.8 && !S.out) { S.out = true; S.d1.ch.mesh.visible = S.d2.ch.mesh.visible = true; }
     if (S.isMoto && t > 2.0 && S.d2.down) S.d2.down = false;
     if (S.wClients && t > 5.2 && S.wClients[0].down) { for (const wc of S.wClients) wc.down = false; }
-    if (t > 12 && !S.units) this.callPolice(S, [S.officers]);              // (quelqu'un a appelé la police : une jeep, deux policiers)
+    if (t > 5 && !S.units) this.callPolice(S, [S.officers]);              // (quelqu'un a appelé la police : une jeep, deux policiers)
     // les policiers vont se mettre de part et d'autre des deux chauffeurs
     const mx = (X[1] + X[2]) / 2, zI = S.zI;
     if (this.policeStep(S, t, dt, (cx, ze) => [[[cx, ze], [mx, zI + 3.4]], [[cx, ze], [cx, zI - 3.2], [mx, zI - 3.2], [mx, zI - 0.1]]], ['Police ! Botika ! — Police ! Arrêtez !', 'Botika ! Police !'])) { /* (ils descendent) */ }
@@ -433,7 +442,7 @@ export class Incidents {
     }
     if (S.back && t > S.calmT + 11 && S.cars) { for (const v of S.cars) this.releaseCar(v); S.cars = null; this.c.traffic().blocks = this.c.traffic().blocks.filter(b => b !== S.block); }
     if (!S.polOut && t > 110 && !S.back) S.calmT = t - 8;               // (sécurité : la police n'a pas pu venir)
-    if (!S.caught && !S.allIn) this.duel(S, t, time);
+    if (!S.caught && !S.allIn && !S.calmT && S.out) this.duel(S, t, time);
     for (const a of S.actors) if (a.ch.mesh.visible) this.move(a, t, time);
     if ((S.polBack && t > S.polBack + 4 && !S.cars) || t > 160) this.finish();
   }
@@ -455,15 +464,15 @@ export class Incidents {
     });
     S.officers = Array.from({ length: 4 }, (_, i) => { const o = this.actor(outfit('police'), W.MEDIAN + 0.25, zI + 40 + i); o.ch.mesh.visible = false; return o; });
     // (l'auteur, 10/11 : « ils bloquent la route pendant 2 à 3 minutes » : la police est appelée tard, elle arrive vers 2 min à 2 min 40)
-    S.callAt = 95 + Math.random() * 40;
+    S.callAt = 18 + Math.random() * 10;   // (l'auteur, 26/11 : « les policiers mettent trop de temps »)
     this.c.toast('Kuluna ! Des jeunes se battent sur le boulevard : la route est bloquée.', 4.5);
     this.c.say('Kuluna ! Bakangi nzela ! — Les Kuluna bloquent la route !', 'client', 4);
   }
   /** Les jeunes se battent deux par deux, face à face : chacun son tour arme son coup, frappe ; l'autre pare ou est touché, recule, et finit par tomber un moment. */
   duel(S, t, time) {
-    const P = 2.6;
-    S.youths.forEach((y, k) => {
-      const o = S.youths[k ^ 1];
+    const P = 2.6, duelists = S.youths ?? [S.d1, S.d2];   // (accident : les deux chauffeurs ; Kuluna : les huit jeunes)
+    duelists.forEach((y, k) => {
+      const o = duelists[k ^ 1];
       if (!y.ch.mesh.visible || !o || y.path && t < y.path[3]) return;                    // (il arrive encore en marchant)
       if (y.downUntil && t < y.downUntil) { y.down = true; y.ox = y.oz = 0; return; }
       if (y.down) { y.down = false; y.hits = 0; y.downUntil = 0; }
@@ -484,7 +493,7 @@ export class Incidents {
   kuluna(S, dt, taxi) {
     const t = S.t, time = this.c.time(), W = this.c.W(), X = W.LANE_X;
     if (t > S.callAt && !S.units) this.callPolice(S, [S.officers.slice(0, 2), S.officers.slice(2)]);   // (deux jeeps)
-    if (t > 50 && !S.saidWait) { S.saidWait = true; this.c.say('Bakangi nzela naino… Police ezali wapi ? — Ils bloquent encore la route… Où est la police ?', 'client', 4); }
+    if (t > 40 && !S.saidWait) { S.saidWait = true; this.c.say('Bakangi nzela naino… Police ezali wapi ? — Ils bloquent encore la route… Où est la police ?', 'client', 4); }
     const xs = [X[0] + 0.4, X[1] - 0.7, X[1] + 0.9, X[2] - 0.3];
     if (this.policeStep(S, t, dt, (cx, ze) => [0, 1, 2, 3].map(i => [[cx, ze - (i % 2) * 0.6], [xs[i], Math.min(S.zI + 4.5, ze - 1)]]), ['Police ! Bokima te ! — Police ! Ne bougez pas !', 'Police ! Telema !'])) { /* (ils descendent) */ }
     for (const o of S.officers) if (o.arrived && o.free === undefined) o.free = true;
@@ -528,6 +537,7 @@ export class Incidents {
       S.youths.forEach((y, i) => { y.mode = 'idle'; y.ox = y.oz = 0; y.down = false; this.route(y, [[y.x, y.z], [W.ROAD_EDGE + 7, y.z - 25 + Math.random() * 10]], t + i * 0.2, 2.2, () => { y.ch.mesh.visible = false; }); });
       if (S.block) { this.c.traffic().blocks = this.c.traffic().blocks.filter(b => b !== S.block); S.block = null; }
     }
+    if (!S.caught && !S.allIn) this.duel(S, t, time);
     for (const a of S.actors) if (a.ch.mesh.visible) this.move(a, t, time);
     if ((S.polBack && t > S.polBack + 4 && !S.block) || t > 420) this.finish();
   }

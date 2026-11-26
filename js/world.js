@@ -3426,7 +3426,7 @@ function addHighrise(b, signs, side, z, w, t) {
     const [tt, sub, bg, fg] = SHOP_SIGNS[s];
     signs.add(`shop${s}`, () => signTexture(tt, sub, bg, fg, true), Math.min(ww * 0.8, 7), 1.2, side * (FRONT + 2 - 0.12), 3.8, z, -side * Math.PI / 2);
   }
-  if (!tower && chance(0.15)) {   // panneau publicitaire sur le toit
+  if (false && !tower && chance(0.15)) {   // panneau publicitaire sur le toit (l'auteur, 26/11 : tous les panneaux génériques sont retirés)
     const k = Math.floor(Math.random() * BILLBOARDS.length);
     const [tt, sub, bg, fg] = BILLBOARDS[k];
     b.box(0.2, 2, 0.2, 0x6c7680, x, h + 1.6, z - 3).box(0.2, 2, 0.2, 0x6c7680, x, h + 1.6, z + 3);
@@ -6524,7 +6524,7 @@ function addLimete(chunks, details, curbs, signs, scene) {
 
   // Grands panneaux publicitaires sur deux pieds, dans la bande (vidéos), en alternant les côtés
   let bi = 0;
-  for (let z = Z16 - 70; z > zEnd + 30; z -= rand(170, 250), bi++) {
+  for (let z = Z16 - 70; false && z > zEnd + 30; z -= rand(170, 250), bi++) {   // (retirés, 26/11)
     const side = bi % 2 ? -1 : 1;
     if (sideOf[side](z, 6)) continue;
     const x = side * (xLawn + 4), [t, sub, bg, fg] = BILLBOARDS[bi % BILLBOARDS.length], b = chunks.at(z);
@@ -10115,7 +10115,7 @@ function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
   }
   // Panneaux publicitaires (Sendwe, Libération, 30 Juin)
   let bi = 0;
-  for (let z = zA - 60; z > zE + 60; z -= rand(160, 240)) {
+  for (let z = zA - 60; false && z > zE + 60; z -= rand(160, 240)) {   // (retirés, 26/11)
     const side = bi % 2 ? -1 : 1;
     if (extZone(z) === 'triomphal' || !extFree(side, z + 4, z - 4)) continue;
     const [t, sub, bg, fg] = BILLBOARDS[bi++ % BILLBOARDS.length];
@@ -10943,11 +10943,11 @@ function addPairMedian(chunks, curbs, details) {
 }
 /** Immenses panneaux sur structure de tubes (vidéo, photo de Ngaba) : côté route, face à ceux qui arrivent ; `empty` : la structure seule. */
 function addBigBoard(chunks, signs, side, z, i, empty) {
+  return;   // (l'auteur, 26/11 : plus aucun panneau géant, avec ou sans publicité)
   const b = chunks.at(z), x = side * (FRONT + 2), W = 11, H = 7, y = 11, C = empty ? 0xb7c3cc : 0x7a858c;
   for (const ox of [-W / 2 + 0.6, W / 2 - 0.6]) b.box(0.26, y, 0.26, C, x + ox, y / 2, z).box(0.26, y, 0.26, C, x + ox, y / 2, z + 1.8);
   b.box(0.42, y + H - 2, 0.42, empty ? 0x3f7fb2 : C, x, (y + H - 2) / 2, z + 0.9);
   for (const yy of [y - 3, y, y + H / 2, y + H]) b.box(W, 0.14, 0.14, C, x, yy, z).box(W, 0.14, 0.14, C, x, yy, z + 1.8);
-  if (empty) return;
   const [t, sub2] = BILLBOARDS[i % BILLBOARDS.length];
   signs.add(`bigb${i % BILLBOARDS.length}`, () => signTexture(t, sub2, pick(['#1d4fa0', '#0b5fb0', '#163a7a']), '#f5c400'), W - 0.2, H - 0.2, x, y + H / 2, z + 1.95, 0);
 }
@@ -11399,7 +11399,7 @@ function addPoidsLourds(scene, chunks, details, signs, groundMat) {
     }
   }
   // Grands panneaux publicitaires sur un mât (vues : Altesse, Mayo…) : textes génériques du jeu
-  PL.billboards.forEach(([km, side], i) => {
+  if (false) PL.billboards.forEach(([km, side], i) => {
     const z = zKm(km), x = side * (FRONT - 3) - (side < 0 ? PL_LEFT_X : 0), [t, sub, bg, fg] = BILLBOARDS[i % BILLBOARDS.length];
     chunks.at(z).cyl(0.28, 0.34, 9, 0x6c7680, x, 4.5, z).box(9.4, 0.3, 0.3, 0x6c7680, x, 8.7, z);
     signs.add(`bb${i % BILLBOARDS.length}`, () => signTexture(t, sub, bg, fg), 9, 3.8, x, 10.6, z + 0.2, 0);
@@ -11846,7 +11846,7 @@ export function buildWorld(scene, opts = {}) {
   __mark('bw Panneaux publicitaires (pas devant les façades pho');
   // Panneaux publicitaires (pas devant les façades photographiques : elles ont leurs vrais panneaux)
   let bi = 0;
-  for (let z = -160; !R.industrial && z > Z_GEN + 100; z -= rand(220, 320)) {   // (Route Poids Lourds : plBoards)
+  for (let z = -160; false && !R.industrial && z > Z_GEN + 100; z -= rand(220, 320)) {   // (Route Poids Lourds : plBoards)
     const side = bi % 2 ? -1 : 1;
     if (inRiver(z, 20) || inCrossing(z, 10) || inMateteZone(side, z, 10) || atSideRoad(side, z, 4) || nearRing(z, 10) || (MONUMENTAL && bi > 3)) continue;
     if (photoAt(side, z)) { bi++; continue; }

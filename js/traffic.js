@@ -308,6 +308,9 @@ export class Traffic {
     for (const v of this.list) if (v.jam) this.hideJam(v);
   }
 
+  /** Un blocage (incidents.js) ne retient que les véhicules des voies qu'il occupe (x0..x1) ; sans x0 : toute la chaussée. */
+  blockHits(bk, v) { return bk.x0 === undefined || (v.targetX > bk.x0 - 0.8 && v.targetX < bk.x1 + 0.8) || (v.x > bk.x0 - 0.8 && v.x < bk.x1 + 0.8); }
+
   laneFree(x, z, self, taxi, margin = 10, side = 1) {
     if (taxi && Math.abs(taxi.x - x) < 2.4 && Math.abs(taxi.z - z) < margin + tl(taxi) / 2) return false;
     return !this.list.some(o => o !== self && o.side === side && Math.abs(o.targetX - x) < 1.5 && Math.abs(o.z - z) < margin + o.len / 2);
@@ -381,6 +384,7 @@ export class Traffic {
       if (l < 0 || l > RIGHT) continue;
       if (split && (LANE_X[l] < RAMP_X) !== (LANE_X[cur] < RAMP_X)) continue;
       if (this.laneClosedNear(v.side, l, v.z, 90)) continue;              // (chantier devant : pas vers une voie fermée)
+      if (this.blocks.some(bk => bk.side === v.side && bk.x0 !== undefined && LANE_X[l] > bk.x0 - 0.8 && LANE_X[l] < bk.x1 + 0.8 && v.z - bk.z > -8 && v.z - bk.z < 120)) continue;   // (incident devant : pas vers une voie bloquée)
       if (this.laneSafe(LANE_X[l], v, taxi)) { v.targetX = LANE_X[l]; return true; }
     }
     return false;
@@ -680,7 +684,11 @@ export class Traffic {
       }
       const safe = v.kind === 'moto' ? 3 : this.inJamNow(v.z) ? 1.9 : 6;
       if (gap < safe + 10) target = Math.min(target, Math.max(0, lead + (gap - safe) * 0.6));
-      for (const bk of this.blocks) if (bk.side === 1) { const g = v.z - v.len / 2 - bk.z; if (g > -8 && g < 90) target = Math.min(target, Math.sqrt(2 * 6 * Math.max(0, g - 3))); }   // (incidents.js : route bloquée ; freinage selon la distance d'arrêt, même pour la police)
+      for (const bk of this.blocks) if (bk.side === 1 && this.blockHits(bk, v)) {
+        const g0 = v.z - v.len / 2 - bk.z;
+        if (bk.x0 !== undefined && g0 > 0 && g0 < 70 && (v.blkT = (v.blkT ?? Math.random() * 0.5) - dt) <= 0) { v.blkT = 0.5; this.tryLaneChange(v, taxi); }   // (l'auteur, 26/11 : seules les voies concernées sont bloquées : on se range dans une voie libre)
+      }
+      for (const bk of this.blocks) if (bk.side === 1 && this.blockHits(bk, v)) { const g = v.z - v.len / 2 - bk.z; if (g > -8 && g < 90) target = Math.min(target, Math.sqrt(2 * 6 * Math.max(0, g - 3))); }   // (incidents.js : route bloquée ; freinage selon la distance d'arrêt, même pour la police)
       target = Math.min(target, this.signalLimit(v, st, 1));                // feu rouge devant : arrêt à la ligne
       target = Math.min(target, this.worksLimit(v, taxi, dt));               // (chantier : se rabattre)
 

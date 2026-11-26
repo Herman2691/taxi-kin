@@ -715,3 +715,6 @@ body.vr #hud, body.vr #bubbles, body.vr #touch, body.vr #choice, body.vr #songs,
 #side-msgs #toast.note { font-size: 11px; padding: 3px 8px; background: rgba(10,12,14,.55); }
 #side-msgs #btn-flee, #side-msgs #btn-descendre { order: 5; pointer-events: auto; font-size: 14px; padding: 8px 14px; }
 @media (max-height: 460px) { #side-msgs { top: 52px; width: min(230px, 32vw); max-height: 46vh; } }
+
+/* (26/11) cachés par le menu ≡ */
+body.hide-course #course, body.hide-itin #itin { display: none !important; }
