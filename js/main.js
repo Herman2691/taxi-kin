@@ -399,12 +399,14 @@ if (ROAD6) loadedRoads.add('kv');
 if (ROAD7) loadedRoads.add('roc');
 if (ROAD8) loadedRoads.add('mm');
 const MULTI = !!(ROAD2 || ROAD3 || ROAD4 || ROAD5 || ROAD6 || ROAD7 || ROAD8);   // (plusieurs routes : raccords et décor des autres routes)
-let quality = isTouch ? 'low' : 'high';
+const weakPc = (navigator.hardwareConcurrency ?? 8) <= 4 || (navigator.deviceMemory ?? 8) <= 4;   // (collègues : PC modestes → départ en « Légers »)
+let quality = isTouch || weakPc ? 'low' : 'high';
+let renderScale = 1;                                    // (baisse automatique si l'image reste saccadée, voir frame())
 $('sel-quality').value = (PARAMS.get('autostart') === '1' && store('quality')) || quality;
 
 function applyQuality() {
   const high = quality === 'high';
-  renderer.setPixelRatio(Math.min(devicePixelRatio, high ? 2 : 1.25));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, high ? 2 : 1.25) * renderScale);
   renderer.shadowMap.enabled = high;
   ROAD1.world.sun.castShadow = high;
   fogFar = high ? 520 : 380;
@@ -1754,8 +1756,9 @@ function drive(dt) {
   const lvl = nextLevel(taxi.level, taxi.x, taxi.z, nx, nz);
   const why = rawBlock(nx, nz, lvl) ?? (lvl ? null : solidAround(nx, nz, taxi.heading));
   if (!why || rawBlock(taxi.x, taxi.z, taxi.level) || ((why === 'obstacle' || why === 'gens' || why === 'vehicule') && solidAround(taxi.x, taxi.z, taxi.heading)) ||
-      (why === 'travaux' && solidAround(taxi.x, taxi.z, taxi.heading) === 'travaux' && (taxi.speed < 0 || !worksDeep(nx, nz, taxi.heading)))) {   // (26/11 : collé aux barrières du chantier, on peut en sortir : le pas suivant ne doit plus toucher la barrière elle-même) taxi.x = nx; taxi.z = nz; taxi.level = lvl; }   // (déjà dedans : on peut en sortir)
-  else {
+      (why === 'travaux' && solidAround(taxi.x, taxi.z, taxi.heading) === 'travaux' && (taxi.speed < 0 || !worksDeep(nx, nz, taxi.heading)))) {   // (26/11 : collé aux barrières du chantier, on peut en sortir : le pas suivant ne doit plus toucher la barrière elle-même)
+    taxi.x = nx; taxi.z = nz; taxi.level = lvl;
+  } else {
     // (on ne glisse que dans un sens où le taxi avançait vraiment : de face contre un obstacle, il s'arrête)
     // (l'auteur, 13/11 : rien ne passe à travers) : on ne glisse que là où ni bordure ni obstacle du décor ni personne ne bloque
     const free = (x, z) => !rawBlock(x, z, taxi.level) && (taxi.level || !solidAround(x, z, taxi.heading));
@@ -3016,11 +3019,25 @@ function menuCamera(t) {
 // ---------- Boucle ----------
 let last = performance.now();
 let menuT = 0;
+const perf = { n: 0, sum: 0, skip: 1 };
 const portraitTouch = matchMedia('(orientation: portrait) and (pointer: coarse)');
 
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000);
+  // Adaptation automatique : si l'image reste lente 4 s, on allège (ombres coupées, puis image moins définie)
+  if (G.state === 'play' && !document.hidden) {
+    perf.n++; perf.sum += now - last;
+    if (perf.sum > 4000) {
+      const fps = perf.n * 1000 / perf.sum;
+      perf.n = 0; perf.sum = 0;
+      if (fps < 26 && perf.skip-- <= 0) {
+        if (quality === 'high') { quality = 'low'; $('sel-quality').value = 'low'; applyQuality(); hud.toast('Image lente : mode « Légers » activé.', 3); }
+        else if (renderScale > 0.6) { renderScale = Math.max(0.6, renderScale - 0.2); applyQuality(); hud.toast('Image lente : définition réduite.', 3); }
+        perf.skip = 1;                                  // (on laisse une période pour juger le nouveau réglage)
+      }
+    }
+  } else { perf.n = 0; perf.sum = 0; perf.skip = 1; }
   last = now;
 
   if (G.state === 'play') {
