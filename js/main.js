@@ -5,7 +5,7 @@ import { Lunettes } from './lunettes.js';
 import { releaseCpuCopies, watchScene } from './memoire.js';
 import * as THREE from 'three';
 import * as W1 from './world.js';
-import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createTrain, TRAIN_L, setNight, receveurTenue, setReceveurLive, RECEVEUR_POSTE } from './models.js';
+import { createCar, createMinibus, createCityBus, createTruck, createSUV, createTricycle, createMoto, createPolicePickup, createAmbulance, createCraneTruck, createTrain, TRAIN_L, setNight, receveurTenue, setReceveurLive, RECEVEUR_POSTE } from './models.js';
 import { NightGlow, makeBeam, setBeam } from './nuit.js';
 import { Retro } from './retro.js';
 import { buildCabin } from './cabine.js';
@@ -1020,7 +1020,7 @@ function endShift(reason) {
   const net = G.cash - owed;
   $('countdown').hidden = true;
   traffic.raceFrozen = false;
-  $('end-title').textContent = race ? (race.rank === 1 ? 'Course gagnée ! 🏆' : `Course terminée : ${race.rank}e sur 4`) : reason === 'panne' ? 'Panne d’essence : fin de la journée' : reason === 'arret' ? 'Arrêté par la police' : reason === 'arrive' ? `Arrivé : ${IT ? legs().to.name : A.endName} !` : 'Il fait nuit, fin de journée';
+  $('end-title').textContent = race ? (race.rank === 1 ? 'Course gagnée ! 🏆' : `Course terminée : ${race.rank}e sur 4`) : reason === 'panne' ? 'Panne d’essence : fin de la journée' : reason === 'fourriere' ? 'Véhicule remorqué par la police' : reason === 'arret' ? 'Arrêté par la police' : reason === 'arrive' ? `Arrivé : ${IT ? legs().to.name : A.endName} !` : 'Il fait nuit, fin de journée';
   $('end-sub').textContent = `${G.rides} course${G.rides > 1 ? 's' : ''} · ${G.crashes} accrochage${G.crashes > 1 ? 's' : ''}${IT ? ` · ${G.tours ?? 0} trajet${(G.tours ?? 0) > 1 ? 's' : ''} terminé${(G.tours ?? 0) > 1 ? 's' : ''}` : ` · ${Math.round(-taxi.z)} m parcourus`}`;
   const rows = [
     [race ? 'Gain de la course' : 'Courses', G.fares], ...(race ? [] : [['Pourboires', G.tips]]),
@@ -1032,6 +1032,7 @@ function endShift(reason) {
   if (race) $('end-sub').textContent = race.board.map((r, i) => `${i + 1}. ${r.name}${r.time ? ` (${Math.floor(r.time / 60)}:${String(Math.floor(r.time % 60)).padStart(2, '0')})` : ''}`).join(' · ');
   if (reason === 'arret' && G.caughtRun) $('end-sub').textContent = G.caughtRun === 'bagarre' ? 'Bagarre avec la police' : 'Délit de fuite après un accident';
   $('end-verdict').textContent = race ? (race.rank === 1 ? `Bravo ! Tu remportes ${fmtFC(race.prix)}.` : race.rank === 2 ? 'Deuxième : tu récupères ta mise.' : 'Perdu : la mise est pour le gagnant. Revanche ?')
+    : reason === 'fourriere' ? `Ton véhicule est resté trop longtemps en panne sur le boulevard : la police l’a fait enlever par la dépanneuse (fourrière : ${fmtFC(TOW_FINE)}). Prévois toujours assez d’essence !`
     : reason === 'arret' && G.caughtRun === 'bagarre' ? 'Tu t’es battu avec un policier et tu as fui : la police t’a rattrapé. Tu passes la nuit au poste.'
     : reason === 'arret' && G.caughtRun ? 'Tu as fui après avoir renversé un piéton : la police t’a rattrapé. Tu passes la nuit au poste.'
     : reason === 'arret' ? `Tu as renversé un piéton : l'ambulance l'a emmené à l'hôpital, et tu passes la nuit au poste (amende de ${fmtFC(ACC_FINE)}). Conduis prudemment dans la foule !`
@@ -1983,6 +1984,7 @@ addEventListener('keydown', e => { if (e.code === 'KeyE' && G.state === 'play') 
 // Quand le carburant finit, le véhicule est garé là où il s'arrête. Avec de l'argent, on envoie le receveur (ou on y va soi-même) : il descend avec un bidon,
 // marche jusqu'à la station la plus proche, achète l'essence, revient, ouvre le coffre et verse. Sans argent, le jeu s'arrête là.
 const BIDON_PCT = 25, BIDON_FC = BIDON_PCT * FUEL_PRICE, PANNE_WALK = 4;
+const PANNE_TOW = 110, TOW_FINE = 30000;                // (en panne depuis trop longtemps : la police enlève le véhicule avec la dépanneuse)
 function panneBidon() {
   const g = new THREE.Group(), red = new THREE.MeshLambertMaterial({ color: 0xc8102e });
   g.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.17), red));
@@ -2014,6 +2016,7 @@ function panneEnd() {
   if (!P) return;
   if (P.a) A.group.remove(P.a.ch.mesh);
   if (P.coffre) taxiMesh.remove(P.coffre);
+  if (P.tow) { A.group.remove(P.tow.mesh); taxiMesh.scale.setScalar(1); }
   if (rcv) rcv.ch.mesh.visible = true;
   taxiMesh.traverse(m => { if (m.userData.rider === 'conducteur') m.visible = true; });
   G.panne = null;
@@ -2064,6 +2067,44 @@ function panneWalk(P, pts, dt) {
   place(a.ch.mesh, a.x, a.z, a.yaw, 0);
   return done;
 }
+/** Trop longtemps en panne : la police arrive derrière avec la dépanneuse (le camion-grue), accroche le véhicule et l'emmène : fin de la journée. */
+function panneTowStart(P) {
+  if (P.a) A.group.remove(P.a.ch.mesh);
+  if (P.coffre) { taxiMesh.remove(P.coffre); P.coffre = null; }
+  if (P.phase === 'ask') { $('choice').hidden = true; G.choiceCb = null; }
+  P.a = null;
+  if (rcv) rcv.ch.mesh.visible = true;
+  taxiMesh.traverse(m => { if (m.userData.rider === 'conducteur') m.visible = true; });
+  const mesh = createCraneTruck();
+  A.group.add(mesh);
+  P.tow = { phase: 'come', t: 0, d: 120, stop: taxi.bl / 2 + 6.4, v: 0, mesh };
+  place(mesh, taxi.x, taxi.z + 500, taxi.heading, 0);
+  hud.toast('Le véhicule gêne la circulation depuis trop longtemps : la police arrive avec la dépanneuse !', 4.5);
+  say('Ah ! Polisi ya mobembo eyei… — La police arrive pour nous remorquer !', 'client', 4);
+}
+function panneTow(P, dt) {
+  const T = P.tow, fw = [Math.sin(taxi.heading), -Math.cos(taxi.heading)];
+  T.t += dt;
+  if (T.phase === 'come') {
+    T.d = Math.max(T.stop, T.d - 13 * dt);
+    if (T.d <= T.stop) { T.phase = 'hook'; T.t = 0; hud.toast('Les policiers accrochent le véhicule…', 3); }
+  } else if (T.phase === 'hook') {
+    if (T.t > 3.5) {                                                  // (le véhicule est hissé sur le plateau : on en pose une copie, l'original disparaît)
+      try {
+        const c = taxiMesh.clone(true);
+        c.position.set(0, 1.45, T.mesh.userData.bed ?? 1.2); c.rotation.set(0, 0, 0);
+        T.mesh.add(c);
+      } catch (e) { console.error(e); }
+      taxiMesh.scale.setScalar(0.001);
+      T.phase = 'go'; T.t = 0;
+    }
+  } else {
+    T.v = Math.min(15, T.v + 3.2 * dt);
+    T.d -= T.v * dt;                                                  // (il repart devant, avec le véhicule à bord)
+    if (T.t > 6) { G.fines += TOW_FINE; panneEnd(); endShift('fourriere'); return; }
+  }
+  place(T.mesh, taxi.x - fw[0] * T.d, taxi.z - fw[1] * T.d, taxi.heading, 0);
+}
 function panneScene(dt) {
   let P = G.panne;
   if (G.state !== 'play') { if (P) panneEnd(); return; }
@@ -2073,6 +2114,9 @@ function panneScene(dt) {
   }
   P.t += dt;
   G.prompt = '';
+  if (P.tow) { panneTow(P, dt); return; }
+  if (P.t > PANNE_TOW && !['stop', 'boot', 'in', 'over'].includes(P.phase) && !G.police) panneTowStart(P);
+  if (P.tow) return;
   if (P.phase === 'stop') {
     if (Math.abs(taxi.speed) > 0.3 && P.t < 8) return;
     taxi.speed = 0;
