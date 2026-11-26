@@ -1984,7 +1984,7 @@ addEventListener('keydown', e => { if (e.code === 'KeyE' && G.state === 'play') 
 // Quand le carburant finit, le véhicule est garé là où il s'arrête. Avec de l'argent, on envoie le receveur (ou on y va soi-même) : il descend avec un bidon,
 // marche jusqu'à la station la plus proche, achète l'essence, revient, ouvre le coffre et verse. Sans argent, le jeu s'arrête là.
 const BIDON_PCT = 25, BIDON_FC = BIDON_PCT * FUEL_PRICE, PANNE_WALK = 4;
-const PANNE_TOW = 110, TOW_FINE = 30000, TOW_MOVE_FINE = 10000;                // (en panne depuis trop longtemps : la police enlève le véhicule avec la dépanneuse)
+const PANNE_TOW = 150, TOW_FINE = 30000, TOW_MOVE_FINE = 10000;                // (en panne depuis trop longtemps : la police enlève le véhicule avec la dépanneuse)
 function panneBidon() {
   const g = new THREE.Group(), red = new THREE.MeshLambertMaterial({ color: 0xc8102e });
   g.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.17), red));
@@ -2113,7 +2113,7 @@ function panneTow(P, dt) {
   } else if (T.phase === 'leave') {
     T.v = Math.min(8, T.v + 3 * dt);
     T.d += T.v * dt;                                                   // (elle s'éloigne en marche arrière, par l'accotement)
-    if (T.d > 140) { A.group.remove(T.mesh); P.tow = null; P.towed = (P.towed ?? 0) + 1; P.t = 0; P.phase = 'stop'; return; }
+    if (T.d > 140) { A.group.remove(T.mesh); P.tow = null; P.towed = (P.towed ?? 0) + 1; P.t = 0; P.age = 0; P.phase = 'stop'; return; }
   } else {
     T.v = Math.min(15, T.v + 3.2 * dt);
     T.d -= T.v * dt;                                                   // (elle repart devant, avec le véhicule à bord)
@@ -2137,11 +2137,11 @@ function panneScene(dt) {
     if (VEH_ID === 'athlete' || G.fuel > 0.05 || G.off || G.held || G.police || G.accident || G.race || G.wewaFall) return;
     P = panneStart();
   }
-  P.t += dt;
+  P.t += dt; P.age = (P.age ?? 0) + dt;                   // (age : depuis le début de la panne, sans remise à zéro par étape)
   G.prompt = '';
   panneBlock(P);
   if (P.tow) { panneTow(P, dt); return; }
-  if (P.t > PANNE_TOW && !['stop', 'boot', 'in', 'over'].includes(P.phase) && !G.police) panneTowStart(P);
+  if (P.age > PANNE_TOW && !['stop', 'boot', 'in', 'over'].includes(P.phase) && !G.police) panneTowStart(P);
   if (P.tow) return;
   if (P.phase === 'stop') {
     if (Math.abs(taxi.speed) > 0.3 && P.t < 8) return;

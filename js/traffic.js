@@ -632,7 +632,7 @@ export class Traffic {
         }
         if (v.stop > 0 && !v.flee) { v.stop -= dt; target = 0; }            // (la jeep de police de l'autre chaussée s'arrête à la scène)
         target = Math.min(target, this.worksLimit(v, taxi, dt));            // (chantier : se rabattre)
-        for (const bk of this.blocks) if (bk.side === -1) { const g = bk.z - v.z - v.len / 2; if (g > -8 && g < 90) target = Math.min(target, Math.sqrt(2 * 6 * Math.max(0, g - 3))); }   // (freinage selon la distance d'arrêt)
+        for (const bk of this.blocks) if (bk.side === -1 && this.blockHits(bk, v)) { const g = bk.z - v.z - v.len / 2; if (g > -8 && g < 90) target = Math.min(target, Math.sqrt(2 * 6 * Math.max(0, g - 3))); }   // (freinage selon la distance d'arrêt)
         if (taxi.z > v.z && sameLevel(taxi, v) && Math.abs(taxi.x - v.x) < (tw(taxi) + v.wid) / 2 + 0.2) {   // le taxi devant elle, dans sa voie
           const g = taxi.z - v.z - (tl(taxi) + v.len) / 2;
           if (g < 18) target = Math.min(target, Math.max(0, -Math.cos(taxi.heading ?? 0) * taxi.speed + (g - 5) * 0.6));
