@@ -11756,7 +11756,15 @@ export function buildWorld(scene, opts = {}) {
     else addCulture(b, signs, m);
   }
   for (const sr of R.workers) addWorkers(details.at(g(sr)), g(sr));
-  for (const p of PHOTO_BOARDS) addPhotoBoard(chunks.at(g(p.s)), signs, p);
+  for (let p of PHOTO_BOARDS) {
+    if (p.flex) {                                                                       // (cherche l'emplacement libre le plus proche : ni rue latérale ni arrêt de bus)
+      const ok = s => { const z = g(s); return !atSideRoad(p.side, z, 12) && !inSideRoadSpan(p.side, z) && !nearAny(z, p.side > 0 ? BUS_STOPS : BUS_STOPS_L, 22) && !inRiver(z, 12) && !inCrossing(z, 12); };
+      const d = [0, 20, -20, 40, -40, 60, -60, 90, -90, 130, -130].find(o => ok(p.s + o));
+      if (d === undefined) continue;
+      p = { ...p, s: p.s + d };
+    }
+    addPhotoBoard(chunks.at(g(p.s)), signs, p);
+  }
   addSignals(scene, chunks);
   if (R.industrial) addPoidsLourds(scene, chunks, details, signs, groundMat);
   if (R.rocade) addRocade(scene, chunks, details, signs);

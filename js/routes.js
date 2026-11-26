@@ -351,6 +351,10 @@ export const ROUTES = {
     // Grands panneaux publicitaires avec une photo (dossier « pano publicitaire ») : s, côté, image, largeur (m)
     photoBoards: [
       { s: 13402, side: 1, img: 'data/tex/pubs/jesus_revient.jpg', w: 9.6 },   // « Jésus revient », à l'entrée de la 16e Rue, côté industriel
+      // (26/11, dossier « pano publicitaire » : un panneau par image ; flex : décalé tout seul s'il tombe sur une rue ou un arrêt)
+      { s: 3100, side: -1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },            // FORAKI, Fondation Rabbi Kimbangi
+      { s: 6500, side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                // Ministère évangélique « Jésus revient bientôt »
+      { s: 9800, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },       // Malongi IA, l'assistant pédagogique des enseignants
     ],
     // Tronçon 16e Rue → 1re Rue (croquis OSM « Bd Lumumba 16e–1re Rue », TPF/FIchierGAMA/roadskin.shp).
     // s = mètres réels depuis l'aéroport (16e Rue = 13 435 m + distance du croquis) ; n = numéro sur le croquis.
