@@ -3151,6 +3151,10 @@ function addPhotoBoard(b, signs, p) {
     .box(w + 0.6, 0.12, 1.3, 0x5d666e, x, y0 - 0.35, z + 0.55)                                        // passerelle d'entretien
     .box(w + 0.6, 0.6, 0.05, 0x5d666e, x, y0 + 0.05, z + 1.2);                                        // garde-corps
   for (let k = 0; k < 3; k++) b.box(0.35, 0.25, 0.45, 0xdedede, x + (k - 1) * w / 3, y0 - 0.1, z + 1.05);   // projecteurs
+  if (LAMPS) {                                                                                       // (la nuit : projecteurs allumés et tache de lumière sur le bas-côté, comme les lampadaires)
+    for (let k = 0; k < 3; k++) LAMPS.at(z).box(0.45, 0.14, 0.55, 0xffffff, x + (k - 1) * w / 3, y0 - 0.1, z + 1.05);
+    POOLS.at(z).add(new THREE.PlaneGeometry(w * 1.6, 14), 0xffffff, x - side * 2, 0.06, z + 0.6, -Math.PI / 2);
+  }
   const tex = () => {
     const t = new THREE.Texture(p.image);
     t.colorSpace = THREE.SRGBColorSpace;
