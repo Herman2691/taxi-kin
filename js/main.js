@@ -1,4 +1,4 @@
-// Taxi Kin — boucle de jeu, conduite du taxi, économie de la journée.
+// Fula-Fula Kin — boucle de jeu, conduite du taxi, économie de la journée.
 import { Radio } from './radio.js';
 import { buildCockpit } from './cockpit.js';
 import { Lunettes } from './lunettes.js';

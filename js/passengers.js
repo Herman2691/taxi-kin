@@ -8,7 +8,7 @@ import { place, spreadAt, worldVec } from './route.js';
 import { GOALS, BUS_STOPS, BUS_STOPS_L, STATIONS, GOALS_LEN, LANE_R, LANE_W, ROAD_EDGE, inRiver, inRaised, roadH, CROWDS, inCrowd, inFlyover } from './world.js';
 import { CURRENT } from './routes.js';
 
-// Ce que disent les clients : en lingala, puis en français (lignes écrites pour Taxi Kin)
+// Ce que disent les clients : en lingala, puis en français (lignes écrites pour Fula-Fula Kin)
 const TYPES = [
   { label: 'Maman du marché', kind: 'woman', basin: true, board: d => `Mbote ! Na ${d}, malembe hein. — Bonjour ! À ${d}, doucement, j'ai des œufs.` },
   { label: "Homme d'affaires", kind: 'business', board: d => `${d}, mbangu ! — ${d}, vite, j'ai une réunion !` },

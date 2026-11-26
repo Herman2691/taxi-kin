@@ -1,4 +1,4 @@
-// Fonction serveur de Taxi Kin : un client (ou un policier…) répond au joueur grâce à une IA.
+// Fonction serveur de Fula-Fula Kin : un client (ou un policier…) répond au joueur grâce à une IA.
 // Les clés ne sont JAMAIS dans le jeu : elles sont dans les variables d'environnement de Vercel.
 // Chaîne de repli : on essaie les IA dans l'ordre, la suivante prend le relais si la limite est atteinte, si ça tarde ou si ça échoue ;
 // si aucune ne répond, on renvoie text:null et le jeu utilise ses répliques écrites à l'avance.

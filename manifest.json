@@ -1,12 +1,12 @@
 {
-  "name": "Taxi Kin — Kinshasa VR Adventure",
-  "short_name": "Taxi Kin",
-  "description": "Simulateur de conduite de taxi, 207 et wewa à travers Kinshasa (avec mode VR).",
+  "name": "Fula-Fula Kin — Kinshasa VR Adventure",
+  "short_name": "Fula-Fula Kin",
+  "description": "Simulateur de conduite de fula-fula, taxi et wewa à travers Kinshasa (avec mode VR).",
   "start_url": "./index.html",
   "display": "fullscreen",
   "orientation": "landscape",
-  "background_color": "#0e1014",
-  "theme_color": "#f5c400",
+  "background_color": "#0b1a2b",
+  "theme_color": "#0b1a2b",
   "icons": [
     {
       "src": "data/logo/icon-128.png",

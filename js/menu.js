@@ -1,4 +1,4 @@
-// Taxi Kin — le menu seul (page d'accueil légère) : on choisit le mode, le véhicule, la ligne, le sens, et ce n'est qu'en appuyant sur « Commencer »
+// Fula-Fula Kin — le menu seul (page d'accueil légère) : on choisit le mode, le véhicule, la ligne, le sens, et ce n'est qu'en appuyant sur « Commencer »
 // que le jeu (jeu.html, js/main.js) se charge et construit la ville de l'itinéraire choisi. Mêmes réglages enregistrés (localStorage) que dans le jeu.
 import { ROUTES, CURRENT, ITINERAIRES, VEHICULES, COURSES } from './routes.js';
 import { THANKS } from './credits.js';
