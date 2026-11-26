@@ -1724,7 +1724,7 @@ function drive(dt) {
   if (prev < 0 && taxi.speed > 0 && !inp.throttle) taxi.speed = 0;
   if (taxi.speed > maxF) taxi.speed = Math.max(maxF, taxi.speed - 4 * dt);
   taxi.speed = clamp(taxi.speed, -MAX_REV, MAX_FWD);
-  if (G.held && taxi.speed <= 0.3) taxi.speed = 0;               // (route barrée par le chauffeur cogné : arrêté, pas de marche arrière)
+  if ((G.held || G.panne) && taxi.speed <= 0.3) taxi.speed = 0;   // (panne sèche : le véhicule reste garé, il ne recule pas ; route barrée par le chauffeur cogné : arrêté, pas de marche arrière)
 
   // Direction : tour complet possible (demi-tour, routes secondaires), plus douce à haute vitesse. Sans action sur le
   // volant, le taxi se remet dans l'axe de la route où il roule s'il en est proche (il ne lutte pas contre un demi-tour)
