@@ -3026,10 +3026,9 @@ const portraitTouch = matchMedia('(orientation: portrait) and (pointer: coarse)'
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000);
-  // Adaptation automatique : si l'image reste lente 4 s, on allège (ombres coupées, puis image moins définie)
+  // Adaptation automatique : si l'image reste lente 4 s, on allège (ombres coupées ; la définition de l'image n'est jamais réduite : elle faisait trembler le lointain)
   if (!extDone) {
     try { extDone = ROAD1.world.extStep?.(G.state === 'play' ? 5 : 14) ?? true; } catch (err) { extDone = true; console.error(err); }
-    if (extDone) releaseCpuCopies(scene);
   }
   if (G.state === 'play' && !document.hidden && extDone) {
     perf.n++; perf.sum += now - last;
@@ -3038,7 +3037,6 @@ function frame(now) {
       perf.n = 0; perf.sum = 0;
       if (fps < 26 && perf.skip-- <= 0) {
         if (quality === 'high') { quality = 'low'; $('sel-quality').value = 'low'; applyQuality(); hud.toast('Image lente : mode « Légers » activé.', 3); }
-        else if (renderScale > 0.6) { renderScale = Math.max(0.6, renderScale - 0.2); applyQuality(); hud.toast('Image lente : définition réduite.', 3); }
         perf.skip = 1;                                  // (on laisse une période pour juger le nouveau réglage)
       }
     }
