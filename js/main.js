@@ -3020,13 +3020,18 @@ function menuCamera(t) {
 let last = performance.now();
 let menuT = 0;
 const perf = { n: 0, sum: 0, skip: 1 };
+let extDone = false;                                    // (décor lointain du prolongement : construit par tranches, voir world.js extStep)
 const portraitTouch = matchMedia('(orientation: portrait) and (pointer: coarse)');
 
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000);
   // Adaptation automatique : si l'image reste lente 4 s, on allège (ombres coupées, puis image moins définie)
-  if (G.state === 'play' && !document.hidden) {
+  if (!extDone) {
+    try { extDone = ROAD1.world.extStep?.(G.state === 'play' ? 5 : 14) ?? true; } catch (err) { extDone = true; console.error(err); }
+    if (extDone) releaseCpuCopies(scene);
+  }
+  if (G.state === 'play' && !document.hidden && extDone) {
     perf.n++; perf.sum += now - last;
     if (perf.sum > 4000) {
       const fps = perf.n * 1000 / perf.sum;

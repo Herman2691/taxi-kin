@@ -20,7 +20,7 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd2';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd3';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 export const ROUTE_LEN = Math.round(GAME_LEN) - R.end.trim;   // portique d'arrivée
 export const MEDIAN = R.twoLane ? 0.12 : R.rocade ? 0.3 : 1.2;   // demi-largeur du terre-plein (route à deux bandes : simple ligne ; Rocade : double ligne)
 export const LANE_W = 3.5;
@@ -9993,9 +9993,10 @@ function addExtFacade(b, d, signs, side, z, w, zone) {
  * Le prolongement après la fourche : sol, terre-plein, bordures et trottoirs, lampadaires, poteaux, façades, carrefours
  * (Kasa-Vubu, Libération, 30 Juin et son saut-de-mouton), lieux nommés. rigid : objets posés en bloc (carrefours).
  */
-function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
+function* addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {   // (générateur : le décor lointain se construit par tranches, voir buildWorld)
   const zA = Z_FORK - 0.5, zE = Z_END;
   addExtGround(scene, groundMat);
+  yield;
 
   // Terre-plein : Sendwe béton + blocs rouges et blancs ; Triomphal planté (palmiers en bacs, drapeaux) ; Libération muret bas ;
   // Boulevard du 30 Juin : comme sur le trajet « Boulevard du 30 Juin » (béton gris + séparateur DBA rouge et blanc, voir plus bas)
@@ -10032,6 +10033,7 @@ function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
     }
     for (let z = zStart - 18; z > zStop + 10; z -= 76) addFlag(chunks.at(z), signs, 0, z, 10);
   }
+  yield;
   // Bordures peintes du terre-plein (rouge et blanc ; blanches sur le Triomphal)
   let paint = 0;
   for (let z = zA; z > zE; z -= 1.5) {
@@ -10040,8 +10042,10 @@ function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
     for (const s of [-1, 1]) curbs.at(z).box(0.16, 0.3, 1.5, zone === 'triomphal' ? 0xf4f4f0 : c, s * (MEDIAN - 0.08), zone === 'liberation' ? 0.18 : 0.16, zm);
   }
 
+  yield;
   // Bordures, caniveaux, trottoirs (bouches des carrefours et des avenues ouvertes)
   for (const s of [-1, 1]) {
+    yield;
     for (const [p, q] of minus(pieces(zA, zE, 16), EXT_CUTS[s])) {
       const zc = (p + q) / 2, len = p - q, b = chunks.at(zc), zone = extZone(zc), d = details.at(zc);
       const pointe = s > 0 && zc > Z_FORK - 112;           // pointe de la fourche : seulement la bordure
@@ -10074,6 +10078,7 @@ function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
     if (zone === '30juin' && paint % 2 === 0) for (const s of [-1, 1]) if (!extCut(s, z)) details.at(z).box(0.28, 0.32, 0.5, 0x6e2a22, s * (ROAD_EDGE + 0.3), 0.36, z);   // bornes
   }
 
+  yield;
   // Lampadaires : doubles sur le terre-plein (Sendwe, Triomphal et 30 Juin, avec bannières bleues), à crosse sur les trottoirs (Libération)
   for (const [zStart, zStop] of [[zA - 12, EXT_ZC], [EXT_ZD - 26, zE + 18]]) {
     for (let z = zStart; z > zStop; z -= 38) {
@@ -10088,8 +10093,10 @@ function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
     if (extCut(s, z, 2) || inFlyover(z, 2)) continue;
     addSideLamp(chunks.at(z), s, z);
   }
+  yield;
   // Poteaux électriques et fils (Sendwe, Libération, Boulevard du 30 Juin)
   for (const s of [-1, 1]) {
+    yield;
     let prev = null;
     for (let z = zA - 6; z > zE + 18; z -= 32) {
       if (extZone(z) === 'triomphal' || (ARC_D && z < ARC_D.z0 + 30 && z > ARC_D.z1 - 30) || extCut(s, z, 2) || (s > 0 && z > Z_FORK - 112)) { prev = null; continue; }
@@ -10100,10 +10107,12 @@ function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
     }
   }
 
+  yield;
   // Façades génériques et vie des trottoirs
   for (const side of [-1, 1]) {
-    let z = zA - 10;
+    let z = zA - 10, nf = 0;
     while (z > zE + 6) {
+      if (++nf % 40 === 0) yield;
       const zone = extZone(z), k = Math.random();
       const w = (zone === 'triomphal' || zone === '30juin') ? rand(18, 32) : k < 0.5 ? rand(6, 10) : rand(10, 18);
       const z0 = z, z1 = z - w, cz = z - w / 2;
@@ -10125,16 +10134,19 @@ function addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
   }
 
   // Ruisseaux et canaux latéraux (Bd de la Permanence, Stade des Martyrs, Kinshasa Arena → Huileries, INA)
+  yield;
   addExtStreams(chunks, details);
+  yield;
 
   // Lieux nommés
-  for (const p of EXT_PLACES) addExtPlace(scene, chunks, details, signs, p);
+  for (const p of EXT_PLACES) { addExtPlace(scene, chunks, details, signs, p); yield; }
 
   // Robots roulage emblématiques (Pont-Cabu / Kasa-Vubu, Carrefour des Huileries sur le Triomphal, et REGIDESO / Huileries sur le 30 Juin)
   addRobotRoulage(chunks.at(ZX(1465)), signs, 0, ZX(1465), 'xrobot_cabu');
   addRobotRoulage(chunks.at(ZX(2400)), signs, 0, ZX(2400), 'xrobot_huileries');
   addRobotRoulage(chunks.at(ZX(9033)), signs, 0, ZX(9033), 'xrobot_30juin_huileries');
 
+  yield;
   addExtJunctions(scene, chunks, details, signs, rigid);
 }
 
@@ -11699,7 +11711,30 @@ export function buildWorld(scene, opts = {}) {
   __mark('ouvrage 11 : const rigid = new Rigid();');
   if (LIM?.fork && R.end.fork) addSendweFork(chunks, details, signs, rigid);
   __mark('ouvrage 12 : if (LIM?.fork && R.end.fork) addSend');
-  if (EXT) addExtension(scene, chunks, details, curbs, signs, rigid, groundMat);
+  // (26/11, chargement plus court) : quand le départ est loin du prolongement, son décor se construit après le départ, par petites tranches
+  // (extStep, appelée à chaque image) ; il a ses propres lots, ses lampes et ses panneaux, affichés ensuite comme les autres (voir follow)
+  // (seulement pour un départ à l'aéroport / début de route, loin du prolongement : les départs nommés, Sendwe, Triomphal, 24 Novembre, Mandela, ou une reprise
+  // à une position précise, arrivent dans le décor lointain, qui doit déjà être là)
+  const qs = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+  const defExt = !!EXT && !START_ATTACHED && Z_START - Z_FORK > 1500 && ['start', 'airport'].includes(qs.get('start') || R.startAt || 'sendwe') && !qs.get('s') && !qs.get('z');
+  let X = null;
+  if (EXT && !defExt) for (const _ of addExtension(scene, chunks, details, curbs, signs, rigid, groundMat));
+  else if (EXT) {
+    X = { c: new Chunks(), d: new Chunks(100), k: new Chunks(100), s: new Signs(), r: new Rigid(), sky: new Chunks(1e6), l: new Chunks(), p: new Chunks(), done: false };
+    X.gen = (function* () {
+      yield* addExtension(scene, X.c, X.d, X.k, X.s, X.r, groundMat);
+      yield; X.c.build(scene);
+      yield; X.sky.build(scene, Object.assign(VC_MAT.clone(), { fog: false }));
+      yield; X.r.build(scene);
+      yield; X.d.build(scene);
+      yield; X.k.build(scene);
+      yield; X.s.build(scene);
+      yield; X.l.build(scene, LAMP_MAT, false);
+      yield; X.p.build(scene, POOL_MAT, false);
+      for (const m of X.p.meshes) { m.receiveShadow = false; m.renderOrder = 1; }
+      X.done = true;
+    })();
+  }
   __mark('ouvrage 13 : if (EXT) addExtension(scene, chunks,');
   __mark('bw Boucle de Masina : tranches à part, affichées de p');
   // Boucle de Masina : tranches à part, affichées de plus loin quand le taxi y roule (voir follow)
@@ -11994,6 +12029,15 @@ export function buildWorld(scene, opts = {}) {
   return {
     sun,
     tick(dt, time, taxi) { campusLife?.update(dt, time, taxi); },
+    /** Construit le décor lointain par tranches (ms par appel) ; renvoie vrai quand c'est fini (ou s'il n'y a rien à faire). */
+    extStep(ms = 5) {
+      if (!X || X.done) return true;
+      const t0 = performance.now();
+      [SKYLINE, LAMPS, POOLS] = [X.sky, X.l, X.p];
+      try { while (!X.done && performance.now() - t0 < ms) X.gen.next(); }
+      finally { SKYLINE = LAMPS = POOLS = null; }
+      return X.done;
+    },
     follow(x, z, heading = 0) {
       // On voit loin dans le sens où roule le taxi (vers Limete, -z, ou en revenant vers l'aéroport, +z) ; de côté : des deux
       const c = Math.cos(heading), far = fog.far + 40, ahead = c > -0.35, behind = c < 0.35;
@@ -12002,6 +12046,13 @@ export function buildWorld(scene, opts = {}) {
       curbs.cull(z, ahead ? 340 : 60, behind ? 340 : 60);
       lamps.cull(z, ahead ? far : 150, behind ? far : 150);
       pools.cull(z, ahead ? 340 : 60, behind ? 340 : 60);
+      if (X?.done) {
+        X.c.cull(z, ahead ? far : 150, behind ? far : 150);
+        X.d.cull(z, ahead ? 200 : 60, behind ? 200 : 60);
+        X.k.cull(z, ahead ? 340 : 60, behind ? 340 : 60);
+        X.l.cull(z, ahead ? far : 150, behind ? far : 150);
+        X.p.cull(z, ahead ? 340 : 60, behind ? 340 : 60);
+      }
       if (PAIR) { pairPeople.cull(z, ahead ? 200 : 60, behind ? 200 : 60); pairFar.cull(z, ahead ? far : 150, behind ? far : 150); }
       for (const m of backdrops) m.visible = m.userData.z1 > z - (ahead ? far : 150) && m.userData.z0 < z + (behind ? far : 150);
       // Masina : depuis le boulevard, on n'en voit que les abords des entrées ; dans la boucle, on voit loin des deux côtés
