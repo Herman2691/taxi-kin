@@ -101,7 +101,7 @@ try {
 } catch { transfer = null; }
 if (transfer?.route !== CURRENT.id) transfer = null;
 let VERSEMENT = transfer?.versement ?? (IT ? VEH.versement : CURRENT.versement);
-const FUEL_START = CURRENT.fuelStart;
+const FUEL_START = Number(new URLSearchParams(location.search).get('essence')) || CURRENT.fuelStart;   // (adresse + ?essence=3 : partir avec 3 % pour essayer la panne sèche)
 const FUEL_PRICE = 100;          // FC par % de réservoir
 const REPAIR_COST = 500;
 const FINE_RED = 5000;          // amende de la police pour un feu rouge grillé (FC)
@@ -1018,7 +1018,7 @@ function endShift(reason) {
   const net = G.cash - owed;
   $('countdown').hidden = true;
   traffic.raceFrozen = false;
-  $('end-title').textContent = race ? (race.rank === 1 ? 'Course gagnée ! 🏆' : `Course terminée : ${race.rank}e sur 4`) : reason === 'arret' ? 'Arrêté par la police' : reason === 'arrive' ? `Arrivé : ${IT ? legs().to.name : A.endName} !` : 'Il fait nuit, fin de journée';
+  $('end-title').textContent = race ? (race.rank === 1 ? 'Course gagnée ! 🏆' : `Course terminée : ${race.rank}e sur 4`) : reason === 'panne' ? 'Panne d’essence : fin de la journée' : reason === 'arret' ? 'Arrêté par la police' : reason === 'arrive' ? `Arrivé : ${IT ? legs().to.name : A.endName} !` : 'Il fait nuit, fin de journée';
   $('end-sub').textContent = `${G.rides} course${G.rides > 1 ? 's' : ''} · ${G.crashes} accrochage${G.crashes > 1 ? 's' : ''}${IT ? ` · ${G.tours ?? 0} trajet${(G.tours ?? 0) > 1 ? 's' : ''} terminé${(G.tours ?? 0) > 1 ? 's' : ''}` : ` · ${Math.round(-taxi.z)} m parcourus`}`;
   const rows = [
     [race ? 'Gain de la course' : 'Courses', G.fares], ...(race ? [] : [['Pourboires', G.tips]]),
@@ -1703,7 +1703,7 @@ function crash(strength) {
 }
 
 function drive(dt) {
-  const inp = G.off || G.held ? { steer: 0, throttle: 0, brake: 1 } : lunettes.on ? lunettes.input(taxi.speed) : input.state;   // (moto : conducteur descendu, ou chauffeur cogné qui barre la route : on ne bouge pas)
+  const inp = G.off || G.held || G.panne ? { steer: 0, throttle: 0, brake: 1 } : lunettes.on ? lunettes.input(taxi.speed) : input.state;   // (moto : conducteur descendu, ou chauffeur cogné qui barre la route : on ne bouge pas)
   taxi.steer += (inp.steer - taxi.steer) * Math.min(1, dt * 8);
 
   // Accélération / freinage / marche arrière
@@ -1975,6 +1975,144 @@ function dismountEnd() {
 }
 $('btn-descendre').addEventListener('click', dismountToggle);
 addEventListener('keydown', e => { if (e.code === 'KeyE' && G.state === 'play') dismountToggle(); });
+
+// ---------- Panne sèche (l'auteur, 26/11) ----------
+// Quand le carburant finit, le véhicule est garé là où il s'arrête. Avec de l'argent, on envoie le receveur (ou on y va soi-même) : il descend avec un bidon,
+// marche jusqu'à la station la plus proche, achète l'essence, revient, ouvre le coffre et verse. Sans argent, le jeu s'arrête là.
+const BIDON_PCT = 25, BIDON_FC = BIDON_PCT * FUEL_PRICE, PANNE_WALK = 4;
+function panneBidon() {
+  const g = new THREE.Group(), red = new THREE.MeshLambertMaterial({ color: 0xc8102e });
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.17), red));
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.08), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+  cap.position.set(0.08, 0.24, 0);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.05), red);
+  grip.position.set(-0.05, 0.24, 0);
+  g.add(cap, grip);
+  return g;
+}
+/** Le coffre ouvert : un volet sombre relevé à l'arrière du véhicule. */
+function panneCoffre() {
+  const g = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(Math.min(1.3, VEH.w * 0.75), 0.05, 0.7), new THREE.MeshLambertMaterial({ color: 0x2a2f36 }));
+  m.position.set(0, 0, -0.35);
+  g.add(m);
+  g.position.set(0, VEH_ID === 'bus' ? 1.1 : 0.98, VEH.l / 2);
+  g.rotation.x = -1.15;
+  return g;
+}
+function panneStart() {
+  const P = G.panne = { phase: 'stop', t: 0 };
+  taxi.speed = Math.min(taxi.speed, 3);
+  hud.toast('Panne d’essence ! Le réservoir est vide.', 3.5);
+  say('Essence esili ! — On n’a plus d’essence !', 'client', 3.5);
+  return P;
+}
+function panneEnd() {
+  const P = G.panne;
+  if (!P) return;
+  if (P.a) A.group.remove(P.a.ch.mesh);
+  if (P.coffre) taxiMesh.remove(P.coffre);
+  if (rcv) rcv.ch.mesh.visible = true;
+  taxiMesh.traverse(m => { if (m.userData.rider === 'conducteur') m.visible = true; });
+  G.panne = null;
+}
+/** Le plan de marche : la porte, le bas-côté, la station, et le retour par le coffre. Un trajet trop long se fait hors de vue (le temps passe quand même). */
+function panneGo(P, receveur) {
+  const s = Math.cos(taxi.heading) >= 0 ? 1 : -1, sx = taxi.x >= 0 ? 1 : -1, fw = [Math.sin(taxi.heading), -Math.cos(taxi.heading)];
+  const door = [taxi.x + (receveur ? sx : -sx) * (taxi.bw / 2 + 0.55), taxi.z];
+  const rear = [taxi.x - fw[0] * (taxi.bl / 2 + 0.9), taxi.z - fw[1] * (taxi.bl / 2 + 0.9)];
+  const vergeX = Math.abs(taxi.x) < ROAD_EDGE ? taxi.x + sx * (ROAD_EDGE - Math.abs(taxi.x) + 1.8) : taxi.x + sx * 2;
+  const pool = FUELS.filter(f => !f.kadafi).length ? FUELS.filter(f => !f.kadafi) : FUELS;
+  const zOf = f => (f.area ? f.area[1] : f.z);
+  const st = pool.slice().sort((a, b) => Math.abs(zOf(a) - taxi.z) - Math.abs(zOf(b) - taxi.z))[0];
+  const zS = st ? zOf(st) : taxi.z - s * 200, dist = Math.abs(zS - taxi.z), dir = zS < taxi.z ? -1 : 1;
+  const vis = Math.min(dist, 150);                                                // (au-delà, il disparaît au loin)
+  P.station = st?.name ?? 'une station';
+  P.dist = dist;
+  P.pts = [door, [vergeX, door[1]], [vergeX, taxi.z + dir * vis]];
+  P.hidden = Math.min(18, Math.max(0, (dist - vis) * 2 / PANNE_WALK));          // (secondes hors de vue, aller-retour)
+  P.back = [[vergeX, taxi.z + dir * vis], [vergeX, rear[1]], rear];
+  P.rear = rear; P.door = door; P.vergeX = vergeX;
+  const ch = new Character(outfit('man', { shirt: receveur ? 0x1d4fa0 : 0xf2f2f2, cap: receveur ? 0xf4f4f4 : null }));
+  A.group.add(ch.mesh);
+  P.bidon = ch.hold(panneBidon());
+  P.a = { ch, x: door[0], z: door[1], yaw: 0 };
+  P.receveur = receveur;
+  if (receveur && rcv) rcv.ch.mesh.visible = false;
+  if (!receveur) taxiMesh.traverse(m => { if (m.userData.rider === 'conducteur') m.visible = false; });
+  P.leg = null; P.phase = 'out';
+  say(receveur ? 'Ya mwana, kende mua kosomba bidon ! — Vas acheter un bidon d’essence !' : 'Nakende mua kosomba essence… — Je vais acheter de l’essence.', 'client', 3.5);
+}
+/** Fait avancer P.a le long de pts à vitesse constante ; renvoie vrai quand il est arrivé. */
+function panneWalk(P, pts, dt) {
+  if (!P.leg || P.leg.pts !== pts) P.leg = { pts, i: 0, k: 0 };
+  const L = P.leg, a = P.a;
+  let left = PANNE_WALK * dt;
+  while (left > 0 && L.i < pts.length - 1) {
+    const p = pts[L.i], q = pts[L.i + 1], d = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1e-3, remain = d * (1 - L.k);
+    const step = Math.min(left, remain);
+    L.k += step / d; left -= step;
+    a.yaw = Math.atan2(-(q[0] - p[0]), q[1] - p[1]) + Math.PI;
+    if (L.k >= 0.9999) { L.i++; L.k = 0; }
+  }
+  const done = L.i >= pts.length - 1;
+  if (done) [a.x, a.z] = pts[pts.length - 1];
+  else [a.x, a.z] = lerp2(pts[L.i], pts[L.i + 1], L.k);
+  a.ch.pose(done ? 'idle' : 'walk', G.time, 1.9);
+  place(a.ch.mesh, a.x, a.z, a.yaw, 0);
+  return done;
+}
+function panneScene(dt) {
+  let P = G.panne;
+  if (G.state !== 'play') { if (P) panneEnd(); return; }
+  if (!P) {
+    if (VEH_ID === 'athlete' || G.fuel > 0.05 || G.off || G.held || G.police || G.accident || G.race || G.wewaFall) return;
+    P = panneStart();
+  }
+  P.t += dt;
+  G.prompt = '';
+  if (P.phase === 'stop') {
+    if (Math.abs(taxi.speed) > 0.3 && P.t < 8) return;
+    taxi.speed = 0;
+    const cash = G.fares + G.tips - G.fuelCost - G.repairs - G.fines - (G.stolen ?? 0);
+    if (cash < BIDON_FC) {
+      P.phase = 'over'; P.t = 0;
+      hud.toast(`Plus assez d’argent pour un bidon (${fmtFC(BIDON_FC)}) : le jeu s’arrête ici.`, 5);
+      say('Mbongo ezali te… Tokoki lisusu kokende te. — Plus d’argent… on ne peut plus avancer.', 'client', 4);
+      return;
+    }
+    P.phase = 'ask';
+    if (VEH_ID === 'moto') { panneGo(P, false); return; }
+    askChoice(`Panne d’essence ! Un bidon de ${BIDON_PCT} % coûte ${fmtFC(BIDON_FC)}. Qui va à la station ?`, 'Le receveur', 'Moi-même', yes => { if (G.panne === P && P.phase === 'ask') panneGo(P, !!yes); });
+    return;
+  }
+  if (P.phase === 'over') { if (P.t > 5) { panneEnd(); endShift('panne'); } return; }
+  if (P.phase === 'ask') { if (lunettes.on && P.t > 3) panneGo(P, false); return; }
+  const a = P.a;
+  if (P.phase === 'out') {
+    if (panneWalk(P, P.pts, dt)) {
+      P.phase = 'far'; P.t = 0;
+      if (P.hidden > 0) a.ch.mesh.visible = false;
+      hud.toast(`Il va à ${P.station} (${Math.round(P.dist)} m)…`, 3);
+    }
+  } else if (P.phase === 'far') {                                                // (à la station : il attend, achète, et repart)
+    if (P.t > P.hidden + 3) {
+      a.ch.mesh.visible = true;
+      G.time += Math.min(900, P.dist * 2 / 1.3) * SHIFT_SECONDS / (720 * 60);      // (le temps réellement perdu : marche aller-retour à 1,3 m/s ; 1 min de jeu = SHIFT_SECONDS / 720 s)
+      G.fuelCost += BIDON_FC;
+      hud.toast(`Bidon payé : ${fmtFC(BIDON_FC)}. Retour au véhicule.`, 3);
+      P.phase = 'back'; P.leg = null;
+    }
+  } else if (P.phase === 'back') {
+    if (panneWalk(P, P.back, dt)) { P.phase = 'boot'; P.t = 0; a.yaw = taxi.heading; P.coffre = panneCoffre(); taxiMesh.add(P.coffre); hud.toast('Il ouvre le coffre…', 2.5); }
+  } else if (P.phase === 'boot') {                                               // (il ouvre, verse, referme)
+    a.ch.pose('idle', G.time);
+    place(a.ch.mesh, a.x, a.z, a.yaw, 0);
+    if (P.t > 3.2 && !P.poured) { P.poured = true; G.fuel = Math.min(100, G.fuel + BIDON_PCT); P.bidon.visible = false; hud.toast(`Il verse l’essence : +${BIDON_PCT} % de carburant.`, 3); }
+    if (P.t > 5.4) { taxiMesh.remove(P.coffre); P.coffre = null; hud.toast('Coffre fermé.', 1.5); P.phase = 'in'; P.leg = null; P.door2 = [P.rear, [P.vergeX, P.rear[1]], [P.vergeX, P.door[1]], P.door]; }
+  } else if (P.phase === 'in') {
+    if (panneWalk(P, P.door2, dt)) { say('Yaka tokende ! — Allons-y !', 'client', 2.5); hud.toast('On repart !', 2); panneEnd(); }
+  }
+}
 
 // ---------- Chute du wewa du joueur avec ses clients lorsqu'un véhicule le tamponne ----------
 function startWewaFall(hit) {
@@ -2634,6 +2772,7 @@ function update(dt) {
   handleHitRun(dt);
   handlePolice(dt);
   dismountScene(dt);
+  panneScene(dt);
   W1.updateSignals(G.time);
   for (const f of FLYOVERS) {
     if (flyWarned.has(f) || taxi.z > f.z0 + 160 || taxi.z < f.z0 || Math.abs(taxi.x) > ROAD_EDGE) continue;   // (pas depuis Masina)
