@@ -355,7 +355,7 @@ export const ROUTES = {
       { s: 3100, side: -1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },            // FORAKI, Fondation Rabbi Kimbangi
       { s: 6500, side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                // Ministère évangélique « Jésus revient bientôt »
       { s: 9800, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },       // (voir ci-dessus)
-      { s: 11700, side: 1, img: 'data/tex/pubs/sysakademia.png', w: 10.4, flex: true },     // SysAkademia, plateforme de gestion universitaire (sysakademia.com)       // Malongi IA, l'assistant pédagogique des enseignants
+      { s: 11700, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },     // SysAkademia, plateforme de gestion universitaire (sysakademia.com)       // Malongi IA, l'assistant pédagogique des enseignants
     ],
     // Tronçon 16e Rue → 1re Rue (croquis OSM « Bd Lumumba 16e–1re Rue », TPF/FIchierGAMA/roadskin.shp).
     // s = mètres réels depuis l'aéroport (16e Rue = 13 435 m + distance du croquis) ; n = numéro sur le croquis.
