@@ -92,12 +92,16 @@ export class Incidents {
     const used = new Set();
     S.units = crews.map((officers, k) => {
       // (l'auteur, 26/11 : « des jeeps de la circulation sont là mais ne font rien ») : une voiture de police qui roule déjà vers la scène, derrière elle, y vient
-      const own = T.list.find(o => o.kind === 'police' && o.side === 1 && !o.keep && !o.chase && !o.fallen && o.mesh.visible && o.z > S.zI + 25 && o.z < S.zI + 260 && !used.has(o));
+      // (26/11, 2e retour : « la police est là, de l'autre côté, mais n'intervient pas ») : celle de l'autre chaussée qui arrive vers la scène s'y arrête aussi,
+      // et ses policiers traversent le terre-plein ; on prend la plus proche, de l'un ou l'autre côté
+      const dist = o => (o.side === 1 ? o.z - S.zI : S.zI - o.z);
+      const own = T.list.filter(o => o.kind === 'police' && !o.keep && !o.chase && !o.fallen && o.mesh.visible && !used.has(o) && dist(o) > (o.side === 1 ? 25 : 20) && dist(o) < (o.side === 1 ? 260 : 200))
+        .sort((p, q) => dist(p) - dist(q))[0];
       if (own) {
         used.add(own);
         this.clearCargo(own);
         Object.assign(own, { speed: Math.max(own.speed ?? 0, 10), keep: true, urgent: 999, chase: null, flee: 0, stop: 0 });
-        return { v: own, officers, still: 0, braking: false, out: 0, back: 0 };
+        return { v: own, opp: own.side === -1, officers, still: 0, braking: false, out: 0, back: 0 };
       }
       const v = T.jeep(k, taxi);
       this.clearCargo(v);                                                  // (ceux qu'elle avait emmenés la dernière fois sont descendus)
@@ -125,19 +129,19 @@ export class Incidents {
       if (u.out) return;
       const v = u.v;
       u.still = v.speed < 0.4 ? u.still + dt : 0;
-      if (v.z - S.zI < 18 + k * 9 && v.z - S.zI > -5 && !u.braking) { u.braking = true; v.stop = 1e6; }   // (près de la scène : elle freine et s'arrête)
+      if ((u.opp ? S.zI - v.z < 12 && S.zI - v.z > -6 : v.z - S.zI < 18 + k * 9 && v.z - S.zI > -5) && !u.braking) { u.braking = true; v.stop = 1e6; }   // (près de la scène : elle freine et s'arrête)
       if (!((u.braking || u.still > 1.5) && v.speed < 0.3)) return;                // (on ne descend que d'une jeep arrêtée)
       u.out = t; any = true;
       v.stop = 1e6; v.urgent = 0;
       u.door = v.z;
       // (ze : devant la jeep arrêtée la plus avancée ; les policiers de la deuxième jeep passent à côté de la première)
-      const front = Math.min(...S.units.map(q => q.v.z - q.v.len / 2));
+      const front = Math.min(...S.units.filter(q => !q.opp).map(q => q.v.z - q.v.len / 2), S.zI + 20);
       const ze = Math.min(S.zI + 7, front - 1.2);
       S.cx = cx; S.ze = Math.min(S.ze ?? Infinity, ze); S.door = S.door ?? u.door;
       u.officers.forEach((o, j) => {
         const i = S.officers.indexOf(o), z0 = u.door + (j - 0.5) * 0.9;
-        o.x = cx; o.z = z0; o.unit = u;
-        o.fwd = [[cx, z0], ...ways(cx, ze)[i]];                                    // (le retour par le même chemin)
+        o.x = u.opp ? -cx : cx; o.z = z0; o.unit = u;
+        o.fwd = u.opp ? [[-cx, z0], [cx, z0 + 1.5], ...ways(cx, ze)[i]] : [[cx, z0], ...ways(cx, ze)[i]];   // (de l'autre chaussée : on traverse le terre-plein)                                    // (le retour par le même chemin)
         this.route(o, o.fwd, t + 0.4 + j * 0.3, 2.6, () => { o.arrived = true; });
       });
       if (Math.abs(u.door - S.zI) > 30) this.c.toast('La police est bloquée dans la file : les policiers descendent et y vont à pied.', 3.5);
@@ -207,7 +211,7 @@ export class Incidents {
     for (const o of people) { o.unit ??= S.units[0]; left.set(o.unit, left.get(o.unit) + 1); }
     const go = u => { u.back = S.t; Object.assign(u.v, { stop: 0, keep: false, urgent: 0 }); if (S.units.every(q => q.back)) S.polBack = S.t; };
     for (const u of S.units) if (!left.get(u) && !u.back) go(u);
-    people.forEach((o, i) => this.route(o, [[o.x, o.z], [cx, o.z], [cx, o.unit.door + (i % 2) * 0.8]], S.t + i * 0.2, 2.6, () => {
+    people.forEach((o, i) => this.route(o, [[o.x, o.z], [cx, o.z], [cx, o.unit.door + (i % 2) * 0.8], ...(o.unit.opp ? [[-cx, o.unit.door + (i % 2) * 0.8]] : [])], S.t + i * 0.2, 2.6, () => {
       o.ch.mesh.visible = false;
       left.set(o.unit, left.get(o.unit) - 1);
       if (left.get(o.unit) === 0) go(o.unit);
@@ -411,7 +415,7 @@ export class Incidents {
     S.crowd = Array.from({ length: 5 }, (_, k) => {
       const c = this.actor(outfit(['man', 'woman', 'student', 'man', 'woman'][k]), W.ROAD_EDGE + 2.5 + Math.random() * 3, zI - 6 + k * 3.5);
       const ang = -0.9 + k * 0.45;
-      c.path = [[c.x, c.z], [mid[0] + Math.cos(ang) * 3.4 + 2.2, mid[1] + Math.sin(ang) * 3.4], 2 + k * 0.4, 5.5 + k * 0.4];
+      c.path = [[c.x, c.z], [W.ROAD_EDGE + 1.4 + (k % 3) * 0.9, mid[1] + (k - 2) * 1.9], 2 + k * 0.4, 5.5 + k * 0.4];   // (26/11 : les curieux restent sur le bas-côté, pas sur le goudron : les voitures passent)
       c.spd = 2; c.mode = 'idle';
       return c;
     });
@@ -546,14 +550,15 @@ export class Incidents {
   /** Appelé par main.js après un choc avec un véhicule de la circulation (hit : l'objet de traffic.js). */
   onCrash(hit, strength, force = false) {
     if (hit?.kind === 'moto') { this.knockWewa(hit, null); return; }
-    if (this.cur || this.disputeCd > 0 || strength < 4 || !hit || hit.side !== 1 || !HELD_KINDS.has(hit.kind) || hit.racer || hit.chase || (!force && Math.random() > 0.4)) return;
+    if (this.cur || this.disputeCd > 0 || strength < 4 || !hit || hit.side !== 1 || !HELD_KINDS.has(hit.kind) || hit.racer || hit.chase) return;   // (26/11 : tout choc sérieux avec une voiture donne l'accident, plus de tirage au sort)
     const taxi = this.c.taxi, W = this.c.W();
     if (Math.cos(taxi.heading) < 0.5 || taxi.x <= 0 || taxi.level) return;
-    this.disputeCd = 180;
+    this.disputeCd = 60;
     const zF = taxi.z - (taxi.bl / 2 + hit.len / 2 + 2.2);
     this.cur = { kind: 'dispute', t: 0, actors: [], props: [], cars: [hit], block: { z: zF + 6, side: 1 }, held: true };
     this.c.traffic().blocks.push(this.cur.block);
     const xF = clamp(taxi.x, W.LANE_X[0], W.LANE_X[W.LANE_X.length - 1]), T = this.c.traffic();
+    Object.assign(this.cur.block, { x0: xF - 1.7, x1: xF + 1.7 });   // (26/11 : seule la voie du chauffeur cogné est bloquée)
     this.holdCar(hit, T.laneFree(xF, zF, hit, null, 4, 1) ? xF : hit.x, T.laneFree(xF, zF, hit, null, 4, 1) ? zF : hit.z, 0);   // (l'auteur, 13/11 : jamais sur une autre voiture)
     this.c.hold(true);
     const S = this.cur, d = this.actor(outfit('man', { shirt: pick([0xf2f2f2, 0xd9480f, 0x2b8a3e]), idle: 1 }), hit.x - hit.wid / 2 - 0.5, zF);
