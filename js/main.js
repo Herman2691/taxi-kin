@@ -1984,7 +1984,7 @@ addEventListener('keydown', e => { if (e.code === 'KeyE' && G.state === 'play') 
 // Quand le carburant finit, le véhicule est garé là où il s'arrête. Avec de l'argent, on envoie le receveur (ou on y va soi-même) : il descend avec un bidon,
 // marche jusqu'à la station la plus proche, achète l'essence, revient, ouvre le coffre et verse. Sans argent, le jeu s'arrête là.
 const BIDON_PCT = 25, BIDON_FC = BIDON_PCT * FUEL_PRICE, PANNE_WALK = 4;
-const PANNE_TOW = 110, TOW_FINE = 30000;                // (en panne depuis trop longtemps : la police enlève le véhicule avec la dépanneuse)
+const PANNE_TOW = 110, TOW_FINE = 30000, TOW_MOVE_FINE = 10000;                // (en panne depuis trop longtemps : la police enlève le véhicule avec la dépanneuse)
 function panneBidon() {
   const g = new THREE.Group(), red = new THREE.MeshLambertMaterial({ color: 0xc8102e });
   g.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.17), red));
@@ -2017,6 +2017,7 @@ function panneEnd() {
   if (P.a) A.group.remove(P.a.ch.mesh);
   if (P.coffre) taxiMesh.remove(P.coffre);
   if (P.tow) { A.group.remove(P.tow.mesh); taxiMesh.scale.setScalar(1); }
+  if (P.block) P.tr.blocks = P.tr.blocks.filter(b => b !== P.block);
   if (rcv) rcv.ch.mesh.visible = true;
   taxiMesh.traverse(m => { if (m.userData.rider === 'conducteur') m.visible = true; });
   G.panne = null;
@@ -2067,7 +2068,8 @@ function panneWalk(P, pts, dt) {
   place(a.ch.mesh, a.x, a.z, a.yaw, 0);
   return done;
 }
-/** Trop longtemps en panne : la police arrive derrière avec la dépanneuse (le camion-grue), accroche le véhicule et l'emmène : fin de la journée. */
+/** Trop longtemps en panne : la police arrive derrière avec la dépanneuse (le camion-grue), par l'accotement pour ne pas traverser la file de voitures.
+ *  La 1re fois, elle tire le véhicule hors du boulevard, sur le bas-côté (amende) ; la 2e fois, elle l'emporte (fourrière : fin de la journée). */
 function panneTowStart(P) {
   if (P.a) A.group.remove(P.a.ch.mesh);
   if (P.coffre) { taxiMesh.remove(P.coffre); P.coffre = null; }
@@ -2075,35 +2077,58 @@ function panneTowStart(P) {
   P.a = null;
   if (rcv) rcv.ch.mesh.visible = true;
   taxiMesh.traverse(m => { if (m.userData.rider === 'conducteur') m.visible = true; });
+  const sx = taxi.x >= 0 ? 1 : -1, xv = sx * (ROAD_EDGE + 2.6);
+  const onRoad = Math.abs(taxi.x) < ROAD_EDGE && !taxi.level && !W1.obstacleAt(xv, taxi.z, 1.6) && !W1.obstacleAt(xv, taxi.z + 8, 1.6) && !W1.obstacleAt(xv, taxi.z - 8, 1.6);
   const mesh = createCraneTruck();
   A.group.add(mesh);
-  P.tow = { phase: 'come', t: 0, d: 120, stop: taxi.bl / 2 + 6.4, v: 0, mesh };
-  place(mesh, taxi.x, taxi.z + 500, taxi.heading, 0);
+  P.tow = { phase: 'come', t: 0, d: 120, stop: taxi.bl / 2 + 6.4, v: 0, mesh, xv, dz: Math.cos(taxi.heading) >= 0 ? 1 : -1, x0: taxi.x, mode: onRoad && !P.towed ? 'verge' : 'away' };
+  place(mesh, xv, taxi.z + P.tow.dz * 500, taxi.heading, 0);
   hud.toast('Le véhicule gêne la circulation depuis trop longtemps : la police arrive avec la dépanneuse !', 4.5);
   say('Ah ! Polisi ya mobembo eyei… — La police arrive pour nous remorquer !', 'client', 4);
 }
 function panneTow(P, dt) {
-  const T = P.tow, fw = [Math.sin(taxi.heading), -Math.cos(taxi.heading)];
+  const T = P.tow;
   T.t += dt;
   if (T.phase === 'come') {
     T.d = Math.max(T.stop, T.d - 13 * dt);
-    if (T.d <= T.stop) { T.phase = 'hook'; T.t = 0; hud.toast('Les policiers accrochent le véhicule…', 3); }
+    if (T.d <= T.stop) { T.phase = 'hook'; T.t = 0; hud.toast(T.mode === 'verge' ? 'Les policiers tirent le véhicule hors du boulevard…' : 'Les policiers accrochent le véhicule…', 3); }
   } else if (T.phase === 'hook') {
-    if (T.t > 3.5) {                                                  // (le véhicule est hissé sur le plateau : on en pose une copie, l'original disparaît)
-      try {
-        const c = taxiMesh.clone(true);
-        c.position.set(0, 1.45, T.mesh.userData.bed ?? 1.2); c.rotation.set(0, 0, 0);
-        T.mesh.add(c);
-      } catch (e) { console.error(e); }
-      taxiMesh.scale.setScalar(0.001);
-      T.phase = 'go'; T.t = 0;
+    const k = Math.min(1, T.t / 2.8);                                  // (le véhicule est tiré en travers, jusqu'au bas-côté, devant la dépanneuse)
+    taxi.x = T.x0 + (T.xv - T.x0) * (k * k * (3 - 2 * k));
+    if (T.t > 3.4) {
+      if (T.mode === 'verge') {                                        // (laissé sur le bas-côté : la panne continue, on peut envoyer chercher l'essence)
+        G.fines += TOW_MOVE_FINE;
+        hud.toast(`Véhicule déplacé hors du boulevard : amende de ${fmtFC(TOW_MOVE_FINE)}.`, 4);
+        T.phase = 'leave'; T.t = 0;
+      } else {                                                         // (hissé sur le plateau : on pose une copie, l'original disparaît)
+        try {
+          const c = taxiMesh.clone(true);
+          c.position.set(0, 1.45, 1.2); c.rotation.set(0, 0, 0);
+          T.mesh.add(c);
+        } catch (e) { console.error(e); }
+        taxiMesh.scale.setScalar(0.001);
+        T.phase = 'go'; T.t = 0;
+      }
     }
+  } else if (T.phase === 'leave') {
+    T.v = Math.min(8, T.v + 3 * dt);
+    T.d += T.v * dt;                                                   // (elle s'éloigne en marche arrière, par l'accotement)
+    if (T.d > 140) { A.group.remove(T.mesh); P.tow = null; P.towed = (P.towed ?? 0) + 1; P.t = 0; P.phase = 'stop'; return; }
   } else {
     T.v = Math.min(15, T.v + 3.2 * dt);
-    T.d -= T.v * dt;                                                  // (il repart devant, avec le véhicule à bord)
+    T.d -= T.v * dt;                                                   // (elle repart devant, avec le véhicule à bord)
     if (T.t > 6) { G.fines += TOW_FINE; panneEnd(); endShift('fourriere'); return; }
   }
-  place(T.mesh, taxi.x - fw[0] * T.d, taxi.z - fw[1] * T.d, taxi.heading, 0);
+  place(T.mesh, T.xv, taxi.z + T.dz * T.d, taxi.heading, 0);
+}
+/** Le véhicule en panne barre sa voie : les voitures s'arrêtent derrière lui ou changent de file (comme pour un accident), au lieu de le traverser. */
+function panneBlock(P) {
+  const side = taxi.x >= 0 ? 1 : -1, on = Math.abs(taxi.x) < ROAD_EDGE - 0.4;
+  if (!P.block) { P.block = { z: 0, side: 0, x0: 0, x1: 0 }; P.tr = traffic; traffic.blocks.push(P.block); }
+  const b = P.block;
+  b.side = on ? side : 0;                                              // (sur le bas-côté : il ne gêne plus aucune voie)
+  b.z = side === 1 ? taxi.z + taxi.bl / 2 + 0.6 : taxi.z - taxi.bl / 2 - 0.6;
+  b.x0 = taxi.x - taxi.bw / 2 - 0.3; b.x1 = taxi.x + taxi.bw / 2 + 0.3;
 }
 function panneScene(dt) {
   let P = G.panne;
@@ -2114,6 +2139,7 @@ function panneScene(dt) {
   }
   P.t += dt;
   G.prompt = '';
+  panneBlock(P);
   if (P.tow) { panneTow(P, dt); return; }
   if (P.t > PANNE_TOW && !['stop', 'boot', 'in', 'over'].includes(P.phase) && !G.police) panneTowStart(P);
   if (P.tow) return;
