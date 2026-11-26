@@ -1753,7 +1753,8 @@ function drive(dt) {
   const nx = taxi.x + Math.sin(taxi.heading) * taxi.speed * dt / k, nz = taxi.z - Math.cos(taxi.heading) * taxi.speed * dt;
   const lvl = nextLevel(taxi.level, taxi.x, taxi.z, nx, nz);
   const why = rawBlock(nx, nz, lvl) ?? (lvl ? null : solidAround(nx, nz, taxi.heading));
-  if (!why || rawBlock(taxi.x, taxi.z, taxi.level) || ((why === 'obstacle' || why === 'gens' || why === 'vehicule') && solidAround(taxi.x, taxi.z, taxi.heading))) { taxi.x = nx; taxi.z = nz; taxi.level = lvl; }   // (déjà dedans : on peut en sortir)
+  if (!why || rawBlock(taxi.x, taxi.z, taxi.level) || ((why === 'obstacle' || why === 'gens' || why === 'vehicule') && solidAround(taxi.x, taxi.z, taxi.heading)) ||
+      (why === 'travaux' && solidAround(taxi.x, taxi.z, taxi.heading) === 'travaux' && (taxi.speed < 0 || !worksDeep(nx, nz, taxi.heading)))) {   // (26/11 : collé aux barrières du chantier, on peut en sortir : le pas suivant ne doit plus toucher la barrière elle-même) taxi.x = nx; taxi.z = nz; taxi.level = lvl; }   // (déjà dedans : on peut en sortir)
   else {
     // (on ne glisse que dans un sens où le taxi avançait vraiment : de face contre un obstacle, il s'arrête)
     // (l'auteur, 13/11 : rien ne passe à travers) : on ne glisse que là où ni bordure ni obstacle du décor ni personne ne bloque
@@ -1812,6 +1813,12 @@ function worksHint() {
 }
 /** (l'auteur, 13/11 : « rien ne doit passer transparent ») Le véhicule en (x, z), cap h, touche-t-il un obstacle du bord de la route (sur la terre),
  *  un passant ou des clients qui attendent ? On regarde ses quatre coins et le milieu de l'avant et de l'arrière. */
+/** Le véhicule en (x, z), cap h, touche-t-il vraiment une barrière de chantier (sans la marge de 15 cm de solidAround) ? */
+function worksDeep(x, z, h) {
+  const c = Math.cos(h), s = Math.sin(h), hl = VEH.l / 2, hw = VEH.w / 2;
+  for (const [a, b] of [[hl, hw], [hl, -hw], [-hl, hw], [-hl, -hw], [hl, 0], [-hl, 0], [0, hw], [0, -hw]]) if (A.W.inWorks?.(x + s * a + c * b, z - c * a + s * b, 0)) return true;
+  return false;
+}
 function solidAround(x, z, h) {
   const W = A.W, c = Math.cos(h), s = Math.sin(h), hl = VEH.l / 2, hw = VEH.w / 2;
   if (A.qlife?.vehicleAt(x, z)) return 'vehicule';                       // (une moto ou une voiture de Moboma sous le véhicule)
