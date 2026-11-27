@@ -20,7 +20,7 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd6';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd7';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 
 // Lancement groupé et mis en cache des données JSON et textures partagées entre routes
 const __DATA_CACHE = (globalThis.__TAXIKIN_DATA ??= new Map());
@@ -116,16 +116,30 @@ export const WORKS = (R.works ?? []).map(([a, b, side, lanes]) => {
   const lo = Math.min(...lanes), hi = Math.max(...lanes);
   const xIn = MEDIAN + lo * LANE_W, xOut = MEDIAN + (hi + 1) * LANE_W, outer = xOut >= ROAD_EDGE - 0.1;
   const taper = 30, zt = side > 0 ? z0 + taper : z1 - taper;   // (le biseau, du côté d'où vient la circulation)
-  return { z0, z1, side, lanes, lo, hi, xIn, xOut, outer, taper, zt, on: false, meshes: [] };
+  return { z0, z1, side, lanes, lo, hi, xIn, xOut, outer, taper, zt, on: false, meshes: [], props: [], solids: [] };
 });
+/** Remet debout à leur place initiale tous les cônes et barrières légères d'un chantier. */
+export function resetWorkProps(Wk) {
+  if (!Wk.props) return;
+  for (const p of Wk.props) {
+    p.x = p.x0; p.z = p.z0; p.yaw = p.yaw0;
+    p.vx = 0; p.vz = 0; p.vyaw = 0; p.tilt = 0; p.vtilt = 0; p.hit = false; p.fallSign = 1;
+    p.mesh.rotation.set(0, 0, 0);
+    place(p.mesh, p.x, p.z, p.yaw, roadH(p.z));
+  }
+}
 /** Le tirage de la journée (l'auteur, 14/11 : « pas à chaque course, c'est aléatoire ») : souvent aucun chantier, parfois un, rarement deux. */
 export function randomizeWorks() {
   const n = !WORKS.length || Math.random() < 0.45 ? 0 : Math.random() < 0.7 ? 1 : 2;
   const pickd = new Set(WORKS.map((_, i) => i).sort(() => Math.random() - 0.5).slice(0, n));
-  WORKS.forEach((Wk, i) => { Wk.on = pickd.has(i); for (const m of Wk.meshes) m.visible = Wk.on; });
+  WORKS.forEach((Wk, i) => {
+    Wk.on = pickd.has(i);
+    if (Wk.on) resetWorkProps(Wk);
+    for (const m of Wk.meshes) m.visible = Wk.on;
+  });
   return WORKS.filter(Wk => Wk.on).length;
 }
-/** La part fermée de la largeur en z : 1 dans la zone, de 0 à 1 dans le biseau, 0 ailleurs. */
+/** La part fermée de la largeur en z : 1 dans la zone, de 0 à 1 dans le biseau, 0 ailleurs (utilisé par la circulation IA pour se rabattre). */
 function workK(Wk, z) {
   if (!Wk.on) return 0;                                                    // (pas de chantier à cet endroit aujourd'hui)
   if (z <= Wk.z0 && z >= Wk.z1) return 1;
@@ -133,14 +147,14 @@ function workK(Wk, z) {
   if (Wk.side < 0 && z < Wk.z1 && z > Wk.z1 - Wk.taper) return 1 - (Wk.z1 - z) / Wk.taper;
   return 0;
 }
-/** Le point (x, z) est-il dans une zone de travaux fermée, barrières et cônes compris (à m près) ? */
+/** Le point (x, z) touche-t-il un engin lourd immobile du chantier (pelleteuse, rouleau, camion-benne) ? Les cônes et barrières légères ne bloquent pas : ils se dégagent. */
 export function inWorks(x, z, m = 0) {
   for (const Wk of WORKS) {
-    if ((x >= 0 ? 1 : -1) !== Wk.side) continue;
-    const k = workK(Wk, z);
-    if (k <= 0) continue;
-    const ax = Math.abs(x), w = (Wk.xOut - Wk.xIn) * k;
-    if (Wk.outer ? ax > Wk.xOut - w - m && ax < ROAD_EDGE + 0.4 : ax < Wk.xIn + w + m && ax > MEDIAN - 0.3) return true;
+    if (!Wk.on || (x >= 0 ? 1 : -1) !== Wk.side) continue;
+    if (z > Wk.z0 + 4 || z < Wk.z1 - 4) continue;
+    for (const s of Wk.solids) {
+      if (Math.abs(x - s.x) < s.hx + m && Math.abs(z - s.z) < s.hz + m) return true;
+    }
   }
   return false;
 }
@@ -3074,29 +3088,109 @@ function addRobot(b, B, x, z, streetSide) {
   }
 }
 
+let _workGeos = null;
+function workPropGeos() {
+  if (!_workGeos) {
+    const cone = new Builder().cyl(0.04, 0.18, 0.72, 0xff6a00, 0, 0.38, 0).cyl(0.105, 0.125, 0.1, 0xffffff, 0, 0.47, 0).box(0.42, 0.04, 0.42, 0x1a1a1a, 0, 0.02, 0).geometry();
+    const barR = new Builder().box(0.44, 0.55, 1.85, 0xd62828, 0, 0.28, 0).box(0.26, 0.32, 1.85, 0xd62828, 0, 0.7, 0).geometry();
+    const barW = new Builder().box(0.44, 0.55, 1.85, 0xf2f2ec, 0, 0.28, 0).box(0.26, 0.32, 1.85, 0xf2f2ec, 0, 0.7, 0).geometry();
+    cone.userData._freed = barR.userData._freed = barW.userData._freed = true;
+    _workGeos = { cone, barR, barW };
+  }
+  return _workGeos;
+}
+
+/** Anime et dégage les cônes et barrières légères touchés par le véhicule du joueur. */
+function updateWorksProps(dt, taxi) {
+  if (!WORKS.length || !taxi) return;
+  const h = taxi.heading ?? 0, sinH = Math.sin(h), cosH = Math.cos(h);
+  const hl = taxi.hl ?? 2.2, hw = taxi.hw ?? 0.95, sp = Math.abs(taxi.speed ?? 0);
+  const sgn = (taxi.speed ?? 0) < -0.1 ? -1 : 1;
+  const fx = sinH * sgn, fz = -cosH * sgn;
+  for (const Wk of WORKS) {
+    if (!Wk.on || !Wk.props?.length) continue;
+    const zMid = (Wk.z0 + Wk.z1) / 2, span = (Wk.z0 - Wk.z1) / 2 + Wk.taper + 55;
+    if (Math.abs(taxi.z - zMid) > span) continue;
+    for (const p of Wk.props) {
+      const dx = p.x - taxi.x, dz = p.z - taxi.z;
+      let af = dx * sinH - dz * cosH, al = dx * cosH + dz * sinH;
+      const penF = hl + p.r - Math.abs(af), penL = hw + p.r - Math.abs(al);
+      if (penF > 0 && penL > 0) {
+        const sideSign = al >= 0 ? 1 : -1;
+        const pushX = cosH * sideSign, pushZ = sinH * sideSign;
+        if (!p.hit || Math.hypot(p.vx, p.vz) < 1.5) taxi.coneHit = true;
+        if (penF < penL) {
+          af = (af >= 0 ? 1 : -1) * (hl + p.r + 0.14);
+        } else {
+          al = sideSign * (hw + p.r + 0.14);
+        }
+        p.x = taxi.x + sinH * af + cosH * al;
+        p.z = taxi.z - cosH * af + sinH * al;
+        const kick = Math.max(4.8, sp * 1.2 + 3.2);
+        p.vx = fx * kick * (penF < penL ? 0.95 : 0.55) + pushX * (3.2 + sp * 0.45) + (Math.random() - 0.5) * 1.4;
+        p.vz = fz * kick * (penF < penL ? 0.95 : 0.55) + pushZ * (3.2 + sp * 0.45) + (Math.random() - 0.5) * 1.4;
+        if (p.kind === 'cone') {
+          p.yaw = Math.atan2(p.vx, -p.vz);
+        } else {
+          const bCos = Math.cos(p.yaw), bSin = Math.sin(p.yaw);
+          p.fallSign = (p.vx * bCos + p.vz * bSin) >= 0 ? -1 : 1;
+          p.vyaw = (Math.random() - 0.5) * 4.5;
+        }
+        p.vtilt = Math.max(p.vtilt, 9.5 + Math.min(8, sp * 0.6));
+        p.hit = true;
+      }
+      if (p.hit && (Math.abs(p.vx) > 0.03 || Math.abs(p.vz) > 0.03 || p.tilt < 1.38)) {
+        p.x += p.vx * dt;
+        p.z += p.vz * dt;
+        p.yaw += p.vyaw * dt;
+        const drag = Math.exp(-3.5 * dt);
+        p.vx *= drag; p.vz *= drag; p.vyaw *= drag;
+        p.tilt = Math.min(1.42, p.tilt + p.vtilt * dt);
+        const yOff = (p.kind === 'cone' ? 0.15 : 0.21) * Math.sin(p.tilt);
+        p.mesh.rotation.set(0, 0, 0);
+        place(p.mesh, p.x, p.z, p.yaw, roadH(p.z) + yOff);
+        if (p.kind === 'cone') p.mesh.rotation.x = -p.tilt;
+        else p.mesh.rotation.z = p.fallSign * p.tilt;
+      }
+    }
+  }
+}
+
 /** Le décor des chantiers (voir WORKS) : chaque chantier a ses propres maillages (montrés ou cachés selon le tirage de la journée). */
 function addWorks(scene) {
+  if (!WORKS.length) return;
+  const geos = workPropGeos();
   WORKS.forEach((Wk, i) => {
     const own = new Builder(), signs = new Signs();
     const chunks = { at: () => own }, details = chunks;
     const s = Wk.side, L = Wk.z0 - Wk.z1, zc = (Wk.z0 + Wk.z1) / 2, xm = s * (Wk.xIn + Wk.xOut) / 2;
     const xb = s * (Wk.outer ? Wk.xIn : Wk.xOut), xEdge = s * (Wk.outer ? ROAD_EDGE - 0.4 : MEDIAN + 0.4);
     const zStart = s > 0 ? Wk.z0 : Wk.z1, zEnd = s > 0 ? Wk.z1 : Wk.z0, dir = s > 0 ? -1 : 1;   // (dir : sens de la marche en z)
-    // les barrières rouges et blanches le long des voies fermées, et en travers à la fin
+    Wk.props = [];
+    Wk.solids = [];
+    const addProp = (geo, kind, x0, z0, yaw0, r) => {
+      const pm = new THREE.Mesh(geo, VC_MAT);
+      pm.rotation.order = 'YXZ';
+      pm.castShadow = pm.receiveShadow = true;
+      place(pm, x0, z0, yaw0, roadH(z0));
+      scene.add(pm);
+      Wk.props.push({ mesh: pm, kind, x0, z0, yaw0, x: x0, z: z0, yaw: yaw0, vx: 0, vz: 0, vyaw: 0, tilt: 0, vtilt: 0, hit: false, fallSign: 1, r });
+      return pm;
+    };
+    const propMeshes = [];
+    // les barrières rouges et blanches légères le long des voies fermées, et en travers à la fin (dégageables si heurtées)
     let k = 0;
     for (let z = Wk.z1; z < Wk.z0; z += 2) {
-      const b = chunks.at(z), col = k++ % 2 ? 0xf2f2ec : 0xd62828;
-      b.box(0.5, 0.55, 1.9, col, xb, 0.28, z + 1).box(0.26, 0.32, 1.9, col, xb, 0.7, z + 1);
+      propMeshes.push(addProp(k++ % 2 ? geos.barW : geos.barR, 'bar', xb, z + 1, 0, 0.55));
     }
     for (let x = Math.min(xb, xEdge) + 1; x < Math.max(xb, xEdge); x += 2) {
-      const col = k++ % 2 ? 0xf2f2ec : 0xd62828;
-      chunks.at(zEnd).box(1.9, 0.55, 0.5, col, x, 0.28, zEnd).box(1.9, 0.32, 0.26, col, x, 0.7, zEnd);
+      propMeshes.push(addProp(k++ % 2 ? geos.barW : geos.barR, 'bar', x, zEnd, Math.PI / 2, 0.55));
     }
-    // le biseau de cônes, du bord jusqu'à la ligne des barrières
+    // le biseau de cônes orange, du bord jusqu'à la ligne des barrières (dégageables si heurtés)
     const nC = Math.ceil(Wk.taper / 2.5);
     for (let j = 0; j <= nC; j++) {
-      const u = j / nC, x = xEdge + (xb - xEdge) * u, z = Wk.zt + (zStart - Wk.zt) * u, d = details.at(z);
-      d.cyl(0.04, 0.18, 0.72, 0xff6a00, x, 0.38, z).cyl(0.105, 0.125, 0.1, 0xffffff, x, 0.47, z).box(0.42, 0.04, 0.42, 0x1a1a1a, x, 0.02, z);
+      const u = j / nC, x = xEdge + (xb - xEdge) * u, z = Wk.zt + (zStart - Wk.zt) * u;
+      propMeshes.push(addProp(geos.cone, 'cone', x, z, 0, 0.28));
     }
     // les panneaux « TRAVAUX » avant le biseau, au bord de la chaussée, face à la circulation
     for (const [dz, title, sub] of [[70, '⚠ TRAVAUX', Wk.outer ? 'Voies de droite fermées' : 'Voies de gauche fermées'], [38, Wk.outer ? '⬉ SERREZ À GAUCHE' : '⬈ SERREZ À DROITE', 'Chantier · Réfection de la chaussée']]) {
@@ -3115,6 +3209,7 @@ function addWorks(scene) {
     // la pelleteuse : le bras plonge dans la tranchée
     {
       const x = xm, z = Wk.z1 + L * 0.66, Y = 0xf2b705, D = 0x2a2b2e;
+      Wk.solids.push({ x, z, hx: 1.4, hz: 2.4 });
       b.box(0.6, 0.65, 3.6, D, x - 1.05, 0.33, z).box(0.6, 0.65, 3.6, D, x + 1.05, 0.33, z).box(1.6, 0.35, 2.4, 0x3a3c40, x, 0.75, z)
         .box(2.5, 1.0, 2.8, Y, x, 1.45, z + 0.2).box(2.5, 0.8, 0.6, 0x2b2d31, x, 1.4, z + 1.75)
         .box(0.95, 1.2, 1.1, Y, x - 0.7, 2.5, z - 0.6).box(0.88, 0.62, 0.03, 0x1c2b3a, x - 0.7, 2.62, z - 1.17)
@@ -3124,6 +3219,7 @@ function addWorks(scene) {
     // le rouleau compresseur
     {
       const x = xm, z = Wk.z1 + L * 0.22, Y = 0xf2b705;
+      Wk.solids.push({ x, z, hx: 1.15, hz: 2.0 });
       b.add(new THREE.CylinderGeometry(0.75, 0.75, 1.8, 14).rotateZ(Math.PI / 2), 0x7c8086, x, 0.75, z - 1.3)
         .box(2.0, 0.25, 0.42, Y, x, 1.55, z - 1.3).box(1.7, 1.1, 2.0, Y, x, 1.2, z + 0.6)
         .add(new THREE.CylinderGeometry(0.55, 0.55, 0.45, 12).rotateZ(Math.PI / 2), 0x1c1d20, x - 0.9, 0.55, z + 1.0)
@@ -3134,6 +3230,7 @@ function addWorks(scene) {
     // le camion-benne garé au fond
     {
       const x = xm + s * 0.2, z = s > 0 ? Wk.z1 + 7 : Wk.z0 - 7, o = s > 0 ? -1 : 1;   // (cabine vers la sortie du chantier)
+      Wk.solids.push({ x, z, hx: 1.3, hz: 3.5 });
       b.box(2.3, 1.9, 1.8, 0xd9480f, x, 1.55, z + o * 2.7).box(2.1, 0.7, 0.03, 0x1c2b3a, x, 1.95, z + o * 3.62)
         .box(2.4, 1.2, 4.2, 0xa0522d, x, 1.85, z - o * 0.5).box(2.2, 0.35, 6.6, 0x2b2d31, x, 0.75, z);
       for (const dz of [2.6, -0.9, -2.1]) for (const sx of [-1, 1]) b.add(new THREE.CylinderGeometry(0.5, 0.5, 0.36, 12).rotateZ(Math.PI / 2), 0x1c1d20, x + sx * 1.05, 0.5, z + o * dz);
@@ -3141,7 +3238,7 @@ function addWorks(scene) {
     const m = new THREE.Mesh(bendGeometry(raise(own.geometry())), VC_MAT);
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
-    Wk.meshes = [m, ...signs.build(scene)];
+    Wk.meshes = [m, ...propMeshes, ...signs.build(scene)];
     for (const q of Wk.meshes) q.visible = Wk.on;
   });
 }
@@ -12053,7 +12150,10 @@ export function buildWorld(scene, opts = {}) {
   const campusLife = R.campus ? new CampusLife(scene) : null;
   return {
     sun,
-    tick(dt, time, taxi) { campusLife?.update(dt, time, taxi); },
+    tick(dt, time, taxi) {
+      campusLife?.update(dt, time, taxi);
+      updateWorksProps(dt, taxi);
+    },
     /** Construit le décor lointain par tranches (ms par appel) ; renvoie vrai quand c'est fini (ou s'il n'y a rien à faire). */
     extStep(ms = 5) {
       if (!X || X.done) return true;

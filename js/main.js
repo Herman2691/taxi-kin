@@ -106,7 +106,7 @@ const FUEL_PRICE = 100;          // FC par % de réservoir
 const REPAIR_COST = 500;
 const FINE_RED = 5000;          // amende de la police pour un feu rouge grillé (FC)
 // Conduite libre : messages quand le taxi touche un obstacle (voir blockedAt dans world.js)
-const WALL_MSG = { median: 'Attention au terre-plein !', curb: 'Attention au trottoir !', rail: 'Attention au garde-corps !', obstacle: 'Attention, obstacle !', gens: 'Attention aux gens !', vehicule: 'Attention à la voiture !', travaux: 'Travaux : voie fermée, serre de l’autre côté !',
+const WALL_MSG = { median: 'Attention au terre-plein !', curb: 'Attention au trottoir !', rail: 'Attention au garde-corps !', obstacle: 'Attention, obstacle !', gens: 'Attention aux gens !', vehicule: 'Attention à la voiture !', travaux: 'Attention aux engins de chantier !',
   wall: 'Attention au mur !', end: 'Fin de la route', start: "Fin de la route : l'aérogare" };
 const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -912,7 +912,7 @@ function startShift() {
     state: 'play', time: 0, minutes: 360, fuel: FUEL_START,
     fares: 0, tips: 0, fuelCost: 0, repairs: 0, fines: 0, rides: 0, crashes: 0,
     cash: 0, prompt: '', crashCd: 0, wallCd: 0, brakeHold: 0, fuelWarned: false, police: null, wrongT: 0, tours: 0, ambulance: false, accident: null, race: null, mise: 0, hitRun: null, caughtRun: false,
-    stolen: 0, held: false, choiceCb: null, lastSermon: -1e9, km: 0, depart: null,
+    stolen: 0, held: false, choiceCb: null, lastSermon: -1e9, km: 0, depart: null, coneCd: 0,
   });
   incidents.finish();
   $('choice').hidden = true;
@@ -923,7 +923,7 @@ function startShift() {
   for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeJams) bouchon = r.W.randomizeJams().some(j => j.lvl > 1) || bouchon;
   if (PARAMS.get('bouchon')) for (const r of [ROAD1]) r.W.JAMS.forEach(j => { j.on = PARAMS.get('bouchon') !== '0'; });
   if (bouchon) setTimeout(() => { if (G.state === 'play') hud.note('📻 Embouteillage signalé de Pascal au Quartier 1 aujourd’hui', 2); }, 4000);
-  for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeWorks) { r.W.randomizeWorks(); if (PARAMS.get('travaux')) r.W.WORKS.forEach(Wk => { Wk.on = true; for (const m of Wk.meshes) m.visible = true; }); }
+  for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeWorks) { r.W.randomizeWorks(); if (PARAMS.get('travaux')) r.W.WORKS.forEach(Wk => { Wk.on = true; r.W.resetWorkProps?.(Wk); for (const m of Wk.meshes) m.visible = true; }); }
   worksWarned.clear();
   if (PARAMS.get('pluie')) rain.startNow(Number(PARAMS.get('pluie')) || 400);   // (test : ?pluie=1)
   DAY.urgent = 1 + Math.floor(Math.random() * 2);   // (une ou deux ambulances en urgence sans accident, sur toute la journée)
@@ -1865,6 +1865,7 @@ function handleTraffic(dt) {
   // Emprise du taxi selon son cap (en x : largeur, en z : longueur), pour les chocs avec la circulation
   const ch = Math.abs(Math.cos(taxi.heading)), sh = Math.abs(Math.sin(taxi.heading));
   taxi.bw = ch * VEH.w + sh * VEH.l; taxi.bl = ch * VEH.l + sh * VEH.w;
+  taxi.hl = VEH.l / 2; taxi.hw = VEH.w / 2;
   // Circulation vivante sur les routes voisines quand on approche d'un raccord (Mandela / 30 Juin, Route Poids Lourds, Place de la Gare)
   for (const other of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
     if (!other || other === A || other.nearZ === null || other.nearZ === undefined) continue;
@@ -2862,7 +2863,9 @@ function update(dt) {
   life.updateCrossers(dt, taxi, G.time);
   A.qlife?.update(dt, taxi, G.time);
   pedestrians();
+  taxi.coneHit = false;
   A.world.tick(dt, G.time, taxi);
+  if (taxi.coneHit && (G.coneCd = (G.coneCd ?? 0)) <= G.time) { G.coneCd = G.time + 0.16; sound.crash(0.08); }
   if (G.race) { updateRace(dt); G.prompt = ''; }
   else if (VEH.perso) G.prompt = '';         // (voiture personnelle ou athlète : on parcourt la ville, pas de clients)
   else {
