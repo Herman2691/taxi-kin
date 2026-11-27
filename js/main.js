@@ -1740,7 +1740,7 @@ function drive(dt) {
       const d0 = wrapA(axis - taxi.heading), d1 = wrapA(axis + Math.PI - taxi.heading), d = Math.abs(d0) < Math.abs(d1) ? d0 : d1;
       // (en quittant la Place de la Gare, où l'on arrive en biais : aide plus large, pour ne pas finir sur le trottoir)
       // (l'auteur, 27/11 : « la moto ne conduit pas droit » sur la route des rails en biais, à 37° des axes : en y entrant tout droit, l'écart dépassait l'aide)
-      if (Math.abs(d) < (A.W.inPlaza(taxi.x, taxi.z) || (A === ROAD1 && W1.plBandU?.(taxi.x, taxi.z) >= 0) ? 0.9 : 0.3)) taxi.heading += d * Math.min(1, dt * 1.4 * Math.min(1, sp / 4));
+      if (Math.abs(d) < (A.W.inPlaza(taxi.x, taxi.z) || (A === ROAD1 && W1.plBandU?.(taxi.x, taxi.z) >= 0) ? 0.9 : 0.3)) taxi.heading += d * Math.min(1, dt * 1.4 * (A === ROAD1 && W1.plBandU?.(taxi.x, taxi.z) >= 0 ? Math.max(0.6, Math.min(1, sp / 4)) : Math.min(1, sp / 4)));   // (route en biais : se redresse aussi à l'arrêt)
     }
   }
   taxi.heading = wrapA(taxi.heading);
