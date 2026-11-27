@@ -174,7 +174,14 @@ export class Traffic {
     for (const k of TRAFFIC_MIX?.our ?? MIX_OUR) this.add(scene, 1, k);
     for (const k of TRAFFIC_MIX?.onc ?? MIX_ONC) this.add(scene, -1, k);
     this.jamActive = false;
-    if (JAMS.some(j => j.lvl > 1)) for (const side of [1, -1]) for (let i = 0; i < JAM_FLEET[side]; i++) { const v = this.add(scene, side, JAM_MIX[(i * 7 + (side > 0 ? 0 : 3)) % JAM_MIX.length]); v.jam = true; this.hideJam(v); }
+    this.jamTodo = [];
+    if (JAMS.some(j => j.lvl > 1)) {
+      for (const side of [1, -1]) {
+        for (let i = 0; i < JAM_FLEET[side]; i++) {
+          this.jamTodo.push([side, JAM_MIX[(i * 7 + (side > 0 ? 0 : 3)) % JAM_MIX.length]]);
+        }
+      }
+    }
     // Carrefours à feux : des voitures sortent de la rue et traversent le boulevard pendant le vert de la rue.
     // dir -1 : de la droite vers la gauche, dir +1 : de la gauche vers la droite (seulement s'il y a une rue de ce côté)
     this.crossing = [];
@@ -296,10 +303,19 @@ export class Traffic {
     return v;
   }
 
-  /** Les véhicules de l'embouteillage grave : cachés très loin tant que le taxi n'est pas dans la zone. */
+  /** Les véhicules de l'embouteillage grave : construits par petits lots après le départ, cachés tant que le taxi n'est pas dans la zone. */
+  stepJamBuild(n = 2) {
+    while (n-- > 0 && this.jamTodo.length) {
+      const [side, kind] = this.jamTodo.pop();
+      const v = this.add(this.scene, side, kind);
+      v.jam = true;
+      this.hideJam(v);
+    }
+  }
   inJamNow(z) { return this.jamActive && JAMS.some(j => j.on && j.lvl > 1 && z < j.z0 && z > j.z1); }
   hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.mesh.visible = false; }
   startJam(taxi) {
+    if (this.jamTodo.length) this.stepJamBuild(this.jamTodo.length);
     this.jamActive = true;
     for (const v of this.list) if (v.jam) { this.place(v, taxi.z, 0, taxi); put(v, v.side === 1 ? 0 : Math.PI); }
   }
@@ -590,6 +606,7 @@ export class Traffic {
     // Le taxi revient vers l'aéroport (+z) : on renouvelle les voitures devant lui dans ce sens (sans dépasser le début de la route)
     const back = Math.cos(taxi.heading ?? 0) < -0.35, zMax = Math.min(140, TRAFFIC_START - 30);
     const peds = this.extraPeds?.length ? (this.peds ?? []).concat(this.extraPeds) : (this.peds ?? []);   // (incidents.js : les gens sur la chaussée)
+    if (this.jamTodo.length && !this.jamActive) this.stepJamBuild(2);
     if (this.jamActive !== undefined && !taxi.fixed) {
       const J = JAMS.find(j => j.on && j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
       if (J && !this.jamActive) this.startJam(taxi); else if (!J && this.jamActive) this.stopJam();

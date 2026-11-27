@@ -24,6 +24,17 @@
   .boot #menu { display: none !important; }
 </style>
 <link rel="modulepreload" href="./vendor/three/build/three.module.js">
+<link rel="modulepreload" href="./vendor/three/addons/loaders/GLTFLoader.js">
+<link rel="modulepreload" href="./vendor/three/addons/utils/BufferGeometryUtils.js">
+<link rel="modulepreload" href="./js/main.js">
+<link rel="modulepreload" href="./js/routes.js">
+<link rel="modulepreload" href="./js/route.js">
+<link rel="modulepreload" href="./js/models.js">
+<link rel="modulepreload" href="./js/characters.js">
+<link rel="modulepreload" href="./js/world.js">
+<link rel="modulepreload" href="./js/traffic.js">
+<link rel="modulepreload" href="./js/passengers.js">
+<link rel="modulepreload" href="./js/life.js">
 <script>if (new URLSearchParams(location.search).get('autostart') === '1') document.documentElement.classList.add('boot');</script>
 <script type="importmap">
 { "imports": {
@@ -305,7 +316,7 @@
   addEventListener('error', e => { if (!e.target || e.target === window || e.target.tagName === 'SCRIPT') loadFail(e.message); }, true);
   addEventListener('unhandledrejection', e => loadFail(e.reason?.message));
 </script>
-<div id="ver" style="position:fixed;left:6px;bottom:2px;z-index:5;font:10px sans-serif;color:#fff;opacity:.55;pointer-events:none">version 26/11 · d</div>
+<div id="ver" style="position:fixed;left:6px;bottom:2px;z-index:5;font:10px sans-serif;color:#fff;opacity:.55;pointer-events:none">version 28/11 · d6</div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -198,6 +198,23 @@ const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 3600);
 globalThis.TAXIKIN_KV = !!CURRENT.attachKv && want('kv');   // (world.js : le décor du carrefour Kasa-Vubu laisse la place à la vraie avenue)
 globalThis.TAXIKIN_ROC = !!CURRENT.attachRoc && want('roc'); // (world.js : les entrées « Rocade Sud-Est » laissent la place à la vraie route)
 globalThis.TAXIKIN_MM = TAXIKIN_ROC && !!CURRENT.attachMm && want('mm');   // (Première Entrée → Rocade : seulement avec la Rocade, où elle arrive)
+// Préchargement parallèle des modules des routes rattachées pendant que la ville principale se construit
+const __roadMods = new Map();
+const __prefetchRoad = route => {
+  if (route && !__roadMods.has(route)) {
+    const q = `?route=${route}`;
+    const p = Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`)));
+    p.catch(() => {});
+    __roadMods.set(route, p);
+  }
+};
+if (CURRENT.attach && want('30juin')) __prefetchRoad(CURRENT.attach.route);
+if (CURRENT.attachPL && want('pl')) __prefetchRoad(CURRENT.attachPL.route);
+if (CURRENT.attachUni && want('uni')) __prefetchRoad(CURRENT.attachUni.route);
+if (CURRENT.attachBp && want('bp')) __prefetchRoad(CURRENT.attachBp.route);
+if (CURRENT.attachKv && want('kv')) __prefetchRoad(CURRENT.attachKv.route);
+if (CURRENT.attachRoc && want('roc')) __prefetchRoad(CURRENT.attachRoc.route);
+if (globalThis.TAXIKIN_MM) __prefetchRoad(CURRENT.attachMm.route);
 mark('avant la construction de la ville');
 watchScene(scene);                               // (téléphone : sommets du décor réduits dès qu'ils sont ajoutés, voir memoire.js)
 const world = W1.buildWorld(scene);
@@ -222,7 +239,7 @@ let ROAD2 = null, ROAD3 = null, ROAD4 = null, ROAD5 = null, ROAD6 = null, ROAD7 
 async function loadRoad(route) {
   const q = `?route=${route}`;
   mark(`route attachée ${route} : début`);
-  const [W, RT, T, P, L, H] = await Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`)));
+  const [W, RT, T, P, L, H] = await (__roadMods.get(route) ?? Promise.all(['world', 'route', 'traffic', 'passengers', 'life', 'hud'].map(m => import(`./${m}.js${q}`))));
   mark(`route attachée ${route} : fichiers chargés`);
   await new Promise(r => setTimeout(r, 0));
   const group = new THREE.Group();
@@ -236,9 +253,14 @@ async function loadRoad(route) {
 }
 const ang = v => Math.atan2(v.x, v.z);
 mark('avant les routes attachées 1');
-const [r2Loaded, r3Loaded] = await Promise.all([
+const [r2Loaded, r3Loaded, r4Loaded, r5Loaded, r6Loaded, r7Loaded, r8Loaded] = await Promise.all([
   CURRENT.attach && want('30juin') ? loadRoad(CURRENT.attach.route) : null,
   CURRENT.attachPL && want('pl') ? loadRoad(CURRENT.attachPL.route) : null,
+  CURRENT.attachUni && want('uni') ? loadRoad(CURRENT.attachUni.route) : null,
+  CURRENT.attachBp && want('bp') ? loadRoad(CURRENT.attachBp.route) : null,
+  CURRENT.attachKv && want('kv') ? loadRoad(CURRENT.attachKv.route) : null,
+  CURRENT.attachRoc && want('roc') ? loadRoad(CURRENT.attachRoc.route) : null,
+  globalThis.TAXIKIN_MM ? loadRoad(CURRENT.attachMm.route) : null,
 ]);
 if (r2Loaded) {
   const at = CURRENT.attach;
@@ -293,8 +315,8 @@ if (r3Loaded) {
   }
 }
 // ---------- Avenue de l'Université (routes.js `attachUni`) : elle prolonge son entrée sur le boulevard Sendwe ----------
-if (CURRENT.attachUni && want('uni')) {
-  ROAD4 = await loadRoad(CURRENT.attachUni.route);
+if (r4Loaded) {
+  ROAD4 = r4Loaded;
   const { RT: RT4, group } = ROAD4, q = W1.UNI_STUB;
   const P = RT1.worldVec(q.b[0], 0, q.b[1], new THREE.Vector3()), dir = P.clone().sub(RT1.worldVec(q.a[0], 0, q.a[1], new THREE.Vector3()));
   const Q = RT4.worldVec(0, 0, 0, new THREE.Vector3()), d4 = RT4.worldVec(0, 0, -2, new THREE.Vector3()).sub(Q);
@@ -306,8 +328,8 @@ if (CURRENT.attachUni && want('uni')) {
   JOINS.push({ a: ROAD1, za: q.b[1], b: ROAD4, zb: 0, w: P.clone(), r: 420 });
 }
 // ---------- By Pass (routes.js `attachBp`) : son tracé est déjà dans le repère de la scène (tools/bypass.py) ----------
-if (CURRENT.attachBp && want('bp')) {
-  ROAD5 = await loadRoad(CURRENT.attachBp.route);
+if (r5Loaded) {
+  ROAD5 = r5Loaded;
   ROAD5.rho = 0;
   ROAD5.group.position.y = -0.025;
   ROAD5.group.updateMatrixWorld(true);
@@ -325,8 +347,8 @@ if (CURRENT.attachBp && want('bp')) {
 // après la fourche suit les caps réels d'OSM). De là, elle part vers la Gombe et vers Kintambo.
 mark('routes attachées 2 en place');
 const KV = { z1: 0, z6: 0, dir6: null, dir1: null };
-if (CURRENT.attachKv && want('kv')) {
-  ROAD6 = await loadRoad(CURRENT.attachKv.route);
+if (r6Loaded) {
+  ROAD6 = r6Loaded;
   const { RT: RT6, group } = ROAD6, J = ROAD6.RT.ROUTE_DATA.extra.kvJoin, V = THREE.Vector3;
   KV.z1 = -RT1.toGame(CURRENT.ext.from + CURRENT.ext.b);       // centre du carrefour Kasa-Vubu sur le trajet principal
   KV.z6 = -RT6.toGame(J.s);
@@ -359,11 +381,9 @@ if (CURRENT.attachKv && want('kv')) {
 // Son début est au bord droit de l'avenue de l'Université (avant le portail de l'UNIKIN), son bout au bord gauche du boulevard Lumumba, 900 m après
 // l'aérogare (entrées « ROCADE SUD-EST » de routes.js, qui ne sont pas dessinées quand elle est chargée).
 const ROC = {};
-if (CURRENT.attachRoc && want('roc')) {
-  [ROAD7, ROAD8] = await Promise.all([
-    loadRoad(CURRENT.attachRoc.route),
-    globalThis.TAXIKIN_MM ? loadRoad(CURRENT.attachMm.route) : Promise.resolve(null),
-  ]);
+if (r7Loaded) {
+  ROAD7 = r7Loaded;
+  ROAD8 = r8Loaded;
   ROAD7.rho = 0;
   ROAD7.group.position.y = -0.02;
   ROAD7.group.updateMatrixWorld(true);

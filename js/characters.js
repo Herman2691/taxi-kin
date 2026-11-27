@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { nonIndexed } from './geo.js';
+import { MOBILE } from './memoire.js';
 const __mark = n => { if (location.search.includes('mesure')) console.log(`MESURE ${String(Math.round(performance.now())).padStart(6)} ms  ${n}`); };
 
 // ---------- Modèles MakeHuman (tools/personnages_mh.py → data/personnages/*.glb) ----------
@@ -750,11 +751,23 @@ export function solveGrip(ch, target) {
   F.add(hand);
   ch.mesh.updateMatrixWorld(true);
   let best = null;
-  for (let x = -0.4; x <= 2.2; x += 0.05) for (let z = -1.3; z <= 0.7; z += 0.05) for (let f = 0; f <= 2.4; f += 0.05) {
+  // Recherche grossière (pas de 0.25) puis raffinement (pas de 0.05) autour du meilleur angle
+  for (let x = -0.4; x <= 2.201; x += 0.25) for (let z = -1.3; z <= 0.701; z += 0.25) for (let f = 0; f <= 2.401; f += 0.25) {
     U.rotation.set(x, 0, z); F.rotation.set(f, 0, 0);
     U.updateMatrixWorld(true);
     const cost = v.setFromMatrixPosition(hand.matrixWorld).distanceTo(T) + 0.03 * (Math.abs(z + 0.3) + Math.abs(f - 1.1));
     if (!best || cost < best[0]) best = [cost, x, z, f];
+  }
+  const [, bx, bz, bf] = best;
+  for (let x = Math.max(-0.4, bx - 0.25); x <= Math.min(2.201, bx + 0.251); x += 0.05) {
+    for (let z = Math.max(-1.3, bz - 0.25); z <= Math.min(0.701, bz + 0.251); z += 0.05) {
+      for (let f = Math.max(0, bf - 0.25); f <= Math.min(2.401, bf + 0.251); f += 0.05) {
+        U.rotation.set(x, 0, z); F.rotation.set(f, 0, 0);
+        U.updateMatrixWorld(true);
+        const cost = v.setFromMatrixPosition(hand.matrixWorld).distanceTo(T) + 0.03 * (Math.abs(z + 0.3) + Math.abs(f - 1.1));
+        if (cost < best[0]) best = [cost, x, z, f];
+      }
+    }
   }
   F.remove(hand);
   U.rotation.set(0, 0, 0); F.rotation.set(0, 0, 0);
@@ -801,18 +814,32 @@ export function bakeStatic(o, mode, origin, farDist = 14) {
   const ch = new Character(o);
   ch.mesh.position.set(...origin);
   if (mode === 'ride' && o.ride.grip) {
-    const hand = new THREE.Object3D(); hand.position.set(0, -0.37, 0); ch.b['foreArm.L'].add(hand);
+    const U = ch.b['upperArm.L'], F = ch.b['foreArm.L'];
+    const hand = new THREE.Object3D(); hand.position.set(0, -0.37, 0); F.add(hand);
     const g = new THREE.Vector3(...o.ride.grip), v = new THREE.Vector3();
+    ch.phase = 0;
+    ch.pose(mode, 0);
+    ch.mesh.updateMatrixWorld(true);
     let best = null;
-    for (let au = 0.2; au < 1.5; au += 0.05) for (let af = -0.3; af < 1.2; af += 0.05) for (const sp of [0.1, 0.2, 0.3, 0.4]) {
-      o.ride.arm = [au, af, sp];
-      ch.pose(mode, 0);
-      ch.mesh.updateMatrixWorld(true);
-      const e = hand.getWorldPosition(v).distanceTo(g);
+    for (let au = 0.2; au < 1.5; au += 0.2) for (let af = -0.3; af < 1.2; af += 0.2) for (const sp of [0.1, 0.2, 0.3, 0.4]) {
+      U.rotation.set(au, 0, -sp); F.rotation.set(af, 0, 0);
+      U.updateMatrixWorld(true);
+      const e = v.setFromMatrixPosition(hand.matrixWorld).distanceTo(g);
       if (!best || e < best[0]) best = [e, au, af, sp];
     }
+    const [, bau, baf] = best;
+    for (let au = Math.max(0.2, bau - 0.2); au < Math.min(1.5, bau + 0.201); au += 0.05) {
+      for (let af = Math.max(-0.3, baf - 0.2); af < Math.min(1.2, baf + 0.201); af += 0.05) {
+        for (const sp of [0.1, 0.2, 0.3, 0.4]) {
+          U.rotation.set(au, 0, -sp); F.rotation.set(af, 0, 0);
+          U.updateMatrixWorld(true);
+          const e = v.setFromMatrixPosition(hand.matrixWorld).distanceTo(g);
+          if (e < best[0]) best = [e, au, af, sp];
+        }
+      }
+    }
     o.ride.arm = best.slice(1);
-    ch.b['foreArm.L'].remove(hand);
+    F.remove(hand);
   }
   ch.phase = 0;
   ch.pose(mode, 0);
@@ -869,6 +896,21 @@ function atlasPixels(M) {
   return _atlas[M.name];
 }
 const _lin = new Float32Array(256).map((_, i) => Math.pow(i / 255, 2.2));
+const _modelBake = {}, _poseBake = new Map();
+const _bmRoot = new THREE.Matrix4(), _bmPos = new THREE.Vector3(), _bmQuat = new THREE.Quaternion(), _bmScale = new THREE.Vector3(), _bmUp = new THREE.Vector3(0, 1, 0);
+function modelBakeInfo(M) {
+  let info = _modelBake[M.name];
+  if (!info) {
+    const src = M.geos[2], uv = src.attributes.uv, vCount = src.attributes.position.count, A = atlasPixels(M);
+    const atlasLin = new Float32Array(vCount * 3);
+    for (let i = 0; i < vCount; i++) {
+      const px = Math.min(A.w - 1, Math.max(0, Math.floor(uv.getX(i) * A.w))), py = Math.min(A.h - 1, Math.max(0, Math.floor(uv.getY(i) * A.h))), k = (py * A.w + px) * 4;
+      atlasLin[i * 3] = _lin[A.d[k]]; atlasLin[i * 3 + 1] = _lin[A.d[k + 1]]; atlasLin[i * 3 + 2] = _lin[A.d[k + 2]];
+    }
+    info = _modelBake[M.name] = { idx: src.index.array, vCount, atlasLin, tPos: new Float32Array(vCount * 3), tNor: new Float32Array(vCount * 3), tCol: new Float32Array(vCount * 3) };
+  }
+  return info;
+}
 function bakeModelled(builder, o, mode, x, z, ry, t) {
   const M = MODELS[o.model];
   let P = _poser[o.model];
@@ -883,28 +925,58 @@ function bakeModelled(builder, o, mode, x, z, ry, t) {
     sm.bind(ch.mesh.levels[0].object.isSkinnedMesh ? ch.mesh.levels[0].object.skeleton : ch.mesh.levels[0].object.children.find(c => c.isSkinnedMesh).skeleton);
     P = _poser[o.model] = { ch, sm };
   }
-  const { ch, sm } = P, h = o.height ?? 1, g = o.girth ?? 1;
-  ch.mesh.position.set(x, 0, z);
-  ch.mesh.rotation.set(0, ry, 0);
-  ch.mesh.scale.set(h * (1 + (g - 1) * 0.7), h, h * (1 + (g - 1) * 0.5));
-  applyPose(ch.b, mode, t, 1, o);
-  ch.mesh.updateMatrixWorld(true);
-  const src = sm.geometry, { pos, nor } = skinnedWorld(sm), n = pos.length / 3;
-  const zc = zoneColors(M.geos[2].attributes._zone, o, M).array, A = atlasPixels(M), uv = src.attributes.uv, col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const px = Math.min(A.w - 1, Math.max(0, Math.floor(uv.getX(i) * A.w))), py = Math.min(A.h - 1, Math.max(0, Math.floor(uv.getY(i) * A.h))), k = (py * A.w + px) * 4;
-    col[i * 3] = zc[i * 3] * _lin[A.d[k]]; col[i * 3 + 1] = zc[i * 3 + 1] * _lin[A.d[k + 1]]; col[i * 3 + 2] = zc[i * 3 + 2] * _lin[A.d[k + 2]];
+  const { ch, sm } = P, info = modelBakeInfo(M);
+  const tBin = Math.round((((t % 10) + 10) % 10) * 1.5);
+  const extra = (o.ride || o.grip || o.u !== undefined) ? `|${o.ride ? JSON.stringify(o.ride) : ''}|${o.grip ? o.grip.join(',') : ''}|${o.u ?? ''}` : '';
+  const poseKey = `${o.model}|${mode}|${o.idle ?? 0}|${o.female ? 1 : 0}|${o.dress ? 1 : 0}|${o.phone ? 1 : 0}|${o.basin ? 1 : 0}|${o.cuffed ? 1 : 0}|${o.weapon ?? ''}|${tBin}${extra}`;
+  let pose = _poseBake.get(poseKey);
+  if (!pose) {
+    ch.mesh.position.set(0, 0, 0);
+    ch.mesh.rotation.set(0, 0, 0);
+    ch.mesh.scale.set(1, 1, 1);
+    applyPose(ch.b, mode, tBin / 1.5, 1, o);
+    ch.mesh.updateMatrixWorld(true);
+    const { pos: ipos, nor: inor } = skinnedWorld(sm);
+    const boneMats = ch.bones.map(b => b.matrixWorld.clone());
+    pose = { ipos, inor, boneMats };
+    _poseBake.set(poseKey, pose);
   }
-  let geo = new THREE.BufferGeometry();
+  const h = o.height ?? 1, g = o.girth ?? 1;
+  const sx = h * (1 + (g - 1) * 0.7), sy = h, sz = h * (1 + (g - 1) * 0.5);
+  const cos = Math.cos(ry), sin = Math.sin(ry);
+  const zc = zoneColors(M.geos[2].attributes._zone, o, M).array;
+  const { idx, vCount, atlasLin, tPos, tNor, tCol } = info;
+  const { ipos, inor, boneMats } = pose;
+  for (let i = 0, j = 0; i < vCount; i++, j += 3) {
+    const px = ipos[j] * sx, py = ipos[j + 1] * sy, pz = ipos[j + 2] * sz;
+    tPos[j] = cos * px + sin * pz + x;
+    tPos[j + 1] = py;
+    tPos[j + 2] = -sin * px + cos * pz + z;
+    const nx0 = inor[j] / sx, ny0 = inor[j + 1] / sy, nz0 = inor[j + 2] / sz;
+    const invL = 1 / (Math.hypot(nx0, ny0, nz0) || 1);
+    tNor[j] = (cos * nx0 + sin * nz0) * invL;
+    tNor[j + 1] = ny0 * invL;
+    tNor[j + 2] = (-sin * nx0 + cos * nz0) * invL;
+    tCol[j] = zc[j] * atlasLin[j];
+    tCol[j + 1] = zc[j + 1] * atlasLin[j + 1];
+    tCol[j + 2] = zc[j + 2] * atlasLin[j + 2];
+  }
+  const m = idx.length, pos = new Float32Array(m * 3), nor = new Float32Array(m * 3), col = new Float32Array(m * 3);
+  for (let i = 0, d = 0; i < m; i++, d += 3) {
+    const s = idx[i] * 3;
+    pos[d] = tPos[s]; pos[d + 1] = tPos[s + 1]; pos[d + 2] = tPos[s + 2];
+    nor[d] = tNor[s]; nor[d + 1] = tNor[s + 1]; nor[d + 2] = tNor[s + 2];
+    col[d] = tCol[s]; col[d + 1] = tCol[s + 1]; col[d + 2] = tCol[s + 2];
+  }
+  const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+  if (!MOBILE || builder.keepUv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(m * 2), 2));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setIndex(src.index);
-  geo = nonIndexed(geo);
-  builder.parts.push(geo);
+  if (builder.addBaked) builder.addBaked(geo); else builder.parts.push(geo);
+  _bmRoot.compose(_bmPos.set(x, 0, z), _bmQuat.setFromAxisAngle(_bmUp, ry), _bmScale.set(sx, sy, sz));
   for (const p of parts(o, true)) {                                         // béret, gilet, foulard... : pièces rigides posées sur leur os
-    p.geo.applyMatrix4(_m.copy(ch.bones[p.bone].matrixWorld));
+    p.geo.applyMatrix4(_m.multiplyMatrices(_bmRoot, boneMats[p.bone]));
     builder.addRaw(p.geo, p.color);
   }
 }

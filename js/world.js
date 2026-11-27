@@ -20,7 +20,37 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd4';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd6';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+
+// Lancement groupé et mis en cache des données JSON et textures partagées entre routes
+const __DATA_CACHE = (globalThis.__TAXIKIN_DATA ??= new Map());
+const __cachedJson = (key, rel, fallback = null) => {
+  if (!__DATA_CACHE.has(key)) {
+    __DATA_CACHE.set(key, fetch(new URL(`../${rel}`, import.meta.url)).then(r => (r.ok ? r.json() : fallback)).catch(() => fallback));
+  }
+  return __DATA_CACHE.get(key);
+};
+const __cachedImg = rel => {
+  const key = `img:${rel}`;
+  if (!__DATA_CACHE.has(key)) {
+    __DATA_CACHE.set(key, new Promise(res => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => res(null);
+      i.src = new URL(`../${rel}`, import.meta.url).href;
+    }));
+  }
+  return __DATA_CACHE.get(key);
+};
+const __MOB_ON = new URLSearchParams(globalThis.location?.search ?? '').get('moboma') === '0' ? null : (R.moboma ?? null);
+const __pMasOsm = R.masina?.osm ? __cachedJson(`json:${R.masina.osm}`, R.masina.osm) : Promise.resolve(null);
+const __pMobOsm = __MOB_ON?.osm ? __cachedJson(`json:${__MOB_ON.osm}`, __MOB_ON.osm) : Promise.resolve(null);
+const __pPlLinks = R.pl || R.attachPL ? __cachedJson('json:data/poidslourds_links.json', 'data/poidslourds_links.json') : Promise.resolve(null);
+const __pAsphalt = __cachedImg('data/tex/asphalt.jpg');
+const __pStrips = __cachedJson('json:data/tex/strips/strips.json', 'data/tex/strips/strips.json', {});
+const __pPhotoBoards = Promise.all((R.photoBoards ?? []).map(async p => ({ ...p, image: await __cachedImg(p.img) })));
+const __pMobLogo = __MOB_ON ? __cachedImg('data/tex/moboma/logo_passio.jpg') : Promise.resolve(null);
+const __pLimOsm = R.limete?.buildings ? __cachedJson(`json:${R.limete.buildings}`, R.limete.buildings) : Promise.resolve(null);
 export const ROUTE_LEN = Math.round(GAME_LEN) - R.end.trim;   // portique d'arrivée
 export const MEDIAN = R.twoLane || R.pl ? 0.12 : R.rocade ? 0.3 : 1.2;   // demi-largeur du terre-plein (route à deux bandes : simple ligne ; Rocade : double ligne)
 export const LANE_W = 3.5;
@@ -310,7 +340,7 @@ const LIM_PB_X = ROAD_EDGE + 32, LIM_LAWN = 12;    // axe des petits boulevards 
 // goudron, les avenues de quartier en terre qui croisent Kulumba (courts tronçons dans leur vraie direction, fermés par une
 // maison au fond), la rue Imbali le long du chemin de fer. dead : [début, fin] en cul-de-sac.
 const MAS = R.masina ?? null;
-const MAS_OSM = MAS?.osm ? await fetch(new URL(`../${MAS.osm}`, import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null) : null;
+const MAS_OSM = await __pMasOsm;
 const MAS_K = R.scale, MAS_W = 9, MAS_SW = 6, MAS_SL = 34;   // échelle des écarts ; largeur de Kulumba ; avenues de quartier
 // La rivière Bonamak du boulevard s'arrête à 120 m, avant Kulumba : en vrai, Kulumba n'a pas de pont à cet endroit (l'auteur
 // en cite trois : sur Bosango près du Marché Hindou, après l'Avenue Congo, et sur le Mokali après Kibunda)
@@ -456,8 +486,8 @@ export function masinaRoadName(x, z) {
 // Tracé : data/moboma_osm.json (tools/moboma_osm.py), à l'échelle du boulevard (comme Masina). Les entrées sur le boulevard sont dans routes.js
 // sideRoads (moboma : clé de la rue, link : seulement l'embouchure) ; une rue qui arrive au boulevard sans entrée (Maison communale, station,
 // Kin Marché, arrêts) s'arrête derrière les façades. Routes : { key, name, w, paved, pts (coordonnées route), dead : [début, fin] en cul-de-sac }.
-const MOB = new URLSearchParams(globalThis.location?.search ?? '').get('moboma') === '0' ? null : (R.moboma ?? null);   // (?moboma=0 : sans le quartier, pour comparer)
-const MOB_OSM = MOB?.osm ? await fetch(new URL(`../${MOB.osm}`, import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null) : null;
+const MOB = __MOB_ON;   // (?moboma=0 : sans le quartier, pour comparer)
+const MOB_OSM = await __pMobOsm;
 const MOB_ROADS = [];
 export const MOB_ROADS_ = MOB_ROADS;                // (tests : main.js ?debug=1)
 export const MOB_LOG = {};                          // (tests : repères sans place, maisons du cœur des îlots)
@@ -889,9 +919,7 @@ function ribbonSeg(Q, x, z) {
 // ---------- Liaisons Lumumba ↔ Route Poids Lourds (14e, 15e, 16e, 17e Rues, Av. de l'Aérodrome) ----------
 // Elles prolongent les rues de Limete, qui s'arrêtent à 90 m du petit boulevard, jusqu'aux rues d'entrée de la Route Poids Lourds. Le
 // tracé (data/poidslourds_links.json, tools/poids_lourds_links.js) est dans le repère de la Route Poids Lourds, où le taxi les parcourt.
-const PL_LINK_DATA = R.pl || R.attachPL
-  ? await fetch(new URL('../data/poidslourds_links.json', import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null)
-  : null;
+const PL_LINK_DATA = await __pPlLinks;
 /** Repère du trajet principal : bouts de rue de Limete où le taxi passe sur la liaison (a → b : en s'éloignant du boulevard). */
 export const PL_STUBS = R.attachPL && LIM ? (() => {
   const r15 = LIM_ST.find(r => r.name === '15e RUE'), r14 = LIM_ST.find(r => r.name === '14e RUE' && r.side > 0), a15 = r15.ang * Math.PI / 180;
@@ -1424,20 +1452,10 @@ const chance = p => Math.random() < p;
 
 // ---------- Textures ----------
 // Images tirées des vidéos des créateurs qui ont donné leur accord (voir js/credits.js)
-const loadImage = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-const ASPHALT = await loadImage(new URL('../data/tex/asphalt.jpg', import.meta.url).href).catch(() => null);
-// Bandes photographiques des façades (tools/strips.py) ; sans elles, le décor reste entièrement modélisé
 __mark('world.js : avant les textures de bandes');
-const STRIPS = await fetch(new URL('../data/tex/strips/strips.json', import.meta.url)).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
-// Grands panneaux publicitaires avec une photo (routes.js photoBoards) ; sans l'image, le panneau n'est pas construit
-const PHOTO_BOARDS = await Promise.all((R.photoBoards ?? []).map(async p =>
-  ({ ...p, image: await loadImage(new URL(`../${p.img}`, import.meta.url).href).catch(() => null) })));
-// Le logo des Passionistes (photo de l'auteur, Kingasani/logo ITPPassio) : sur l'ITP Passio, le groupe scolaire Passio et le couvent (Moboma)
-const MOB_LOGO = MOB ? await loadImage(new URL('../data/tex/moboma/logo_passio.jpg', import.meta.url).href).catch(() => null) : null;
-// Bâtiments réels de Limete, 16e Rue → 1re Rue (OpenStreetMap, tools/limete_buildings.py) ; sans eux, façades génériques
-const LIM_OSM = R.limete?.buildings
-  ? await fetch(new URL(`../${R.limete.buildings}`, import.meta.url)).then(r => (r.ok ? r.json() : null)).catch(() => null)
-  : null;
+const [ASPHALT, STRIPS, PHOTO_BOARDS, MOB_LOGO, LIM_OSM] = await Promise.all([
+  __pAsphalt, __pStrips, __pPhotoBoards, __pMobLogo, __pLimOsm,
+]);
 
 function canvasTexture(w, h, draw) {
   const c = document.createElement('canvas');
@@ -1604,10 +1622,10 @@ const CONCRETE = 0xbdb7a9;
 // ---------- Outils d'assemblage ----------
 /** Builders regroupés par tranches de route, pour garder le découpage (frustum culling). */
 class Chunks {
-  constructor(size = 320) { this.size = size; this.map = new Map(); }
+  constructor(size = 320, keepUv = false) { this.size = size; this.keepUv = keepUv; this.map = new Map(); }
   at(z) {
     const k = Math.floor(z / this.size);
-    if (!this.map.has(k)) this.map.set(k, new Builder());
+    if (!this.map.has(k)) this.map.set(k, new Builder(this.keepUv));
     return this.map.get(k);
   }
   build(scene, material = VC_MAT, cast = true, raw = false) {   // raw : sans écartement des chaussées (ce qui est posé sur le terre-plein)
@@ -1697,7 +1715,7 @@ class Signs {
   // zRef : panneau posé en bloc avec un objet (bendRigid) au lieu d'être plié le long de la route
   add(key, makeTexture, w, h, x, y, z, ry, basic = false, zRef = null) {
     const k = zRef === null ? key : `${key}@${zRef}`;
-    if (!this.groups.has(k)) this.groups.set(k, { tex: makeTexture(), b: new Builder(), basic, zRef });
+    if (!this.groups.has(k)) this.groups.set(k, { tex: makeTexture(), b: new Builder(true), basic, zRef });
     this.groups.get(k).b.add(new THREE.PlaneGeometry(w, h), 0xffffff, x, y, z, 0, ry, 0);
   }
   build(scene, raw = false) {   // raw : ne suit pas l'écartement des chaussées (parc de l'Échangeur)
@@ -2348,9 +2366,10 @@ function addStation(b, signs, st) {
   for (const sz of [-4, 4]) b.box(0.9, 1.65, 0.65, roofCol, x - 2, 0.82, st.z + sz).box(0.94, 0.4, 0.68, isEngen ? 0xe31837 : trimCol, x - 2, 1.4, st.z + sz);
   b.box(10, 3.5, 7, 0xf2f0e8, x + 7, 1.75, st.z - 12).box(10.3, 0.35, 7.3, roofCol, x + 7, 3.6, st.z - 12);
   b.box(14, 0.05, 30, 0x555559, x, 0.03, st.z);
-  // Bandeau sur l'auvent face au boulevard + grand totem au bord de la route
+  // Bandeau sur l'auvent face au boulevard + grand totem double-face au bord de la route
   signs.add(`st_canopy_${st.z}`, () => signTexture(upper, subText, signBg, signFg), 11, 0.9, x - 7.12, 5.38, st.z, -Math.PI / 2, true);
-  signs.add(`st_totem_${st.z}`, () => signTexture(upper, subText, signBg, signFg), 5.2, 1.65, ROAD_EDGE + 2.4, 6.2, st.z + 11.5, 0, true);
+  signs.add(`st_totem_${st.z}`, () => signTexture(upper, subText, signBg, signFg), 5.2, 1.65, ROAD_EDGE + 2.4, 6.2, st.z + 11.7, 0, true);
+  signs.add(`st_totem_${st.z}`, () => signTexture(upper, subText, signBg, signFg), 5.2, 1.65, ROAD_EDGE + 2.4, 6.2, st.z + 11.3, Math.PI, true);
   b.box(0.32, 5.8, 0.32, isEngen ? 0x003da5 : 0x8e949a, ROAD_EDGE + 2.4, 2.9, st.z + 11.5);
 }
 
@@ -4474,12 +4493,14 @@ function addKinMarche(b, signs, side, z) {
     .box(3.2, 0.18, 16.5, 0xc8102e, side * (FRONT - 1.5), 4.0, z, 0, 0, -side * 0.10);
   signs.add(`kinmarche_${side}_${z}`, () => signTexture('KIN MARCHÉ', 'Supermarché · Alimentation', '#c8102e'), 10, 1.7, side * (FRONT - 0.14), 6.2, z, -side * Math.PI / 2, true);
 
-  // Grand totem vertical rouge « KIN MARCHÉ » en bordure de chaussée (vu dans v1_t277s.jpg)
+  // Grand totem vertical rouge « KIN MARCHÉ » en bordure de chaussée (vu dans v1_t277s.jpg), double-face
   const tx = side * (ROAD_EDGE + 2.8), tz = z + 8.5;
   b.box(2.2, 7.8, 0.45, 0xc8102e, tx, 3.9, tz)
     .box(2.4, 0.4, 0.50, 0xf5c400, tx, 7.9, tz);
-  signs.add(`kinmarche_totem_${side}_${z}`, () => signTexture('KIN MARCHÉ', 'Supermarché', '#c8102e', '#ffffff'),
-    2.1, 4.2, tx, 5.2, tz + 0.26, 0, true);
+  for (const [dz, ry] of [[0.26, 0], [-0.26, Math.PI]]) {
+    signs.add(`kinmarche_totem_${side}_${z}`, () => signTexture('KIN MARCHÉ', 'Supermarché', '#c8102e', '#ffffff'),
+      2.1, 4.2, tx, 5.2, tz + dz, ry, true);
+  }
 
   if (side > 0) {
     // Immeuble en briques rouges à grande fenêtre cintrée en demi-lune et panneau sur le toit (juste avant Kin Marché au Q1 dans v1_t277s.jpg)
@@ -4537,12 +4558,14 @@ function addVodacomShop(b, signs, side, z) {
     .box(2.8, 0.20, 14.2, 0xe60000, side * (FRONT - 1.3), 3.85, z, 0, 0, -side * 0.08);
   signs.add(`vodacom_wall_${side}_${z}`, () => signTexture('SHOP VODACOM', 'M-Pesa · Cartes SIM · Smartphones 4G/5G', '#e60000', '#ffffff'),
     11.5, 1.5, side * (FRONT - 0.14), 6.2, z, -side * Math.PI / 2, true);
-  // Totem vertical rouge et blanc Vodacom / M-Pesa au bord de l'arrêt
+  // Totem vertical rouge et blanc Vodacom / M-Pesa au bord de l'arrêt (double-face)
   const tx = side * (ROAD_EDGE + 2.7), tz = z + 7.2;
   b.box(1.9, 6.4, 0.40, 0xe60000, tx, 3.2, tz)
     .box(2.05, 0.35, 0.46, 0xffffff, tx, 6.45, tz);
-  signs.add(`vodacom_totem_${side}_${z}`, () => signTexture('VODACOM', 'Shop Bonamak · M-Pesa', '#e60000', '#ffffff'),
-    1.8, 3.2, tx, 4.3, tz + 0.24, 0, true);
+  for (const [dz, ry] of [[0.24, 0], [-0.24, Math.PI]]) {
+    signs.add(`vodacom_totem_${side}_${z}`, () => signTexture('VODACOM', 'Shop Bonamak · M-Pesa', '#e60000', '#ffffff'),
+      1.8, 3.2, tx, 4.3, tz + dz, ry, true);
+  }
 }
 
 /** Shop Airtel (juste avant l'entrée Kimbuta, l'auteur) : boutique blanche à bandeau rouge, vitrine, totem au bord. */
@@ -4554,7 +4577,9 @@ function addAirtelShop(b, signs, side, z) {
     9, 1.1, side * (FRONT - 0.26), 4.8, z, -side * Math.PI / 2, true);
   const tx = side * (ROAD_EDGE + 2.7), tz = z - 5;
   b.box(1.6, 5.2, 0.38, RED, tx, 2.6, tz).box(1.75, 0.3, 0.44, 0xffffff, tx, 5.3, tz);
-  signs.add(`airtel_totem_${side}_${Math.round(z)}`, () => signTexture('AIRTEL', 'Shop · Kimbuta', '#e40000', '#ffffff'), 1.5, 2.6, tx, 3.6, tz + 0.22, 0, true);
+  for (const [dz, ry] of [[0.22, 0], [-0.22, Math.PI]]) {
+    signs.add(`airtel_totem_${side}_${Math.round(z)}`, () => signTexture('AIRTEL', 'Shop · Kimbuta', '#e40000', '#ffffff'), 1.5, 2.6, tx, 3.6, tz + dz, ry, true);
+  }
 }
 
 /** Mosquée (Badara ; Mosquée Atwa en face de Kimbuta) : salle blanche à bandeau vert et fenêtres en arc, coupole verte,
@@ -4600,12 +4625,14 @@ function addOrangeShop(b, signs, side, z) {
   }
   signs.add(`orange_wall_${side}_${z}`, () => signTexture('SHOP ORANGE', 'Orange Money · Fibre · Smartphones 4G/5G', '#ff6600', '#ffffff'),
     13.5, 1.45, side * (FRONT - 0.14), 7.8, z, -side * Math.PI / 2, true);
-  // Totem vertical noir et orange au bord du boulevard
+  // Totem vertical noir et orange au bord du boulevard (double-face)
   const tx = side * (ROAD_EDGE + 2.7), tz = z + 8.5;
   b.box(1.9, 6.6, 0.42, 0x181818, tx, 3.3, tz)
     .box(2.05, 0.45, 0.48, 0xff6600, tx, 6.65, tz);
-  signs.add(`orange_totem_${side}_${z}`, () => signTexture('ORANGE', 'Shop · Orange Money', '#ff6600', '#111111'),
-    1.8, 3.4, tx, 4.5, tz + 0.25, 0, true);
+  for (const [dz, ry] of [[0.25, 0], [-0.25, Math.PI]]) {
+    signs.add(`orange_totem_${side}_${z}`, () => signTexture('ORANGE', 'Shop · Orange Money', '#ff6600', '#111111'),
+      1.8, 3.4, tx, 4.5, tz + dz, ry, true);
+  }
 }
 
 /** Immeuble de 3 niveaux appelé « MBUJIMAYI KANANGA » (à droite, 30 m après le Shop d'Orange). */
@@ -5406,8 +5433,10 @@ function addCommercialBldg(b, signs, side, z, p) {
     13, 1.5, side * (FRONT - 0.15), H - 1.2, z, -side * Math.PI / 2, true);
   const rx = side * (ROAD_EDGE + 2.6), rz = z + 7.5;
   b.box(1.8, 5.8, 0.38, bgHex, rx, 2.9, rz);
-  signs.add(`comm_totem_${side}_${z}`, () => signTexture(p.name, p.sub ?? '', colStr, p.fg ?? '#ffffff'),
-    1.7, 2.8, rx, 4.0, rz + 0.22, 0, true);
+  for (const [dz, ry] of [[0.22, 0], [-0.22, Math.PI]]) {
+    signs.add(`comm_totem_${side}_${z}`, () => signTexture(p.name, p.sub ?? '', colStr, p.fg ?? '#ffffff'),
+      1.7, 2.8, rx, 4.0, rz + dz, ry, true);
+  }
 }
 
 /** Monument Patrice Emery Lumumba (TPF gis_osm_pois s=12210, avant l'Échangeur de Limete). */
@@ -5448,7 +5477,8 @@ function addSideFuel(b, signs, side, z, key, label = 'STATION', off = 0) {
   signs.add(`${key}_canopy`, () => signTexture(upper, subText, signBg, signFg), 11, 0.9, x - side * 7.12, 5.38, z, -side * Math.PI / 2, true);
   const tx = off ? x - side * 6.2 : side * (ROAD_EDGE + 2.4);
   b.box(0.32, 5.8, 0.32, isEngen ? 0x003da5 : 0x8e949a, tx, 2.9, z + 11.5);
-  signs.add(key, () => signTexture(upper, subText, signBg, signFg), 5.2, 1.65, tx, 6.2, z + 11.55, 0, true);
+  signs.add(key, () => signTexture(upper, subText, signBg, signFg), 5.2, 1.65, tx, 6.2, z + 11.7, 0, true);
+  signs.add(key, () => signTexture(upper, subText, signBg, signFg), 5.2, 1.65, tx, 6.2, z + 11.3, Math.PI, true);
 }
 
 // ---------- Limete : de la 16e Rue à la 1re Rue ----------
@@ -5538,12 +5568,11 @@ function addNamedBlock(b, signs, side, z, w, p, F0, floors = 4) {
     b.box(0.08, 1.3, w * 0.22, 0x1e3246, fx, f * 3.3 + 1.8, z + k * w * 0.3);
     if (p.corner) b.box(d * 0.22, 1.3, 0.08, 0x1e3246, x + side * k * d * 0.3, f * 3.3 + 1.8, zf);
   }
-  if (p.shops) {                                          // vitrines et panneaux de boutiques (couleurs vives, sans marque)
-    const PANELS = [0x1fa3dc, 0xf4f4f0, 0xf5d000, 0xff7a1a, 0x2bb24c, 0x1d4fa0];
+  if (p.shops) {                                          // vitrines de boutiques (sans panneaux vides de couleur)
     for (let k = 0; k < 3; k++) {
       const zk = z + (k - 1) * w / 3, xk = x + side * (k - 1) * d / 3;
-      b.box(0.1, 2.2, w / 3 - 0.5, 0x2a3540, fx, 1.25, zk).box(0.14, 0.9, w / 3 - 0.2, PANELS[k % 6], fx - side * 0.05, 2.85, zk);
-      if (p.corner) b.box(d / 3 - 0.5, 2.2, 0.1, 0x2a3540, xk, 1.25, zf).box(d / 3 - 0.2, 0.9, 0.14, PANELS[(k + 3) % 6], xk, 2.85, zf + 0.05);
+      b.box(0.1, 2.2, w / 3 - 0.5, 0x2a3540, fx, 1.25, zk);
+      if (p.corner) b.box(d / 3 - 0.5, 2.2, 0.1, 0x2a3540, xk, 1.25, zf);
     }
   } else b.box(2.4, 0.2, w * 0.8, c, side * (F - 1.1), 3.3, z, 0, 0, -side * 0.08);   // marquise
   const key = `nb_${side}_${Math.round(z)}`, make = () => signTexture(p.name, p.sub ?? '', col, p.text ?? '#ffffff');
@@ -5734,7 +5763,8 @@ function addStripStation(b, signs, st) {
   const make = () => signTexture(upper, sub, '#1d4fa0', '#ffffff');
   signs.add(`st_strip_${st.z}`, make, wd - 2.4, 0.85, xc, 5.3, st.z + 9.13, 0, true);                    // bandeau de l'auvent
   b.box(0.32, 5.8, 0.32, 0x8e949a, ROAD_EDGE + 1.4, 2.9, st.z + 16.5);
-  signs.add(`st_strip_${st.z}`, make, 4.4, 1.4, ROAD_EDGE + 1.4, 6.2, st.z + 16.55, 0, true);           // totem
+  signs.add(`st_strip_${st.z}`, make, 4.4, 1.4, ROAD_EDGE + 1.4, 6.2, st.z + 16.7, 0, true);            // totem double-face
+  signs.add(`st_strip_${st.z}`, make, 4.4, 1.4, ROAD_EDGE + 1.4, 6.2, st.z + 16.3, Math.PI, true);
 }
 
 // Limete, bâtiments OSM : compression en travers (la même que pour les rues en biais du croquis), agrandissement des tailles
@@ -7686,7 +7716,7 @@ class PlateAtlas {
         x.fillText(n, cx + CW / 2, cy + CH / 2 + 2, CW - 26);
       });
     });
-    const b = new Builder();
+    const b = new Builder(true);
     for (const p of this.parts) {
       const geo = new THREE.PlaneGeometry(p.w, p.h), uv = geo.attributes.uv;
       const u0 = (p.i % COLS) / COLS, dv = CH / H, v0 = 1 - (Math.floor(p.i / COLS) + 1) * dv;
@@ -9273,11 +9303,10 @@ function perforatedTexture() {
   });
 }
 function hoardingTexture(col) {
-  // palissade de chantier en tôle ondulée, affiches collées (vidéo « GOMBE/LINGWALA… » 1:06)
+  // palissade de chantier en tôle ondulée (sans affiches vides de couleur)
   return canvasTexture(512, 128, (x, w, h) => {
     x.fillStyle = col; x.fillRect(0, 0, w, h);
     for (let i = 0; i < w; i += 8) { x.fillStyle = 'rgba(0,0,0,0.12)'; x.fillRect(i, 0, 3, h); }
-    for (let i = 0; i < 6; i++) { x.fillStyle = pick(['#f4f4f0', '#f5c400', '#d62828', '#2b8a3e']); x.fillRect(20 + i * 82, rand(20, 50), 52, 62); }
   });
 }
 
@@ -10088,7 +10117,6 @@ function* addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
     for (let z = zStart; z > zStop; z -= 38) {
       if (EXT_OPEN.some(([zc, h]) => Math.abs(z - zc) < h + 2) || inFlyover(z, 3)) continue;
       addStreetlight(chunks.at(z), z);
-      if (extZone(z) === 'triomphal') chunks.at(z).box(0.95, 1.45, 0.08, 0xf4f4f0, 0, 4.8, z).box(0.85, 1.25, 0.10, 0x1d4fa0, 0, 4.8, z);
     }
   }
   let lamp = 0;
@@ -10421,15 +10449,11 @@ function plCrossing(chunks, signs, km, angDeg, name) {
   signs.add(`pl_cross_${km}`, () => signTexture(name, 'Attention aux trains', '#c8102e'), 3.4, 0.9, ROAD_EDGE + 3, 3.9, z + 7.08, 0, true);
 }
 /** Mur d'usine en panneaux de béton avec poteaux, fil barbelé et parfois une publicité peinte. */
-function plWall(b, side, z, len, x, h = 3.2, ads = false) {
+function plWall(b, side, z, len, x, h = 3.2) {
   const col = pick([0xb4b0a6, 0xa9a59b, 0xbdb7a9, 0x9d9a90]);
   b.box(0.3, h, len, col, x, h / 2, z).box(0.34, 0.5, len, 0x7c7a73, x, 0.25, z);        // mur, soubassement sali
   for (let dz = -len / 2; dz <= len / 2; dz += 4) b.box(0.42, h + 0.4, 0.42, 0x8f8c84, x, (h + 0.4) / 2, z + dz);
   b.box(0.04, 0.04, len, 0x2a2a2a, x, h + 0.42, z);
-  if (ads && chance(0.55)) {
-    const w = Math.min(len * 0.7, 9), c = pick([0xc8102e, 0x1d4fa0, 0xf5c400, 0x1b8a3a, 0xf28c28, 0xe8e2d0]);
-    b.box(0.06, h * 0.7, w, c, x - side * 0.18, h * 0.5, z + rand(-1, 1));
-  }
 }
 /** Grand hangar industriel : mur, bardage, toit à deux pans. */
 function plShed(b, side, z, w, d, x, wall, roof, h = 7) {
@@ -10543,7 +10567,7 @@ class TexWalls {
     if (!this.g.has(key)) {
       const tex = canvasTexture(256, 128, draw);
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      this.g.set(key, { tex, b: new Builder() });
+      this.g.set(key, { tex, b: new Builder(true) });
     }
     const geo = new THREE.PlaneGeometry(w, h), uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / tw, uv.getY(i) * h / th);
@@ -10742,8 +10766,6 @@ function addCampusGate(b, d, T, signs, zG) {
   // la petite loge blanche contre le pilier de droite, sa fenêtre bleue ; la porte brune à gauche
   b.box(1.9, 4.2, 4, WH, PX + 1.8, 2.1, zG + 5.2).box(2.1, 0.3, 4.2, 0x8f9498, PX + 1.8, 4.3, zG + 5.2).box(0.9, 1.3, 0.06, 0x2a62b0, PX + 1.8, 2.5, zG + 7.23);
   b.box(1.3, 2.6, 0.06, 0x7a4b2a, -(PX + 2.6), 1.3, zG + 3.56);
-  // la grande affiche orange devant le pavillon de gauche
-  b.box(0.2, 3.6, 7, 0xe58a2a, -(PX + 16.6), 2.6, zG + 2).box(0.3, 0.8, 7.2, 0x777670, -(PX + 16.6), 0.4, zG + 2);
   // la barrière : poteau, contrepoids, perche rouge et blanche levée au-dessus de la voie de gauche
   const bx = -(E + 0.5), bz = zG + 4.8;
   b.box(0.22, 1.1, 0.22, 0xd8d8d0, bx, 0.55, bz).box(0.7, 0.34, 0.34, 0x444444, bx - 0.5, 1.1, bz, 0, 0, 0.22);
@@ -11002,7 +11024,6 @@ function addBpDecor(chunks, details, signs) {
   for (let k = 0; k < 5; k++) {
     const zc = z1 - k * 9;
     bR.box(0.3, 3, 8.8, k % 2 ? 0xdedbd2 : 0xcfcabd, xr, 1.5, zc);
-    bR.box(0.06, 2.1, 6.6, pick([0xb5583e, 0x6d5a3a, 0xc8b070, 0x8a4a3a]), xr - 0.17, 1.6, zc);
   }
   bR.box(11, 14, 16, 0x8d8a82, xr + 12, 7, z1 - 14);
   for (let y = 2.5; y < 13; y += 3.2) for (let k = -6; k <= 6; k += 4) bR.box(0.06, 1.3, 1.7, 0x2a3540, xr + 6.47, y, z1 - 14 + k);
@@ -11300,14 +11321,11 @@ function addUniRings(chunks, details, signs) {
           dd.box(1.7, 0.1, 0.5, 0xb9b3a7, s * (ROAD_EDGE + 0.95), 0.5, zz - 0.5);
         }
       }
-      // Repères de la vidéo : grand panneau noir à gauche, structure métallique rouge à droite (en arrivant de Sendwe), mât au milieu,
+      // Repères de la vidéo : grand panneau noir à gauche, mât au milieu,
       // station au toit vert et rouge, immeuble clair au coin, toit rose
       const px = -(ROAD_EDGE + 10), pz = z + 62;
       b.box(0.5, 12, 0.5, 0x3a3f45, px, 6, pz);
       signs.add('ezo_noir', () => signTexture('TOZA BA ZOBA TE', 'Rond-Point Ezo', '#14141e', '#f4f4f2'), 7.5, 9, px, 12, pz + 0.3, 0);
-      const fx = ROAD_EDGE + 15, fz = z + 92;
-      for (const [ox, oz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) b.box(0.28, 15, 0.28, 0xa8242e, fx + ox, 7.5, fz + oz);
-      for (const y of [3, 7, 11, 15]) for (const oz of [-3, 3]) b.box(6.3, 0.2, 0.2, 0xa8242e, fx, y, fz + oz);
       b.box(0.1, 12, 0.1, 0x9aa0a6, 0.3, 6, z + 112).box(1.6, 0.5, 0.5, 0x4a4f55, 0.3, 12, z + 112);
       addSideFuel(b, signs, 1, z + 26, 'fuel_ezo', 'STATION', 54);
       const w = -(ROAD_EDGE + 20);
@@ -11481,7 +11499,7 @@ export function buildWorld(scene, opts = {}) {
   const details = new Chunks(100);    // petits objets, affichés seulement de près
   const curbs = new Chunks(100);      // bordures peintes : visibles plus loin que les détails
   const signs = new Signs();
-  const lamps = LAMPS = new Chunks(), pools = POOLS = new Chunks();   // ampoules et taches de lumière des lampadaires (nuit)
+  const lamps = LAMPS = new Chunks(), pools = POOLS = new Chunks(320, true);   // ampoules et taches de lumière des lampadaires (nuit)
   chunks.scan = details.scan = true;                       // (l'auteur, 13/11 : les obstacles du bord de la route, voir obstacleAt)
   obstInit(Z_START + 30, Math.min(Z_GEN, Z_END) - 40);
 
@@ -11572,12 +11590,6 @@ export function buildWorld(scene, opts = {}) {
         .ball(0.45, 0x2e6b28, 0, 0.55, z - 1.1, 1.2, 0.6, 1.2)
         .ball(0.45, 0x2e6b28, 0, 0.55, z + 1.1, 1.2, 0.6, 1.2);
       addPalm(b, 0, z, rand(0.75, 1.05));
-    }
-    // Panneaux publicitaires verticaux et petits drapeaux RDC sur les lampadaires (v3_t178s et v3_t476s)
-    for (let z = Z_START - 10; z > Z_END; z -= 38) {
-      if (inCrossing(z, 6)) continue;
-      chunks.at(z).box(0.95, 1.45, 0.08, 0xf4f4f0, 0, 4.8, z)
-        .box(0.85, 1.25, 0.10, 0x1d4fa0, 0, 4.8, z);
     }
   }
   let solar = 0;
@@ -11725,7 +11737,7 @@ export function buildWorld(scene, opts = {}) {
   let X = null;
   if (EXT && !defExt) for (const _ of addExtension(scene, chunks, details, curbs, signs, rigid, groundMat));
   else if (EXT) {
-    X = { c: new Chunks(), d: new Chunks(100), k: new Chunks(100), s: new Signs(), r: new Rigid(), sky: new Chunks(1e6), l: new Chunks(), p: new Chunks(), done: false };
+    X = { c: new Chunks(), d: new Chunks(100), k: new Chunks(100), s: new Signs(), r: new Rigid(), sky: new Chunks(1e6), l: new Chunks(), p: new Chunks(320, true), done: false };
     X.gen = (function* () {
       yield* addExtension(scene, X.c, X.d, X.k, X.s, X.r, groundMat);
       yield; X.c.build(scene);

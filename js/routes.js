@@ -1321,7 +1321,7 @@ export const ITINERAIRES = [
     title: 'Aéroport ↔ Gare Centrale',
     via: 'Bd Lumumba · Échangeur · Sendwe · 24 Novembre · Bd du 30 Juin',
     stops: ["Aéroport N'djili", 'Masina', 'Échangeur', '24 Novembre', 'Gare Centrale'],
-    km: 26.8, route: 'lumumba', roads: ['30juin', 'pl'],
+    km: 26.8, route: 'lumumba', roads: ['30juin'],
     A: { name: "Aéroport de N'djili", cri: 'Aéroport', road: 1, s: 45, dir: 1 },
     B: { name: 'Gare Centrale · Bd du 30 Juin', cri: 'Gare', road: 2, at: 'plaza', dir: 1 },
     variants: [
@@ -1329,7 +1329,7 @@ export const ITINERAIRES = [
         id: 'limete-30juin', label: 'Via Limete · 24 Nov · 30 Juin', short: 'Limete · 24 Nov · 30 Juin',
         via: 'Bd Lumumba · Échangeur · Sendwe · 24 Novembre · Bd du 30 Juin',
         stops: ["Aéroport N'djili", 'Masina', 'Échangeur', '24 Novembre', 'Gare Centrale'],
-        km: 26.8, roads: ['30juin', 'pl'],
+        km: 26.8, roads: ['30juin'],
         B: { name: 'Gare Centrale · Bd du 30 Juin', cri: 'Gare', road: 2, at: 'plaza', dir: 1 },
       },
       {

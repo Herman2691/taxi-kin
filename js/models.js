@@ -28,13 +28,13 @@ function paint(geo, color) {
   return geo;
 }
 
-/** Téléphone : les pièces attendent leur fusion en octets (normales Int8, couleurs Uint8, sans UV) : 18 octets par sommet au lieu de 44 (tout le décor attend avant d'être fusionné). */
-function pack(g) {
+/** Téléphone : les pièces attendent leur fusion en octets (normales Int8, couleurs Uint8, sans UV sauf maillages texturés) : 18 octets par sommet au lieu de 44 (tout le décor attend avant d'être fusionné). */
+function pack(g, keepUv = false) {
   if (!MOBILE) return g;
   const n = g.attributes.normal, c = g.attributes.color;
   if (n?.array instanceof Float32Array && !n.isInterleavedBufferAttribute) { const a = n.array, o = new Int8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = Math.round(a[i] * 127); g.setAttribute('normal', new THREE.BufferAttribute(o, 3, true)); }
   if (c?.array instanceof Float32Array && !c.isInterleavedBufferAttribute) { const a = c.array, o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = Math.round(Math.min(1, Math.max(0, a[i])) * 255); g.setAttribute('color', new THREE.BufferAttribute(o, 3, true)); }
-  g.deleteAttribute('uv');
+  if (!keepUv) g.deleteAttribute('uv');
   return g;
 }
 /** Remet les pièces au même format (nombres à virgule) avant la fusion : tout le reste du code attend ce format. */
@@ -56,19 +56,24 @@ function unpack(parts) {
 
 /** Assemble des primitives colorées puis les fusionne. */
 export class Builder {
-  constructor() { this.parts = []; }
+  constructor(keepUv = false) { this.parts = []; this.keepUv = keepUv; }
   add(geo, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
     _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz, 'YXZ')), ONE);
     const g = geo.index ? nonIndexed(geo) : geo;
     if (g !== geo) geo.dispose();
-    this.parts.push(pack(paint(g.applyMatrix4(_m), color)));
+    this.parts.push(pack(paint(g.applyMatrix4(_m), color), this.keepUv));
     return this;
   }
   /** Ajoute une géométrie déjà placée (sans transformation). */
   addRaw(geo, color) {
     const g = geo.index ? nonIndexed(geo) : geo;
     if (g !== geo) geo.dispose();
-    this.parts.push(pack(paint(g, color)));
+    this.parts.push(pack(paint(g, color), this.keepUv));
+    return this;
+  }
+  /** Ajoute une géométrie déjà colorée et dépliée (personnages figés). */
+  addBaked(geo) {
+    this.parts.push(pack(geo, this.keepUv));
     return this;
   }
   // Les pièces longues sont subdivisées pour suivre les courbes du boulevard une fois pliées.
