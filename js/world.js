@@ -20,7 +20,7 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd7';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd8';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 
 // Lancement groupé et mis en cache des données JSON et textures partagées entre routes
 const __DATA_CACHE = (globalThis.__TAXIKIN_DATA ??= new Map());
@@ -3262,25 +3262,35 @@ export function updateSignals(t) {
 function addPhotoBoard(b, signs, p) {
   if (!p.image) return;
   const z = g(p.s), side = p.side, w = p.w ?? 9, h = w * p.image.height / p.image.width;
-  const x = side * (p.x ?? ROAD_EDGE + 5.3), y0 = p.y ?? 5, yc = y0 + h / 2;
-  for (const dx of [-w * 0.3, w * 0.3]) b.box(0.5, yc, 0.5, 0x5d666e, x + dx, yc / 2, z);              // pieds
-  b.box(w + 0.5, h + 0.5, 0.35, 0x2a2e33, x, yc, z)                                                    // cadre
-    .box(w + 0.6, 0.12, 1.3, 0x5d666e, x, y0 - 0.35, z + 0.55)                                        // passerelle d'entretien
-    .box(w + 0.6, 0.6, 0.05, 0x5d666e, x, y0 + 0.05, z + 1.2);                                        // garde-corps
-  for (let k = 0; k < 3; k++) b.box(0.35, 0.25, 0.45, 0xdedede, x + (k - 1) * w / 3, y0 - 0.1, z + 1.05);   // projecteurs
+  const inLim = LIM && z <= Z16 + 6 && z >= Z_FORK - 6;
+  const baseX = inLim ? PB_X + 7.5 : R.twoLane ? FRONT - 2.0 : ROAD_EDGE + 5.6;
+  const x = side * (p.x ?? baseX) - (R.industrial && side < 0 ? PL_LEFT_X : 0);
+  const totem = w < 5.2, y0 = p.y ?? (totem ? 3.6 : 5), yc = y0 + h / 2;
+  if (totem) {
+    b.box(0.56, yc, 0.56, 0x5d666e, x, yc / 2, z)
+      .box(w + 0.56, h + 0.56, 0.28, 0xf5c400, x, yc, z)
+      .box(w + 0.36, h + 0.36, 0.36, 0x1a1d24, x, yc, z);
+  } else {
+    for (const dx of [-w * 0.3, w * 0.3]) b.box(0.5, yc, 0.5, 0x5d666e, x + dx, yc / 2, z);              // pieds
+    b.box(w + 0.5, h + 0.5, 0.35, 0x2a2e33, x, yc, z)                                                    // cadre
+      .box(w + 0.6, 0.12, 1.3, 0x5d666e, x, y0 - 0.35, z + 0.55)                                        // passerelle d'entretien
+      .box(w + 0.6, 0.6, 0.05, 0x5d666e, x, y0 + 0.05, z + 1.2);                                        // garde-corps
+  }
+  const nLights = totem ? 2 : 3;
+  for (let k = 0; k < nLights; k++) b.box(0.35, 0.25, 0.45, 0xdedede, x + (k - (nLights - 1) / 2) * (w / nLights), y0 - 0.1, z + 0.95);   // projecteurs
   if (LAMPS) {                                                                                       // (la nuit : projecteurs allumés et tache de lumière sur le bas-côté, comme les lampadaires)
-    for (let k = 0; k < 3; k++) LAMPS.at(z).box(0.45, 0.14, 0.55, 0xffffff, x + (k - 1) * w / 3, y0 - 0.1, z + 1.05);
+    for (let k = 0; k < nLights; k++) LAMPS.at(z).box(0.45, 0.14, 0.55, 0xffffff, x + (k - (nLights - 1) / 2) * (w / nLights), y0 - 0.1, z + 0.95);
     POOLS.at(z).add(new THREE.PlaneGeometry(w * 1.6, 14), 0xffffff, x - side * 2, 0.06, z + 0.6, -Math.PI / 2);
   }
   const tex = () => {
     const t = new THREE.Texture(p.image);
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
+    t.anisotropy = MOBILE ? 2 : 8;
     t.needsUpdate = true;
     return t;
   };
-  signs.add(`photo_${p.s}_${side}`, tex, w, h, x, yc, z + 0.19, 0, true);
-  signs.add(`photo_${p.s}_${side}`, tex, w, h, x, yc, z - 0.19, Math.PI, true);
+  signs.add(`photo_${p.img}`, tex, w, h, x, yc, z + 0.2, 0, true);
+  signs.add(`photo_${p.img}`, tex, w, h, x, yc, z - 0.2, Math.PI, true);
 }
 
 function addRoadSign(b, signs, key, title, sub, z, bg = '#1d6b3a') {

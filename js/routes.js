@@ -350,12 +350,17 @@ export const ROUTES = {
     },
     // Grands panneaux publicitaires avec une photo (dossier « pano publicitaire ») : s, côté, image, largeur (m)
     photoBoards: [
-      { s: 13402, side: 1, img: 'data/tex/pubs/jesus_revient.jpg', w: 9.6 },   // « Jésus revient », à l'entrée de la 16e Rue, côté industriel
-      // (26/11, dossier « pano publicitaire » : un panneau par image ; flex : décalé tout seul s'il tombe sur une rue ou un arrêt)
-      { s: 3100, side: -1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },            // FORAKI, Fondation Rabbi Kimbangi
-      { s: 6500, side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                // Ministère évangélique « Jésus revient bientôt »
-      { s: 9800, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },       // (voir ci-dessus)
-      { s: 11700, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },     // SysAkademia, plateforme de gestion universitaire (sysakademia.com)       // Malongi IA, l'assistant pédagogique des enseignants
+      { s: 420, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },                      // Affiche officielle Fula-Fula Kin VR (sortie Aéroport)
+      { s: 1850, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true }, // Bannière Fula-Fula Kin
+      { s: 3100, side: -1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },                // FORAKI, Fondation Rabbi Kimbangi
+      { s: 4650, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },                     // Affiche officielle Fula-Fula Kin VR (Masina / Kingasani)
+      { s: 6500, side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                    // Ministère évangélique « Jésus revient bientôt »
+      { s: 8250, side: -1, img: 'data/tex/pubs/jesus_revient.jpg', w: 8.6, flex: true },         // « Jésus revient » (Pascal / N'djili)
+      { s: 9800, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },           // Malongi IA, l'assistant pédagogique des enseignants
+      { s: 11700, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },          // SysAkademia, plateforme de gestion universitaire
+      { s: 13402, side: 1, img: 'data/tex/pubs/jesus_revient.jpg', w: 9.6 },                     // « Jésus revient », à l'entrée de la 16e Rue, côté industriel
+      { s: 15250, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true }, // Bannière Fula-Fula Kin (Limete)
+      { s: 16800, side: -1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },                   // Affiche officielle Fula-Fula Kin VR (Limete 1re Rue)
     ],
     // Tronçon 16e Rue → 1re Rue (croquis OSM « Bd Lumumba 16e–1re Rue », TPF/FIchierGAMA/roadskin.shp).
     // s = mètres réels depuis l'aéroport (16e Rue = 13 435 m + distance du croquis) ; n = numéro sur le croquis.
@@ -833,6 +838,12 @@ export const ROUTES = {
       trees: [[5900, 1], [6350, -1], [4140, 1], [4210, 1], [8000, -1], [8250, -1], [1030, 1], [2300, 1], [2310, -1]],
       junction: 7063,            // Av. de l'Aérodrome : feux et tour de police (vidéo « de A à Z », 06:40)
     },
+    photoBoards: [
+      { s: plKm(2100), side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
+      { s: plKm(4560), side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
+      { s: plKm(6780), side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },
+      { s: plKm(8900), side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
+    ],
   },
 
   // Avenue de l'Université (tools/universite.py, OSM ; dossier « Université » : croquis du Rond-Point Ngaba, vidéos d'Ezo et de l'UNIKIN).
@@ -871,6 +882,13 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    photoBoards: [
+      { s: 1200, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
+      { s: 3200, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },
+      { s: 5100, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
+      { s: 7400, side: -1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },
+      { s: 8800, side: 1, img: 'data/tex/pubs/jesus_revient.jpg', w: 8.6, flex: true },
+    ],
   },
 
   // Avenue Kasa-Vubu (tools/kasavubu.py, OSM) : du rond-point Kintambo Magasin au boulevard du 30 Juin (Gombe). L'auteur, 08/11 : « c'est juste un
@@ -909,6 +927,12 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    photoBoards: [
+      { s: 1800, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
+      { s: 5600, side: -1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
+      { s: 9800, side: 1, img: 'data/tex/pubs/jesus_revient.jpg', w: 8.6, flex: true },
+      { s: 13600, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
+    ],
   },
 
   // By Pass (tools/bypass.py, OSM) : de l'entrée réservée à l'Échangeur à Cité Verte, par le Rond-Point Ngaba. Tracé en mètres de jeu dans la
@@ -948,6 +972,12 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    photoBoards: [
+      { s: 1600, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
+      { s: 4800, side: -1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },
+      { s: 8200, side: 1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },
+      { s: 11800, side: -1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
+    ],
   },
 
   // Rocade Sud-Est (tools/rocade.py) : de l'UNIKIN (bord de l'avenue de l'Université, avant le portail) par Kimwenza, Bralima, Riflard, le rail,
@@ -1027,6 +1057,12 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    photoBoards: [
+      { s: 2500, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },
+      { s: 14500, side: -1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },
+      { s: 28000, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
+      { s: 44500, side: -1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
+    ],
   },
 
   '30juin': {
@@ -1249,6 +1285,13 @@ export const ROUTES = {
     ],
     // Liaison avec l'avenue de la Libération (ex-24 Novembre) : en s'engageant dans son entrée au Rond-point Mandela, on
     // passe sur le trajet principal, sur le 24 Novembre vers Asanef et le Triomphal (voir `links` du trajet lumumba)
+    photoBoards: [
+      { s: 920, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
+      { s: 2250, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },
+      { s: 3900, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
+      { s: 5450, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
+      { s: 6750, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },
+    ],
     links: [{ to: 'lumumba', at: 'sideRoad', road: 4377, side: 1, s: 23930, dir: -1, name: 'Avenue de la Libération (ex-24 Novembre)' }],
   },
 };
