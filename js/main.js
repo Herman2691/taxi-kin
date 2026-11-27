@@ -1847,9 +1847,20 @@ function handleTraffic(dt) {
   // Circulation vivante sur les routes voisines quand on approche d'un raccord (Mandela / 30 Juin, Route Poids Lourds, Place de la Gare)
   for (const other of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) {
     if (!other || other === A || other.nearZ === null || other.nearZ === undefined) continue;
-    const proxy = { x: 999, z: other.nearZ, speed: 0, heading: 0, bw: 2, bl: 4, level: 'pont', core: true };
-    if (!other.nearActive) { other.nearActive = true; other.traffic.reset(proxy); }
-    other.traffic.update(dt, proxy, G.time);
+    // (l'auteur, 27/11 : à l'approche du raccord, les véhicules de l'autre route disparaissaient ou passaient « transparents » : le taxi y est maintenant
+    // représenté à sa vraie place sur cette route, comme un véhicule plein)
+    const px = other.nearX ?? 999, close = Math.abs(px) < 12;
+    const proxy = close
+      ? { x: px, z: other.nearZ, speed: Math.abs(taxi.speed), heading: other.nearFwd === false ? Math.PI : 0, bw: taxi.bw, bl: taxi.bl }
+      : { x: 999, z: other.nearZ, speed: 0, heading: 0, bw: 2, bl: 4, level: 'pont', core: true };
+    if (!other.nearActive) { other.nearActive = true; other.traffic.reset({ ...proxy, x: 999, level: 'pont', core: true }); }
+    const oh = other.traffic.update(dt, proxy, G.time);
+    if (oh && close && !oh.fallen) {
+      const same = (oh.side === 1) === (proxy.heading === 0), vs = oh.speed ?? 0;
+      const k = same ? Math.abs(Math.abs(taxi.speed) - vs) : Math.abs(taxi.speed) + vs;
+      taxi.speed *= 0.5; oh.speed = Math.max(0, vs * 0.5);
+      if (G.crashCd <= 0 && k > 2.5) crash(k);
+    }
   }
   const hit = traffic.update(dt, taxi, G.time);
   if (!hit) return;
@@ -2795,7 +2806,11 @@ function followRoads() {
         if (d < j.r && d < bd) { bd = d; best = j; }
       }
       if (!best) { other.nearZ = null; other.nearActive = false; other.world.follow(0, 1e7, 0); }
-      else { const c = roadCoords(other, p, best.a === other ? best.za : best.zb, 450); other.nearZ = c.z; other.world.follow(c.x, c.z, Math.PI / 2); }
+      else {
+        const c = roadCoords(other, p, best.a === other ? best.za : best.zb, 450);
+        if (Math.abs(c.z - (other.nearZ ?? c.z)) > 0.05) other.nearFwd = c.z < (other.nearZ ?? c.z);   // (sens de marche du taxi sur la route voisine)
+        other.nearZ = c.z; other.nearX = c.x; other.world.follow(c.x, c.z, Math.PI / 2);
+      }
     }
   }
   ROAD1.world.light(p);                          // soleil et ciel : sur le taxi

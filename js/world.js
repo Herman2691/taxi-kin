@@ -20,9 +20,9 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd3';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd4';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 export const ROUTE_LEN = Math.round(GAME_LEN) - R.end.trim;   // portique d'arrivée
-export const MEDIAN = R.twoLane ? 0.12 : R.rocade ? 0.3 : 1.2;   // demi-largeur du terre-plein (route à deux bandes : simple ligne ; Rocade : double ligne)
+export const MEDIAN = R.twoLane || R.pl ? 0.12 : R.rocade ? 0.3 : 1.2;   // demi-largeur du terre-plein (route à deux bandes : simple ligne ; Rocade : double ligne)
 export const LANE_W = 3.5;
 export const LANES = R.lanes;
 export const ROAD_EDGE = MEDIAN + LANES * LANE_W;
@@ -1168,10 +1168,11 @@ const MAT_PL = HAS_MATETE ? (() => {
 // après le Y d'Akram, elle prend peu à peu la coupe de la Route Poids Lourds attachée (2 × 2 voies de 3,5 m, bande grise de 2,4 m au milieu, caniveaux,
 // deux voies ferrées à gauche), si bien qu'au raccord (u = PL_JOIN_U) les deux routes sont identiques.
 const smooth01 = t => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k); };
-const PL_HALF = 1.2 + 2 * LANE_W;                     // demi-largeur de la Route Poids Lourds (son MEDIAN + 2 voies)
+const PL_MED = 0.12;                                  // (l'auteur, 27/11 : le milieu n'est qu'UNE ligne, pas une bande où l'on passe)
+const PL_HALF = PL_MED + 2 * LANE_W;                     // demi-largeur de la Route Poids Lourds (son MEDIAN + 2 voies)
 const plHalfR = u => 4 + (PL_HALF - 4) * smooth01((u - 115) / 35);   // bord droit (côté Akram) : s'élargit juste après le Y
 const plHalfL = u => 4 + (PL_HALF - 4) * smooth01((u - 200) / 40);   // bord gauche : une fois la voie ferrée écartée
-const plMed = u => 1.2 * smooth01((u - 115) / 35);                    // demi-largeur de la bande grise du milieu
+const plMed = u => PL_MED * smooth01((u - 115) / 35);                    // demi-largeur de la bande grise du milieu
 const plRailA = u => -12 - 5.2 * smooth01((u - 150) / 70);           // voie ferrée (en travers) : -12 sous le pont → -(PL_HALF + 9) au raccord
 const plRailB = u => plRailA(u) - 3.6 * smooth01((u - 170) / 65);     // 2e voie : se détache de la première (aiguillage)
 // Loin de l'axe du boulevard, sa courbe resserre le dessin en travers (k < 1 : 8 m du plan ≈ 5,5 m à l'écran). La fin de la route des rails est
@@ -1454,12 +1455,12 @@ function canvasTexture(w, h, draw) {
 
 // (partagée entre les copies du module chargées pour les routes attachées : même image, même contexte WebGL ; chargement plus court)
 const TEX_SHARED = (globalThis.TAXIKIN_TEX ??= new Map());
-function roadTexture(mirror, lanes = LANES) {
-  const key = `road|${mirror}|${lanes}|${!!R.twoLane}|${!!ASPHALT}`;
-  if (!TEX_SHARED.has(key)) TEX_SHARED.set(key, roadTextureDraw(mirror, lanes));
+function roadTexture(mirror, lanes = LANES, single = !!R.pl) {
+  const key = `road|${mirror}|${lanes}|${!!R.twoLane}|${!!ASPHALT}|${single}`;
+  if (!TEX_SHARED.has(key)) TEX_SHARED.set(key, roadTextureDraw(mirror, lanes, single));
   return TEX_SHARED.get(key);
 }
-function roadTextureDraw(mirror, lanes) {
+function roadTextureDraw(mirror, lanes, single) {
   // Le carreau couvre toute la chaussée d'un sens (LANES voies) sur 12 m de long.
   const t = canvasTexture(1024, 1024, (x, W, H) => {
     if (ASPHALT) {
@@ -1493,7 +1494,7 @@ function roadTextureDraw(mirror, lanes) {
     const inner = mirror ? w - 5 : 2, outer = mirror ? 2 : w - 5;
     x.fillStyle = 'rgba(236,236,230,0.85)';
     if (!R.twoLane) {                                // (deux bandes : seulement les tirets au milieu, dessinés à part)
-      x.fillRect(inner, 0, 3, h);
+      if (!single) x.fillRect(inner, 0, 3, h);       // (une seule ligne au milieu, dessinée à part)
       x.fillRect(outer, 0, 3, h);
     }
     for (let k = 1; k < lanes; k++) for (const y0 of [0, 128]) x.fillRect(k * w / lanes - 1.5, y0, 3, 64);
@@ -4821,7 +4822,7 @@ function plWide(scene) {
     // (le sens des triangles dépend du côté : on garde les faces vers le haut)
     if (sd < 0) { const ix = geo.index.array; for (let k = 0; k < ix.length; k += 3) { const t = ix[k + 1]; ix[k + 1] = ix[k + 2]; ix[k + 2] = t; } }
     geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: roadTexture(sd < 0, 2) }));
+    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: roadTexture(sd < 0, 2, true) }));
     m.receiveShadow = true;
     scene.add(m);
   }
@@ -4833,8 +4834,7 @@ function plWide(scene) {
     const u0 = us[i - 1], u1 = us[i], um = (u0 + u1) / 2;
     // la bande grise du milieu et ses deux lignes blanches (comme la Route Poids Lourds : ni terre-plein ni séparateur)
     seg(u0, u1, () => 0, 2 * plMed(um), 0.02, Y + 0.004, 0x66676a);
-    if (plMed(um) > 0.3) for (const k of [-1, 1]) seg(u0, u1, () => k * 0.14, 0.14, 0.02, Y + 0.014, 0xe8e8e2);
-    else seg(u0, u1, () => 0, 0.18, 0.02, Y + 0.014, 0xf2f2ec);        // (avant la bande grise : la ligne du milieu)
+    seg(u0, u1, () => 0, 0.2, 0.02, Y + 0.014, 0xf2f2ec);              // (une seule ligne au milieu)
     // bordures, caniveaux, rebords (à droite, après la jonction de la bretelle) ; trottoir de béton à gauche ; terre battue qui s'étale
     for (const sd of [1, -1]) {
       if (sd > 0 && um < 128) continue;
@@ -11531,6 +11531,7 @@ export function buildWorld(scene, opts = {}) {
   for (const [p, q] of minus([...spans(Z_START, IS_TOWER ? ECH.fork0 : Z_GEN), ...(IS_TOWER ? pieces(ECH.merge, Z_GEN) : [])], signalCuts)) {
     const b = chunks.at((p + q) / 2), len = p - q, zc = (p + q) / 2;
     if (R.twoLane) b.box(MEDIAN * 2 + 0.3, 0.02, len, 0x7d7b78, 0, 0.012, zc);
+    else if (R.pl) b.box(MEDIAN * 2, 0.02, len, 0x66676a, 0, 0.012, zc).box(0.2, 0.02, len, 0xf2f2ec, 0, 0.024, zc);   // (une seule ligne au milieu)
     else if (R.industrial || R.rocade) b.box(MEDIAN * 2, 0.02, len, 0x66676a, 0, 0.012, zc).box(0.14, 0.02, len, 0xe8e8e2, 0.14, 0.024, zc).box(0.14, 0.02, len, 0xe8e8e2, -0.14, 0.024, zc);   // (ni terre-plein ni séparateur : lignes au sol)
     else if (inHighway(zc)) b.box(MEDIAN * 2, 0.02, len, 0x7a7b7e, 0, 0.012, zc);   // simple marquage au sol
     else b.box(MEDIAN * 2, 0.22, len, 0xa9a49a, 0, 0.11, zc);
