@@ -1,7 +1,7 @@
 // Circulation sur 2 × 4 voies : beaucoup de taxis et taxis-bus jaunes, des motos qui se faufilent,
 // des camions de marchandises. Suivi de distance, arrêts des taxis-bus, réaction au klaxon.
 import { createCar, createMinibus, createCityBus, createTruck, createMoto, createTricycle, createHatchback, createVan, createSUV, createPolicePickup, createPoliceVan, createAmbulance, createEspritDeVie, createTranscoMidi, createTanker, createCitadine, createCrossover, createYango, createTipperTruck, createContainerTruck, createCraneTruck, createFlatbedTruck, createReeferTruck, createCurtainTruck } from './models.js';
-import { LANE_X, LANE_W, RAMP_X, ROAD_EDGE, flyH, flySlope, inFlyover, roadH, roadSlope, TRAFFIC_END, SIGNALS, signalState, ONEWAY_IN, TRAFFIC_MIX, TRAFFIC_START, jamSpeed, ringShift, WORKS, closedLanesAt, JAMS } from './world.js';
+import { LANE_X, LANE_W, RAMP_X, ROAD_EDGE, flyH, flySlope, inFlyover, roadH, roadSlope, TRAFFIC_END, SIGNALS, signalState, ONEWAY_IN, TRAFFIC_MIX, TRAFFIC_START, jamSpeed, ringShift, WORKS, closedLanesAt, JAMS, isJamActive } from './world.js';
 import { place } from './route.js';
 
 const CAR_COLORS = [0xf2f2f2, 0xb8bec4, 0x1e3a8a, 0x7a1f1f, 0x1f1f1f, 0x2f6f3e, 0x9aa5b1];
@@ -312,15 +312,26 @@ export class Traffic {
       this.hideJam(v);
     }
   }
-  inJamNow(z) { return this.jamActive && JAMS.some(j => j.on && j.lvl > 1 && z < j.z0 && z > j.z1); }
+  nearestJam(z) {
+    let best = null, bd = 340;
+    for (const j of JAMS) {
+      if (!isJamActive(j) || j.lvl <= 1) continue;
+      const d = z > j.z0 ? z - j.z0 : z < j.z1 ? j.z1 - z : 0;
+      if (d < bd) { bd = d; best = j; }
+    }
+    return best;
+  }
+  inJamNow(z) { return this.jamActive && JAMS.some(j => isJamActive(j) && j.lvl > 1 && z < j.z0 && z > j.z1); }
   hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.mesh.visible = false; }
-  startJam(taxi) {
+  startJam(taxi, zone = null) {
     if (this.jamTodo.length) this.stepJamBuild(this.jamTodo.length);
     this.jamActive = true;
+    this.jamZone = zone ?? this.nearestJam(taxi.z);
     for (const v of this.list) if (v.jam) { this.place(v, taxi.z, 0, taxi); put(v, v.side === 1 ? 0 : Math.PI); }
   }
   stopJam() {
     this.jamActive = false;
+    this.jamZone = null;
     for (const v of this.list) if (v.jam) this.hideJam(v);
   }
 
@@ -342,9 +353,10 @@ export class Traffic {
       v.mesh.traverse(m => { if (m.userData.rider) m.visible = true; });
     }
     if (v.jam && taxi) {                                                    // (embouteillage grave : juste devant le taxi, et dans la zone de l'embouteillage)
-      const J = JAMS.find(j => j.on && j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
-      zFrom = taxi.z + 25; span = v.side > 0 ? 240 : 200;
-      if (J) zFrom = Math.min(J.z0 - 20, Math.max(J.z1 + 20 + span, zFrom));
+      const J = this.jamZone ?? this.nearestJam(taxi.z);
+      const maxSpan = J ? Math.max(60, J.z0 - J.z1 - 36) : 240;
+      zFrom = taxi.z + 25; span = Math.min(v.side > 0 ? 240 : 200, maxSpan);
+      if (J) zFrom = Math.min(J.z0 - 18, Math.max(J.z1 + 18 + span, zFrom));
     }
     const sign = v.side;
     // Les taxis-bus et camions roulent plutôt à droite, les voitures à gauche
@@ -608,8 +620,9 @@ export class Traffic {
     const peds = this.extraPeds?.length ? (this.peds ?? []).concat(this.extraPeds) : (this.peds ?? []);   // (incidents.js : les gens sur la chaussée)
     if (this.jamTodo.length && !this.jamActive) this.stepJamBuild(2);
     if (this.jamActive !== undefined && !taxi.fixed) {
-      const J = JAMS.find(j => j.on && j.lvl > 1 && taxi.z < j.z0 + 700 && taxi.z > j.z1 - 700);
-      if (J && !this.jamActive) this.startJam(taxi); else if (!J && this.jamActive) this.stopJam();
+      const J = this.nearestJam(taxi.z);
+      if (J && (!this.jamActive || this.jamZone !== J)) this.startJam(taxi, J);
+      else if (!J && this.jamActive) this.stopJam();
     }
     for (const v of this.list) {
       if (v.jam && !this.jamActive) continue;

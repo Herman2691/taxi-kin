@@ -162,8 +162,16 @@ export const ROUTES = {
     dense: [['Liberté', 160], ['Pascal', 90], ['Quartier 3', 160], ['Quartier 1', 110], ['Pont Matete', 85]],
     // Foule (l'auteur, 07/11) : beaucoup de piétons, des gens qui traversent le boulevard, des clients qui se précipitent vers les taxis [début, fin (m), nom]
     crowds: [[4000, 7000, 'Siforco · Kingasani · Masina · Pascal · BKTF'], [7300, 8300, 'Bitabe · Liberté'], [8650, 9320, 'Quartier 1']],
-    // Embouteillages (l'auteur, 08/11 & 16/11 : Pascal, Bitabe → Quartier 1 ; 20/11 : de Pascal au Quartier 1 d'un seul tenant, grave : force 1,5 (2,5 était trop lent à jouer) = vitesse de 0,5 à 5 m/s et flotte de véhicules en plus, traffic.js ; Limete 13e & 12e Rues et 7e Rue, Av. de la Libération → Mandela) [début, fin (m réels), force]
-    jams: [[5780, 9050, 1.5, 0.8], [14300, 15050, 1], [15560, 15860, 1], [21089, 24185, 1]],
+    // Embouteillages programmés par tranche horaire ([début, fin, force, [[hDébut, hFin], ...]]) et aléatoires sur le reste des tronçons (probabilité)
+    jams: [
+      [4120, 5050, 1.35, [[12, 14]]],                         // Siforco → Quartier 3 : 12h à 14h
+      [5780, 9050, 1.5, [[8, 10], [12, 14], [18, 20]]],       // Saut-de-Mouton Pascal → Quartier 1 : 8h–10h, 12h–14h, 18h–20h
+      [10950, 12550, 1, 0.45],                                // Pont Matete → Échangeur : aléatoire
+      [14350, 15200, 1.3, [[9, 11]]],                         // Limete 13e Rue → 10e Rue : 9h à 11h
+      [15560, 15880, 1, [[15, 18]]],                          // Limete 7e Rue : 15h à 18h
+      [17650, 19450, 1, 0.45],                                // Bd Sendwe / Pont-Cabu / Stade des Martyrs : aléatoire
+      [21089, 24185, 1.3, [[8, 10], [15, 19]]],               // Av. du 24 Novembre (Libération) → Mandela : 8h–10h et 15h–19h
+    ],
     // (l'auteur, 10/11) bagarres de Kuluna qui bloquent la route : Masina Quartier 3 et Kingasani ya Suka ; vols à moto : Pascal (et la Place Victoire, Kasa-Vubu)
     kuluna: [[4250, 5150]],
     thefts: [[5850, 6450]],
@@ -748,7 +756,11 @@ export const ROUTES = {
     greenMedianUntil: null,
     guardrails: [],
     dense: [],
-    jams: [[plKm(1250), plKm(3400), 1], [plKm(5750), plKm(7400), 1], [plKm(8500), plKm(10550), 1]],   // Limete Industriel (17e–14e Rues), Kingabwa / Pont Funa, Ndolo / Bralima / Gare
+    jams: [
+      [plKm(1250), plKm(3400), 1, [[7, 9], [15, 18]]],
+      [plKm(5750), plKm(7400), 1, [[7, 9], [15, 18]]],
+      [plKm(8500), plKm(10550), 1, [[7, 9], [15, 18]]],
+    ],   // Route Poids Lourds : 7h à 9h et 15h à 18h
     market: null,
     busParks: [],
     tallNearEnd: 0,
@@ -882,6 +894,7 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    jams: [[2950, 3850, 1, 0.5], [5450, 6450, 1, 0.55]],     // Av. de l'Université (Ezo, Ngaba) : aléatoire
     photoBoards: [
       { s: 1200, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
       { s: 3200, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },
@@ -927,6 +940,7 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    jams: [[7050, 8250, 1, 0.45], [10550, 12500, 1, 0.55]],   // Av. Kasa-Vubu (Bandal, Victoire → Pont-Cabu) : aléatoire
     photoBoards: [
       { s: 1800, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
       { s: 5600, side: -1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
@@ -972,6 +986,7 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    jams: [[4100, 4950, 1, 0.45], [7200, 8950, 1, 0.5]],      // By Pass (Lemba/Salongo, Rond-Point Ngaba) : aléatoire
     photoBoards: [
       { s: 1600, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
       { s: 4800, side: -1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },
@@ -1057,6 +1072,7 @@ export const ROUTES = {
     cranes: false,
     monuments: [],
     workers: [],
+    jams: [[6500, 10000, 1, 0.4], [16800, 20500, 1, 0.45]],   // Rocade (Kimwenza/Bralima, Brasserie/Cecomaf) : aléatoire
     photoBoards: [
       { s: 2500, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },
       { s: 14500, side: -1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },
@@ -1070,7 +1086,7 @@ export const ROUTES = {
     title: 'Boulevard du 30 Juin',
     subtitle: 'Rond-point Kintambo Magasin → Socimat → Mandela → Gare Centrale',
     realKm: 7.62,
-    jams: [[150, 7500, 1]],        // (l'auteur, 08/11) embouteillages sur tout le boulevard du 30 Juin
+    jams: [[150, 7500, 1, [[15, 19]]]],   // Boulevard du 30 Juin : 15h à 19h
     traffic: {
       our: [
         'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi', 'taxi',

@@ -908,21 +908,20 @@ function startShift() {
   }
   quality = $('sel-quality').value;
   applyQuality();
+  const startMin = PARAMS.has('heure') ? Number(PARAMS.get('heure')) * 60 : 360;
   Object.assign(G, {
-    state: 'play', time: 0, minutes: 360, fuel: FUEL_START,
+    state: 'play', time: 0, startMin, minutes: startMin, fuel: FUEL_START,
     fares: 0, tips: 0, fuelCost: 0, repairs: 0, fines: 0, rides: 0, crashes: 0,
     cash: 0, prompt: '', crashCd: 0, wallCd: 0, brakeHold: 0, fuelWarned: false, police: null, wrongT: 0, tours: 0, ambulance: false, accident: null, race: null, mise: 0, hitRun: null, caughtRun: false,
-    stolen: 0, held: false, choiceCb: null, lastSermon: -1e9, km: 0, depart: null, coneCd: 0,
+    stolen: 0, held: false, choiceCb: null, lastSermon: -1e9, km: 0, depart: null, coneCd: 0, jamAnnounced: new Set(),
   });
+  globalThis.__TAXIKIN_HOUR = (((startMin % 1440) + 1440) % 1440) / 60;
+  globalThis.__TAXIKIN_FORCE_JAM = PARAMS.has('bouchon') ? (PARAMS.get('bouchon') !== '0') : null;
   incidents.finish();
   $('choice').hidden = true;
   rain.planDay(SHIFT_SECONDS);
-  // (l'auteur, 14/11 : « le chantier ne doit pas être à chaque course, c'est aléatoire ») : le tirage des chantiers de la journée (test : ?travaux=1)
-  // (l'auteur, 20/11 : l'embouteillage de Pascal au Quartier 1 n'a pas lieu à chaque course : 8 fois sur 10)
-  let bouchon = false;
-  for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeJams) bouchon = r.W.randomizeJams().some(j => j.lvl > 1) || bouchon;
-  if (PARAMS.get('bouchon')) for (const r of [ROAD1]) r.W.JAMS.forEach(j => { j.on = PARAMS.get('bouchon') !== '0'; });
-  if (bouchon) setTimeout(() => { if (G.state === 'play') hud.note('📻 Embouteillage signalé de Pascal au Quartier 1 aujourd’hui', 2); }, 4000);
+  // Tirage des embouteillages aléatoires sur les autres boulevards (les créneaux horaires programmés restent fixes)
+  for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) r?.W.randomizeJams?.();
   for (const r of [ROAD1, ROAD2, ROAD3, ROAD4, ROAD5, ROAD6, ROAD7, ROAD8]) if (r?.W.randomizeWorks) { r.W.randomizeWorks(); if (PARAMS.get('travaux')) r.W.WORKS.forEach(Wk => { Wk.on = true; r.W.resetWorkProps?.(Wk); for (const m of Wk.meshes) m.visible = true; }); }
   worksWarned.clear();
   if (PARAMS.get('pluie')) rain.startNow(Number(PARAMS.get('pluie')) || 400);   // (test : ?pluie=1)
@@ -2841,7 +2840,24 @@ function followRoads() {
 const flyWarned = new Set();
 function update(dt) {
   G.time += dt;
-  G.minutes = 360 + G.time * (720 / SHIFT_SECONDS);
+  G.minutes = (G.startMin ?? 360) + G.time * (720 / SHIFT_SECONDS);
+  const curHour = (((G.minutes % 1440) + 1440) % 1440) / 60;
+  globalThis.__TAXIKIN_HOUR = curHour;
+  if (G.jamAnnounced) {
+    for (const [hr, msg] of [
+      [7, '📻 07h00 : Embouteillage signalé sur la Route Poids Lourds'],
+      [8, '📻 08h00 : Embouteillages de Pascal au Quartier 1 et sur le 24 Novembre'],
+      [9, '📻 09h00 : Embouteillage signalé à Limete (13e à 10e Rue)'],
+      [12, '📻 12h00 : Embouteillages à Siforco–Quartier 3 et Pascal–Quartier 1'],
+      [15, '📻 15h00 : Embouteillages sur le 30 Juin, 24 Novembre, Poids Lourds et 7e Rue Limete'],
+      [18, '📻 18h00 : Embouteillage du soir de Pascal au Quartier 1'],
+    ]) {
+      if (curHour >= hr && curHour < hr + 0.25 && !G.jamAnnounced.has(hr)) {
+        G.jamAnnounced.add(hr);
+        hud.note(msg, 3);
+      }
+    }
+  }
   G.crashCd -= dt;
   G.wallCd -= dt;
 

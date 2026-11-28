@@ -20,7 +20,7 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd9';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd10';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 
 // Lancement groupé et mis en cache des données JSON et textures partagées entre routes
 const __DATA_CACHE = (globalThis.__TAXIKIN_DATA ??= new Map());
@@ -101,11 +101,42 @@ export const flySlope = z => flyH(z - 0.5) - flyH(z + 0.5);
 export const inFlyover = (z, margin = 0) => FLYOVERS.some(f => z < f.z0 + margin && z > f.z1 - margin);
 export const FOOTBRIDGES = R.footbridges.map(g);
 export const TRAFFIC_MIX = R.traffic ?? R.pl?.traffic ?? null;    // (véhicules propres au trajet : voir traffic.js)
-/** Embouteillages (routes.js `jams`) : zones où la circulation roule au pas, en accordéon. */
-export const JAMS = (R.jams ?? []).map(([a, b, lvl = 1, prob = 1]) => ({ z0: g(a), z1: g(b), lvl, prob, on: true }));   // prob : chance qu'il y en ait un dans la journée (l'auteur, 20/11 : 8 sur 10)
-/** Tire au sort les embouteillages de la journée (à chaque début de journée ou de course) ; renvoie ceux qui ont lieu. */
+/** Embouteillages (routes.js `jams`) : à créneaux horaires fixes (tableau [[débutH, finH], ...]) ou aléatoires sur les autres boulevards (probabilité). */
+export const JAMS = (R.jams ?? []).map(([a, b, lvl = 1, scheduleOrProb = 1]) => {
+  const scheduled = Array.isArray(scheduleOrProb);
+  return {
+    z0: g(a), z1: g(b), lvl,
+    scheduled,
+    prob: scheduled ? 1 : scheduleOrProb,
+    hours: scheduled ? scheduleOrProb : null,
+    on: true,
+  };
+});
+/** L'embouteillage j est-il actif à l'heure courante du jeu (globalThis.__TAXIKIN_HOUR) ? */
+export function isJamActive(j) {
+  const forced = globalThis.__TAXIKIN_FORCE_JAM;
+  if (forced !== null && forced !== undefined) return forced;
+  if (!j.on) return false;
+  if (!j.hours?.length) return true;
+  const h = globalThis.__TAXIKIN_HOUR ?? 6;
+  return j.hours.some(([h0, h1]) => (h0 <= h1 ? (h >= h0 && h < h1) : (h >= h0 || h < h1)));
+}
+/** Tire au sort les embouteillages aléatoires de la journée (les embouteillages programmés gardent toujours leurs horaires fixes). */
 export function randomizeJams() {
-  for (const j of JAMS) j.on = Math.random() < j.prob;
+  for (const j of JAMS) {
+    if (j.scheduled) {
+      j.on = true;
+    } else {
+      j.on = Math.random() < j.prob;
+      if (j.on) {
+        const m0 = +(6.5 + Math.random() * 4).toFixed(2), d0 = +(1.8 + Math.random() * 1.5).toFixed(2);
+        const m1 = +(13 + Math.random() * 4.5).toFixed(2), d1 = +(2 + Math.random() * 1.8).toFixed(2);
+        j.hours = [[m0, m0 + d0], [m1, m1 + d1]];
+      } else {
+        j.hours = null;
+      }
+    }
+  }
   return JAMS.filter(j => j.on);
 }
 // ---------- Les travaux (l'auteur, 13/11 : « ajouter aussi des travaux dans le boulevard ») : routes.js `works`. Les voies fermées sont entourées de
@@ -164,11 +195,11 @@ export function closedLanesAt(side, z) {
   return null;
 }
 
-export const inJam = (z, m = 0) => JAMS.some(j => j.on && z < j.z0 + m && z > j.z1 - m);
+export const inJam = (z, m = 0) => JAMS.some(j => isJamActive(j) && z < j.z0 + m && z > j.z1 - m);
 /** Vitesse permise (m/s) en z au temps t : Infinity hors embouteillage ; entrée et sortie progressives ; des vagues qui avancent et s'arrêtent. */
 export function jamSpeed(z, t) {
   for (const j of JAMS) {
-    if (!j.on || z > j.z0 + 60 || z < j.z1 - 60) continue;
+    if (!isJamActive(j) || z > j.z0 + 60 || z < j.z1 - 60) continue;
     const edge = Math.min(1, (j.z0 + 60 - z) / 120, (z - j.z1 + 60) / 120);
     const wave = Math.max(0, Math.sin(z * 0.045 + t * 0.55));
     return 14 - edge * (14 - (0.8 + 6.5 * wave) / j.lvl);
