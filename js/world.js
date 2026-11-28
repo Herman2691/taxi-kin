@@ -20,7 +20,7 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd10';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd11';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 
 // Lancement groupé et mis en cache des données JSON et textures partagées entre routes
 const __DATA_CACHE = (globalThis.__TAXIKIN_DATA ??= new Map());
@@ -2022,13 +2022,13 @@ function addCrane(b, x, z) {
     .box(0.06, 18, 0.06, 0x222222, x, y - 9, z - 28); // câble
 }
 
-function addPowerPoles(chunks, details) {
+function addPowerPoles(chunks, details, skipBoards = []) {
   for (const s of [-1, 1]) {
     if (R.industrial && s < 0) continue;              // (Route Poids Lourds : à gauche, le chemin de fer)
     const x = s * (FRONT - 1.2);
     let prev = null;
     for (let z = Z_START - 5; z > Z_GEN; z -= 32) {
-      if (inRiver(z, 3) || inCrossing(z, 2) || inMateteZone(s, z, 3) || nearRing(z, 6) || (R.campus && z < CAMPUS_Z) || onSideAsphalt(x, z)) { prev = null; continue; }
+      if (inRiver(z, 3) || inCrossing(z, 2) || inMateteZone(s, z, 3) || nearRing(z, 6) || (R.campus && z < CAMPUS_Z) || onSideAsphalt(x, z) || skipBoards.some(p => p.side === s && Math.abs(p.z - z) < 16)) { prev = null; continue; }
       const b = chunks.at(z);
       b.cyl(0.11, 0.15, 9, chance(0.5) ? 0x5d4a38 : 0x9a958a, x, 4.5, z)
         .box(1.4, 0.1, 0.1, 0x4a3a2a, x, 8.4, z);
@@ -3292,27 +3292,33 @@ export function updateSignals(t) {
  */
 function addPhotoBoard(b, signs, p) {
   if (!p.image) return;
-  const z = g(p.s), side = p.side, w = p.w ?? 9, h = w * p.image.height / p.image.width;
+  const z = p.z ?? g(p.s), side = p.side, w = p.w ?? 9, h = w * p.image.height / p.image.width;
   const inLim = LIM && z <= Z16 + 6 && z >= Z_FORK - 6;
-  const baseX = inLim ? PB_X + 7.5 : R.twoLane ? FRONT - 2.0 : ROAD_EDGE + 5.6;
+  const baseX = inLim ? PB_X + 7.5 : R.twoLane ? FRONT - 2.0 : ROAD_EDGE + 5.8;
   const x = side * (p.x ?? baseX) - (R.industrial && side < 0 ? PL_LEFT_X : 0);
-  const totem = w < 5.2, y0 = p.y ?? (totem ? 3.6 : 5), yc = y0 + h / 2;
+  const totem = w < 5.4, y0 = p.y ?? (totem ? 3.8 : 4.8), yc = y0 + h / 2;
+  // Pieds strictement sous le cadre (de y = 0 à y = y0) et plus fins que le caisson : rien ne dépasse jamais devant l'affiche
   if (totem) {
-    b.box(0.56, yc, 0.56, 0x5d666e, x, yc / 2, z)
-      .box(w + 0.56, h + 0.56, 0.28, 0xf5c400, x, yc, z)
-      .box(w + 0.36, h + 0.36, 0.36, 0x1a1d24, x, yc, z);
+    b.box(0.46, y0, 0.30, 0x5d666e, x, y0 / 2, z)
+      .box(1.1, 0.18, 0.7, 0x454c54, x, 0.09, z)
+      .box(w + 0.56, h + 0.56, 0.30, 0xf5c400, x, yc, z)
+      .box(w + 0.34, h + 0.34, 0.40, 0x1a1d24, x, yc, z);
   } else {
-    for (const dx of [-w * 0.3, w * 0.3]) b.box(0.5, yc, 0.5, 0x5d666e, x + dx, yc / 2, z);              // pieds
-    b.box(w + 0.5, h + 0.5, 0.35, 0x2a2e33, x, yc, z)                                                    // cadre
-      .box(w + 0.6, 0.12, 1.3, 0x5d666e, x, y0 - 0.35, z + 0.55)                                        // passerelle d'entretien
-      .box(w + 0.6, 0.6, 0.05, 0x5d666e, x, y0 + 0.05, z + 1.2);                                        // garde-corps
+    for (const dx of [-w * 0.3, w * 0.3]) b.box(0.44, y0, 0.30, 0x5d666e, x + dx, y0 / 2, z);
+    b.box(w + 0.54, h + 0.54, 0.40, 0x2a2e33, x, yc, z)
+      .box(w + 0.4, 0.14, 0.44, 0xf5c400, x, y0 - 0.24, z);
   }
+  // Projecteurs placés sous le bas du cadre (aucun élément ne remonte au-dessus de y0 - 0.30)
   const nLights = totem ? 2 : 3;
-  for (let k = 0; k < nLights; k++) b.box(0.35, 0.25, 0.45, 0xdedede, x + (k - (nLights - 1) / 2) * (w / nLights), y0 - 0.1, z + 0.95);   // projecteurs
-  if (LAMPS) {                                                                                       // (la nuit : projecteurs allumés et tache de lumière sur le bas-côté, comme les lampadaires)
-    for (let k = 0; k < nLights; k++) LAMPS.at(z).box(0.45, 0.14, 0.55, 0xffffff, x + (k - (nLights - 1) / 2) * (w / nLights), y0 - 0.1, z + 0.95);
-    POOLS.at(z).add(new THREE.PlaneGeometry(w * 1.6, 14), 0xffffff, x - side * 2, 0.06, z + 0.6, -Math.PI / 2);
+  for (let k = 0; k < nLights; k++) {
+    const lx = x + (k - (nLights - 1) / 2) * (w / nLights);
+    for (const sz of [-1, 1]) {
+      b.box(0.08, 0.08, 0.55, 0x5d666e, lx, y0 - 0.34, z + sz * 0.42)
+        .box(0.36, 0.18, 0.28, 0xdedede, lx, y0 - 0.34, z + sz * 0.68);
+      if (LAMPS) LAMPS.at(z).box(0.42, 0.12, 0.32, 0xffffff, lx, y0 - 0.34, z + sz * 0.68);
+    }
   }
+  if (POOLS) POOLS.at(z).add(new THREE.PlaneGeometry(w * 1.6, 14), 0xffffff, x - side * 2, 0.06, z, -Math.PI / 2);
   const tex = () => {
     const t = new THREE.Texture(p.image);
     t.colorSpace = THREE.SRGBColorSpace;
@@ -3320,8 +3326,8 @@ function addPhotoBoard(b, signs, p) {
     t.needsUpdate = true;
     return t;
   };
-  signs.add(`photo_${p.img}`, tex, w, h, x, yc, z + 0.2, 0, true);
-  signs.add(`photo_${p.img}`, tex, w, h, x, yc, z - 0.2, Math.PI, true);
+  signs.add(`photo_${p.img}`, tex, w, h, x, yc, z + 0.23, 0, true);
+  signs.add(`photo_${p.img}`, tex, w, h, x, yc, z - 0.23, Math.PI, true);
 }
 
 function addRoadSign(b, signs, key, title, sub, z, bg = '#1d6b3a') {
@@ -10260,7 +10266,7 @@ function* addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
   let lamp = 0;
   for (let z = EXT_ZC - 10; z > EXT_ZD + 18; z -= 21) {
     const s = lamp++ % 2 ? -1 : 1;
-    if (extCut(s, z, 2) || inFlyover(z, 2)) continue;
+    if (extCut(s, z, 2) || inFlyover(z, 2) || PHOTO_BOARDS.some(p => p.side === s && Math.abs(g(p.s) - z) < 14)) continue;
     addSideLamp(chunks.at(z), s, z);
   }
   yield;
@@ -10269,7 +10275,7 @@ function* addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
     yield;
     let prev = null;
     for (let z = zA - 6; z > zE + 18; z -= 32) {
-      if (extZone(z) === 'triomphal' || (ARC_D && z < ARC_D.z0 + 30 && z > ARC_D.z1 - 30) || extCut(s, z, 2) || (s > 0 && z > Z_FORK - 112)) { prev = null; continue; }
+      if (extZone(z) === 'triomphal' || (ARC_D && z < ARC_D.z0 + 30 && z > ARC_D.z1 - 30) || extCut(s, z, 2) || (s > 0 && z > Z_FORK - 112) || PHOTO_BOARDS.some(p => p.side === s && Math.abs(g(p.s) - z) < 14)) { prev = null; continue; }
       const x = s * (FRONT - 1.2), b = chunks.at(z);
       b.cyl(0.11, 0.15, 9, chance(0.5) ? 0x5d4a38 : 0x9a958a, x, 4.5, z).box(1.4, 0.1, 0.1, 0x4a3a2a, x, 8.4, z);
       if (prev !== null) for (const dx of [-0.6, 0, 0.6]) details.at(z).box(0.03, 0.03, prev - z, 0x1a1a1a, x + dx, 8.15, (prev + z) / 2);
@@ -10294,13 +10300,13 @@ function* addExtension(scene, chunks, details, curbs, signs, rigid, groundMat) {
       z -= w + rand(0.4, 2.2);
     }
   }
-  // Panneaux publicitaires (Sendwe, Libération, 30 Juin)
-  let bi = 0;
-  for (let z = zA - 60; false && z > zE + 60; z -= rand(160, 240)) {   // (retirés, 26/11)
-    const side = bi % 2 ? -1 : 1;
-    if (extZone(z) === 'triomphal' || !extFree(side, z + 4, z - 4)) continue;
-    const [t, sub, bg, fg] = BILLBOARDS[bi++ % BILLBOARDS.length];
-    addExtBillboard(chunks.at(z), signs, side, z, t, sub, bg, fg);
+  // Panneaux publicitaires avec photos sur le prolongement (Sendwe, Triomphal, 24 Novembre)
+  for (const p of PHOTO_BOARDS.filter(q => g(q.s) < Z_FORK)) {
+    const z0 = g(p.s);
+    const okExt = z => z < Z_FORK - 18 && z > zE + 24 && extFree(p.side, z + 6, z - 6) && !outsideArc(p.side, z, 8) && !inFlyover(z, 14) && !inRiver(z, 14);
+    const dz = p.flex ? [0, 18, -18, 36, -36, 56, -56, 80, -80, 110, -110].find(o => okExt(z0 + o)) : (okExt(z0) ? 0 : undefined);
+    if (dz === undefined) continue;
+    addPhotoBoard(chunks.at(z0 + dz), signs, { ...p, z: z0 + dz });
   }
 
   // Ruisseaux et canaux latéraux (Bd de la Permanence, Stade des Martyrs, Kinshasa Arena → Huileries, INA)
@@ -11712,8 +11718,26 @@ export function buildWorld(scene, opts = {}) {
     chunks.at(z).box(0.44, 0.86, BLK - 0.12, col, 0, 0.64, zm)
       .box(0.68, 0.26, BLK - 0.12, col, 0, 0.35, zm);
   }
+  // Positions résolues des panneaux photos (avant Z_FORK) pour écarter poteaux électriques, lampadaires, stations et façades
+  const stationZs = STATIONS.map(st => st.z);
+  const RESOLVED_BOARDS = [];
+  for (const p of PHOTO_BOARDS) {
+    if (EXT && g(p.s) < Z_FORK) continue;
+    let sChosen = p.s;
+    if (p.flex) {
+      const ok = s => {
+        const z = g(s);
+        return !atSideRoad(p.side, z, 14) && !inSideRoadSpan(p.side, z) && !nearAny(z, p.side > 0 ? BUS_STOPS : BUS_STOPS_L, 24)
+          && !nearAny(z, stationZs, 28) && !inRiver(z, 14) && !inCrossing(z, 14) && !inFlyover(z, 12);
+      };
+      const d = [0, 25, -25, 50, -50, 80, -80, 115, -115, 150, -150].find(o => ok(p.s + o));
+      if (d === undefined) continue;
+      sChosen = p.s + d;
+    }
+    RESOLVED_BOARDS.push({ ...p, s: sChosen, z: g(sChosen) });
+  }
   for (let z = Z_START - 10; z > Z_GEN; z -= 38) if (!inFlyover(z, 3) && !inHighway(z) && !inEchPark(z, 5) && !inSignalCrossing(z, 3)) addStreetlight(chunks.at(z), z);
-  addPowerPoles(chunks, details);
+  addPowerPoles(chunks, details, RESOLVED_BOARDS);
   if (WORKS.length) { addWorks(scene); randomizeWorks(); }
   if (MONUMENTAL) {
     // Boulevard Triomphal (d'après les vidéos v3_t178s et v3_t476s) :
@@ -11733,7 +11757,7 @@ export function buildWorld(scene, opts = {}) {
   let solar = 0;
   for (let z = -60; z > Z_GEN; z -= 48) {
     const side = solar++ % 2 ? -1 : 1;
-    if (inRiver(z, 4) || inMateteZone(side, z, 3) || nearRing(z, 6) || atSideRoad(side, z, 2)) continue;
+    if (inRiver(z, 4) || inMateteZone(side, z, 3) || nearRing(z, 6) || atSideRoad(side, z, 2) || RESOLVED_BOARDS.some(p => p.side === side && Math.abs(p.z - z) < 13)) continue;
     addSolarLight(chunks.at(z), side, z);
     if (POPULAR && !inHighway(z) && solar % 3 === 0) {
       for (const ry of [0, Math.PI]) signs.add('flagRDC', flagTexture, 1.1, 0.75, side * (ROAD_EDGE + 2.4) + 0.6 * Math.cos(ry), 6.6, z, ry);
@@ -11911,15 +11935,7 @@ export function buildWorld(scene, opts = {}) {
     else addCulture(b, signs, m);
   }
   for (const sr of R.workers) addWorkers(details.at(g(sr)), g(sr));
-  for (let p of PHOTO_BOARDS) {
-    if (p.flex) {                                                                       // (cherche l'emplacement libre le plus proche : ni rue latérale ni arrêt de bus)
-      const ok = s => { const z = g(s); return !atSideRoad(p.side, z, 12) && !inSideRoadSpan(p.side, z) && !nearAny(z, p.side > 0 ? BUS_STOPS : BUS_STOPS_L, 22) && !inRiver(z, 12) && !inCrossing(z, 12); };
-      const d = [0, 20, -20, 40, -40, 60, -60, 90, -90, 130, -130].find(o => ok(p.s + o));
-      if (d === undefined) continue;
-      p = { ...p, s: p.s + d };
-    }
-    addPhotoBoard(chunks.at(g(p.s)), signs, p);
-  }
+  for (const p of RESOLVED_BOARDS) addPhotoBoard(chunks.at(p.z), signs, p);
   addSignals(scene, chunks);
   if (R.industrial) addPoidsLourds(scene, chunks, details, signs, groundMat);
   if (R.rocade) addRocade(scene, chunks, details, signs);
@@ -12063,7 +12079,8 @@ export function buildWorld(scene, opts = {}) {
     ...(R.market ? [{ z: LIB, d: 125 }] : [])];
   const SKIP_BOTH = [...RIVERS.map(r => ({ z: r.z, d: r.w / 2 + 4 })), ...RINGS.map(q => ({ z: q.z, d: q.reach + 4 })), ...RINGS.filter(q => q.kind === 'gap').map(q => ({ z: q.z0 + 150, d: 75 })), ...(R.campus ? [{ z: CAMPUS_Z - 400, d: 400 }] : []),
     ...CROSSINGS.map(c => ({ z: c.z, d: c.w / 2 + 3 }))];
-  const SKIP_SIDE = [...R.monuments.map(m => ({ side: m.side, z: g(m.s), d: m.kind === 'stadium' ? 110 : m.kind === 'palais' ? 95 : m.kind === 'culture' ? 100 : 50 })),
+  const SKIP_SIDE = [...RESOLVED_BOARDS.map(p => ({ side: p.side, z: p.z, d: (p.w ?? 9) * 0.55 + 3.5 })),
+    ...R.monuments.map(m => ({ side: m.side, z: g(m.s), d: m.kind === 'stadium' ? 110 : m.kind === 'palais' ? 95 : m.kind === 'culture' ? 100 : 50 })),
     ...(R.places ?? []).filter(p => p.kind !== 'tanks' && p.kind !== 'pont_matete').map(p => ({ side: p.side, z: g(p.s), d: { petro: 24, lds_church: 18, kimbanseke_commune: 18, masina_commune: 18, vodacom_shop: 12, orange_shop: 13, airtel_shop: 9, atm: 7, mosque: 16, mbujimayi_kananga: 15, ecole_luka: 18, stade_masina: (p.length ?? 36) / 2 + 3, hospital: 16, school: 15, church: 14, shekinah: 42, shekinah_old: 22, commercial: 12, lumumba_monument: 8, apocalypse: 68, regideso: 20, kinmarche: 32, transco_depot: 46, fuel: 22, b30_kintambo: 38, b30_rev_kim: 28, b30_mural: 38, b30_ggmart: 34, b30_chantier: 22, b30_jac: 32, b30_batetela: 26, b30_cnss_glass: 22, b30_res165: 24, b30_gouvernement: 44, b30_white_tower: 22, b30_three_pillars: 24, b30_copper_glass: 22, b30_africell_tower: 24, b30_afriland: 22, b30_matrix: 24, b30_mandela_apt: 24, b30_rotana: 44, b30_believe: 22, b30_sabena: 34, b30_orange_tower: 22, b30_chancellerie: 28, b30_regideso: 32, b30_dentisterie_chantier: 28, b30_blue_curve: 22, b30_scpt: 36, b30_sozacom: 38, b30_solenac: 24, b30_memling: 26, b30_bcdc_tower: 36, b30_palais_justice: 60, b30_bold_chantier: 24, b30_ferris_wheel: 34 }[p.kind] ?? 30 })),
     ...(HAS_MATETE ? [-1, 1].map(side => ({ side, z: (MATETE_ZONE[side][0] + MATETE_ZONE[side][1]) / 2, d: (MATETE_ZONE[side][0] - MATETE_ZONE[side][1]) / 2 + 4 })) : []),
     ...(IS_TOWER ? [{ side: 1, z: (ECH_ZONE[0] + ECH_ZONE[1]) / 2, d: (ECH_ZONE[0] - ECH_ZONE[1]) / 2 },

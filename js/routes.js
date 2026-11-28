@@ -165,7 +165,7 @@ export const ROUTES = {
     // Embouteillages programmés par tranche horaire ([début, fin, force, [[hDébut, hFin], ...]]) et aléatoires sur le reste des tronçons (probabilité)
     jams: [
       [4120, 5050, 1.35, [[12, 14]]],                         // Siforco → Quartier 3 : 12h à 14h
-      [5780, 9050, 1.5, [[8, 10], [12, 14], [18, 20]]],       // Saut-de-Mouton Pascal → Quartier 1 : 8h–10h, 12h–14h, 18h–20h
+      [5780, 9050, 1.5, [[6, 11], [12, 14], [18, 20]]],       // Saut-de-Mouton Pascal → Quartier 1 : 6h–11h, 12h–14h, 18h–20h
       [10950, 12550, 1, 0.45],                                // Pont Matete → Échangeur : aléatoire
       [14350, 15200, 1.3, [[9, 11]]],                         // Limete 13e Rue → 10e Rue : 9h à 11h
       [15560, 15880, 1, [[15, 18]]],                          // Limete 7e Rue : 15h à 18h
@@ -356,19 +356,38 @@ export const ROUTES = {
         [6496, 'DU MARCHÉ', 'bi'], [6640, 'PELENDE', 'bi'], [6972, 'BARAMOTO', 'bi'],
       ],
     },
-    // Grands panneaux publicitaires avec une photo (dossier « pano publicitaire ») : s, côté, image, largeur (m)
+    // Grands panneaux publicitaires avec une photo (dossier « pano publicitaire ») répartis tout le long du boulevard jusqu'à Mandela
     photoBoards: [
-      { s: 420, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },                      // Affiche officielle Fula-Fula Kin VR (sortie Aéroport)
-      { s: 1850, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true }, // Bannière Fula-Fula Kin
-      { s: 3100, side: -1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },                // FORAKI, Fondation Rabbi Kimbangi
-      { s: 4650, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },                     // Affiche officielle Fula-Fula Kin VR (Masina / Kingasani)
-      { s: 6500, side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                    // Ministère évangélique « Jésus revient bientôt »
-      { s: 8250, side: -1, img: 'data/tex/pubs/jesus_revient.jpg', w: 8.6, flex: true },         // « Jésus revient » (Pascal / N'djili)
-      { s: 9800, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },           // Malongi IA, l'assistant pédagogique des enseignants
-      { s: 11700, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },          // SysAkademia, plateforme de gestion universitaire
-      { s: 13402, side: 1, img: 'data/tex/pubs/jesus_revient.jpg', w: 9.6 },                     // « Jésus revient », à l'entrée de la 16e Rue, côté industriel
-      { s: 15250, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true }, // Bannière Fula-Fula Kin (Limete)
-      { s: 16800, side: -1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },                   // Affiche officielle Fula-Fula Kin VR (Limete 1re Rue)
+      { s: 380, side: 1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                       // Sortie Aéroport N'djili
+      { s: 1050, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },  // Zone RVA
+      { s: 1850, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },                  // Vers Camp Badara
+      { s: 2550, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },            // Après Camp Badara
+      { s: 3150, side: 1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                      // Avant Mikondo
+      { s: 3780, side: -1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                    // Mikondo → Siforco
+      { s: 4480, side: 1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                      // Kingasani
+      { s: 5180, side: -1, img: 'data/tex/pubs/jesus_revient.jpg', w: 8.6, flex: true },          // Masina Q3 / Sans-Fil
+      { s: 5620, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },   // Avant Saut-de-mouton Pascal
+      { s: 6500, side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                     // Pascal → BKTF
+      { s: 7220, side: -1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },                 // Après Pont Tshangu
+      { s: 8380, side: -1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                     // Bitabe → Kimbuta
+      { s: 9420, side: 1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },             // Ste-Thérèse → Petro Congo
+      { s: 10180, side: -1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },          // Après Pont N'djili
+      { s: 11120, side: 1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                     // Avant Pont Matete
+      { s: 11950, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true }, // Matete → Échangeur
+      { s: 13402, side: 1, img: 'data/tex/pubs/jesus_revient.jpg', w: 9.6 },                      // Entrée 16e Rue Limete
+      { s: 14220, side: -1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                    // Limete 14e–13e Rue
+      { s: 14880, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },                 // Limete 12e–11e Rue
+      { s: 15480, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },           // Limete 8e Rue
+      { s: 16180, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },  // Limete 5e Rue
+      { s: 16820, side: -1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                    // Limete 2e–1re Rue
+      { s: 17850, side: 1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },                    // Boulevard Sendwe
+      { s: 18580, side: -1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                    // Sendwe → Pont Cabu
+      { s: 19580, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },  // Boulevard Triomphal (après Stade)
+      { s: 20950, side: -1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },                // Triomphal → 24 Novembre
+      { s: 21520, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },           // 24 Novembre (UPC)
+      { s: 22780, side: -1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },                    // 24 Novembre (après Notre-Dame)
+      { s: 23320, side: 1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },            // 24 Novembre (Beaux-Arts → Gombe)
+      { s: 23820, side: -1, img: 'data/tex/pubs/jesus_revient.jpg', w: 8.6, flex: true },         // 24 Novembre (avant Mandela)
     ],
     // Tronçon 16e Rue → 1re Rue (croquis OSM « Bd Lumumba 16e–1re Rue », TPF/FIchierGAMA/roadskin.shp).
     // s = mètres réels depuis l'aéroport (16e Rue = 13 435 m + distance du croquis) ; n = numéro sur le croquis.
@@ -1302,11 +1321,16 @@ export const ROUTES = {
     // Liaison avec l'avenue de la Libération (ex-24 Novembre) : en s'engageant dans son entrée au Rond-point Mandela, on
     // passe sur le trajet principal, sur le 24 Novembre vers Asanef et le Triomphal (voir `links` du trajet lumumba)
     photoBoards: [
-      { s: 920, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
-      { s: 2250, side: -1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },
-      { s: 3900, side: 1, img: 'data/logo/poster.jpg', w: 4.5, flex: true },
-      { s: 5450, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
-      { s: 6750, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },
+      { s: 520, side: -1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },
+      { s: 1150, side: 1, img: 'data/tex/pubs/foraki.jpg', w: 6.5, flex: true },
+      { s: 1820, side: -1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
+      { s: 2420, side: 1, img: 'data/tex/pubs/malongi_ia.png', w: 10.4, flex: true },
+      { s: 3320, side: -1, img: 'data/tex/pubs/mst.jpg', w: 6.5, flex: true },
+      { s: 4050, side: 1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },
+      { s: 4820, side: -1, img: 'data/tex/pubs/jesus_revient.jpg', w: 8.6, flex: true },
+      { s: 5580, side: 1, img: 'data/tex/pubs/fulafulakin_banniere.jpg', w: 10.4, flex: true },
+      { s: 6350, side: -1, img: 'data/logo/poster.jpg', w: 4.6, flex: true },
+      { s: 6950, side: 1, img: 'data/tex/pubs/sysakademia.jpg', w: 10.4, flex: true },
     ],
     links: [{ to: 'lumumba', at: 'sideRoad', road: 4377, side: 1, s: 23930, dir: -1, name: 'Avenue de la Libération (ex-24 Novembre)' }],
   },

@@ -2845,8 +2845,9 @@ function update(dt) {
   globalThis.__TAXIKIN_HOUR = curHour;
   if (G.jamAnnounced) {
     for (const [hr, msg] of [
+      [6.04, '📻 06h00 : Embouteillage matinal de Pascal au Quartier 1 (jusqu’à 11h00)'],
       [7, '📻 07h00 : Embouteillage signalé sur la Route Poids Lourds'],
-      [8, '📻 08h00 : Embouteillages de Pascal au Quartier 1 et sur le 24 Novembre'],
+      [8, '📻 08h00 : Embouteillage signalé sur l’Avenue du 24 Novembre'],
       [9, '📻 09h00 : Embouteillage signalé à Limete (13e à 10e Rue)'],
       [12, '📻 12h00 : Embouteillages à Siforco–Quartier 3 et Pascal–Quartier 1'],
       [15, '📻 15h00 : Embouteillages sur le 30 Juin, 24 Novembre, Poids Lourds et 7e Rue Limete'],
