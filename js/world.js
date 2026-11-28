@@ -20,7 +20,7 @@ const MONUMENTAL = R.style === 'monumental';
 const DOWNTOWN = R.style === 'downtown';
 
 export const END_Z = -Math.round(GAME_LEN);          // fin du tracé OSM (tour, carrefour…)
-export const WORLD_VER = 'd11';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
+export const WORLD_VER = 'd12';   // (affiché en bas à gauche : permet de voir si le téléphone a la dernière version)
 
 // Lancement groupé et mis en cache des données JSON et textures partagées entre routes
 const __DATA_CACHE = (globalThis.__TAXIKIN_DATA ??= new Map());
@@ -112,14 +112,40 @@ export const JAMS = (R.jams ?? []).map(([a, b, lvl = 1, scheduleOrProb = 1]) => 
     on: true,
   };
 });
+/** Intensité courante (0..1) de l'embouteillage j : montée progressive au début du créneau, relâchement fluide à la fin. */
+export function jamStrength(j) {
+  const forced = globalThis.__TAXIKIN_FORCE_JAM;
+  if (forced !== null && forced !== undefined) return forced ? 1 : 0;
+  if (!j.on) return 0;
+  if (!j.hours?.length) return 1;
+  const h = globalThis.__TAXIKIN_HOUR ?? 6;
+  for (const [h0, h1] of j.hours) {
+    const inside = h0 <= h1 ? (h >= h0 && h < h1) : (h >= h0 || h < h1);
+    if (!inside) continue;
+    const elapsed = h >= h0 ? h - h0 : h + 24 - h0;
+    const kIn = h0 <= 6.01 ? 1 : Math.min(1, elapsed / 0.14);   // ~8 min de jeu pour que le bouchon se forme progressivement
+    return 0.05 + 0.95 * smooth(kIn);
+  }
+  return 0;
+}
+/** Vrai pendant ~7 minutes de jeu juste après la fin d'un créneau d'embouteillage en z : les voitures accélèrent franchement pour dégager la chaussée. */
+export function jamJustEnded(z) {
+  const forced = globalThis.__TAXIKIN_FORCE_JAM;
+  if (forced !== null && forced !== undefined) return false;
+  const h = globalThis.__TAXIKIN_HOUR ?? 6;
+  for (const j of JAMS) {
+    if (!j.on || !j.hours?.length || isJamActive(j)) continue;
+    if (z > j.z0 + 140 || z < j.z1 - 140) continue;
+    for (const [, h1] of j.hours) {
+      const after = h >= h1 ? h - h1 : h + 24 - h1;
+      if (after >= 0 && after < 0.12) return true;
+    }
+  }
+  return false;
+}
 /** L'embouteillage j est-il actif à l'heure courante du jeu (globalThis.__TAXIKIN_HOUR) ? */
 export function isJamActive(j) {
-  const forced = globalThis.__TAXIKIN_FORCE_JAM;
-  if (forced !== null && forced !== undefined) return forced;
-  if (!j.on) return false;
-  if (!j.hours?.length) return true;
-  const h = globalThis.__TAXIKIN_HOUR ?? 6;
-  return j.hours.some(([h0, h1]) => (h0 <= h1 ? (h >= h0 && h < h1) : (h >= h0 || h < h1)));
+  return jamStrength(j) > 0;
 }
 /** Tire au sort les embouteillages aléatoires de la journée (les embouteillages programmés gardent toujours leurs horaires fixes). */
 export function randomizeJams() {
@@ -199,8 +225,9 @@ export const inJam = (z, m = 0) => JAMS.some(j => isJamActive(j) && z < j.z0 + m
 /** Vitesse permise (m/s) en z au temps t : Infinity hors embouteillage ; entrée et sortie progressives ; des vagues qui avancent et s'arrêtent. */
 export function jamSpeed(z, t) {
   for (const j of JAMS) {
-    if (!isJamActive(j) || z > j.z0 + 60 || z < j.z1 - 60) continue;
-    const edge = Math.min(1, (j.z0 + 60 - z) / 120, (z - j.z1 + 60) / 120);
+    const str = jamStrength(j);
+    if (str <= 0 || z > j.z0 + 60 || z < j.z1 - 60) continue;
+    const edge = Math.min(1, (j.z0 + 60 - z) / 120, (z - j.z1 + 60) / 120) * str;
     const wave = Math.max(0, Math.sin(z * 0.045 + t * 0.55));
     return 14 - edge * (14 - (0.8 + 6.5 * wave) / j.lvl);
   }

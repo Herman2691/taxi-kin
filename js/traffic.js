@@ -1,7 +1,7 @@
 // Circulation sur 2 × 4 voies : beaucoup de taxis et taxis-bus jaunes, des motos qui se faufilent,
 // des camions de marchandises. Suivi de distance, arrêts des taxis-bus, réaction au klaxon.
 import { createCar, createMinibus, createCityBus, createTruck, createMoto, createTricycle, createHatchback, createVan, createSUV, createPolicePickup, createPoliceVan, createAmbulance, createEspritDeVie, createTranscoMidi, createTanker, createCitadine, createCrossover, createYango, createTipperTruck, createContainerTruck, createCraneTruck, createFlatbedTruck, createReeferTruck, createCurtainTruck } from './models.js';
-import { LANE_X, LANE_W, RAMP_X, ROAD_EDGE, flyH, flySlope, inFlyover, roadH, roadSlope, TRAFFIC_END, SIGNALS, signalState, ONEWAY_IN, TRAFFIC_MIX, TRAFFIC_START, jamSpeed, ringShift, WORKS, closedLanesAt, JAMS, isJamActive } from './world.js';
+import { LANE_X, LANE_W, RAMP_X, ROAD_EDGE, flyH, flySlope, inFlyover, roadH, roadSlope, TRAFFIC_END, SIGNALS, signalState, ONEWAY_IN, TRAFFIC_MIX, TRAFFIC_START, jamSpeed, jamJustEnded, ringShift, WORKS, closedLanesAt, JAMS, isJamActive } from './world.js';
 import { place } from './route.js';
 
 const CAR_COLORS = [0xf2f2f2, 0xb8bec4, 0x1e3a8a, 0x7a1f1f, 0x1f1f1f, 0x2f6f3e, 0x9aa5b1];
@@ -322,17 +322,70 @@ export class Traffic {
     return best;
   }
   inJamNow(z) { return this.jamActive && JAMS.some(j => isJamActive(j) && j.lvl > 1 && z < j.z0 && z > j.z1); }
-  hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.mesh.visible = false; }
-  startJam(taxi, zone = null) {
+  hideJam(v) { v.x = v.targetX = 0; v.z = 1e7; v.speed = 0; v.jamLive = false; v.jamWaiting = false; v.clearing = false; v.mesh.visible = false; }
+  startJam(taxi, zone = null, t = 0) {
     if (this.jamTodo.length) this.stepJamBuild(this.jamTodo.length);
+    const J = zone ?? this.nearestJam(taxi.z);
     this.jamActive = true;
-    this.jamZone = zone ?? this.nearestJam(taxi.z);
-    for (const v of this.list) if (v.jam) { this.place(v, taxi.z, 0, taxi); put(v, v.side === 1 ? 0 : Math.PI); }
+    this.jamZone = J;
+    this.jamFeedT = 0;
+    // Si le joueur est encore loin de la zone (> 250 m, hors de vue dans le brouillard) ou au tout début de la partie, la file est déjà en place au loin.
+    // Sinon (l'heure de l'embouteillage arrive pendant qu'on roule déjà sur place), aucun véhicule n'apparaît brusquement devant le joueur : ils arrivent progressivement depuis l'horizon.
+    const farAway = t < 1.0 || (J && (taxi.z > J.z0 + 250 || taxi.z < J.z1 - 250));
+    for (const v of this.list) {
+      if (!v.jam) continue;
+      if (v.clearing && v.mesh.visible && Math.abs(v.z - taxi.z) < AHEAD + 120) {
+        v.clearing = false;
+        v.jamLive = true;
+        const [lo, hi] = CRUISE[v.kind];
+        v.cruise = lo + Math.random() * (hi - lo);
+      } else if (farAway) {
+        v.clearing = false;
+        v.jamWaiting = false;
+        v.jamLive = true;
+        this.place(v, taxi.z, 0, taxi);
+        put(v, v.side === 1 ? 0 : Math.PI);
+      } else if (!v.jamLive) {
+        this.hideJam(v);
+        v.jamWaiting = true;
+      }
+    }
   }
-  stopJam() {
+  /** Fait entrer progressivement les véhicules en attente depuis l'horizon (hors du champ de vision) quand l'embouteillage commence. */
+  feedWaitingJam(dt, taxi, back, zMax) {
+    if ((this.jamFeedT = (this.jamFeedT ?? 0) - dt) > 0) return;
+    const v = this.list.find(o => o.jam && o.jamWaiting);
+    if (!v) return;
+    this.jamFeedT = 0.16;
+    v.jamWaiting = false;
+    v.jamLive = true;
+    v.clearing = false;
+    if (v.side === 1) {
+      const zSpawn = back ? Math.min(zMax, taxi.z + AHEAD + 140) : taxi.z - AHEAD - 40;
+      this.place(v, zSpawn, 90, taxi, true);
+    } else {
+      const zSpawn = back ? Math.min(zMax, taxi.z + AHEAD + 120) : taxi.z - AHEAD - 50;
+      this.place(v, zSpawn, 90, taxi, true);
+    }
+    put(v, v.side === 1 ? 0 : Math.PI);
+  }
+  stopJam(immediate = false, taxi = null) {
     this.jamActive = false;
     this.jamZone = null;
-    for (const v of this.list) if (v.jam) this.hideJam(v);
+    for (const v of this.list) {
+      if (!v.jam) continue;
+      if (immediate || !v.jamLive || !v.mesh.visible || v.z > 1e6 || (taxi && Math.abs(v.z - taxi.z) > AHEAD + 150)) {
+        this.hideJam(v);
+      } else {
+        // Fin de l'heure d'embouteillage : les véhicules visibles ne disparaissent pas, ils accélèrent franchement et dégagent la route jusqu'au loin
+        v.jamLive = false;
+        v.jamWaiting = false;
+        v.clearing = true;
+        v.stop = 0;
+        const [, hi] = CRUISE[v.kind];
+        v.cruise = hi + 4;
+      }
+    }
   }
 
   /** Un blocage (incidents.js) ne retient que les véhicules des voies qu'il occupe (x0..x1) ; sans x0 : toute la chaussée. */
@@ -343,7 +396,7 @@ export class Traffic {
     return !this.list.some(o => o !== self && o.side === side && Math.abs(o.targetX - x) < 1.5 && Math.abs(o.z - z) < margin + o.len / 2);
   }
 
-  place(v, zFrom, span, taxi) {
+  place(v, zFrom, span, taxi, horizonOnly = false) {
     // (une jeep recyclée : les personnes arrêtées qu'elle emmenait, assises à l'arrière, s'en vont avec elle ; incidents.js seat)
     if (v.cargo?.length) { for (const m of v.cargo) { v.mesh.remove(m); m.geometry.dispose(); } v.cargo = []; }
     if (v.fallen) {
@@ -352,7 +405,7 @@ export class Traffic {
       v.mesh.rotation.z = 0;
       v.mesh.traverse(m => { if (m.userData.rider) m.visible = true; });
     }
-    if (v.jam && taxi) {                                                    // (embouteillage grave : juste devant le taxi, et dans la zone de l'embouteillage)
+    if (v.jam && taxi && !horizonOnly) {                                    // (embouteillage déjà formé au loin : dans la zone de l'embouteillage)
       const J = this.jamZone ?? this.nearestJam(taxi.z);
       const maxSpan = J ? Math.max(60, J.z0 - J.z1 - 36) : 240;
       zFrom = taxi.z + 25; span = Math.min(v.side > 0 ? 240 : 200, maxSpan);
@@ -392,7 +445,7 @@ export class Traffic {
   }
 
   reset(taxi) {
-    if (this.jamActive) this.stopJam();
+    this.stopJam(true);
     const our = this.list.filter(v => v.side === 1 && !v.racer && !v.jam);
     const onc = this.list.filter(v => v.side === -1 && !v.racer && !v.jam);
     for (const v of this.list) if (v.jam) this.hideJam(v);
@@ -621,20 +674,30 @@ export class Traffic {
     if (this.jamTodo.length && !this.jamActive) this.stepJamBuild(2);
     if (this.jamActive !== undefined && !taxi.fixed) {
       const J = this.nearestJam(taxi.z);
-      if (J && (!this.jamActive || this.jamZone !== J)) this.startJam(taxi, J);
-      else if (!J && this.jamActive) this.stopJam();
+      if (J && (!this.jamActive || this.jamZone !== J)) this.startJam(taxi, J, t);
+      else if (!J && this.jamActive) this.stopJam(false, taxi);
+      if (this.jamActive) this.feedWaitingJam(dt, taxi, back, zMax);
     }
     for (const v of this.list) {
-      if (v.jam && !this.jamActive) continue;
+      if (v.jam && !v.jamLive && !v.clearing) continue;
       if (v.held) { put(v, v.heldYaw ?? (v.side > 0 ? 0 : Math.PI)); continue; }   // (incidents.js : voiture arrêtée dans une scène)
       if (v.side === -1) {
         if (v.racer?.done) { v.mesh.visible = false; continue; }
         if (v.racer) { this.raceBack(v, dt, taxi); continue; }        // (course aller-retour : l'adversaire revient vers le départ)
-        if (!back && (v.z > taxi.z + 70 || v.z > TRAFFIC_START)) this.place(v, taxi.z - AHEAD - 40, 120, taxi);
-        else if (back && v.z > TRAFFIC_START) this.place(v, taxi.z - BEHIND, 100, taxi);
-        else if (back && (v.z > taxi.z + AHEAD + 160 || v.z < taxi.z - BEHIND)) this.place(v, Math.min(zMax, taxi.z + AHEAD + 100), 100, taxi);
+        if (!back && (v.z > taxi.z + 70 || v.z > TRAFFIC_START)) {
+          if (v.clearing) { this.hideJam(v); continue; }
+          this.place(v, taxi.z - AHEAD - 40, 120, taxi, v.jam);
+        } else if (back && v.z > TRAFFIC_START) {
+          if (v.clearing) { this.hideJam(v); continue; }
+          this.place(v, taxi.z - BEHIND, 100, taxi, v.jam);
+        } else if (back && (v.z > taxi.z + AHEAD + 160 || v.z < taxi.z - BEHIND)) {
+          if (v.clearing) { this.hideJam(v); continue; }
+          this.place(v, Math.min(zMax, taxi.z + AHEAD + 100), 100, taxi, v.jam);
+        }
         // en sens inverse : vitesse constante, sauf à l'approche d'un feu (arrêt au rouge, file d'attente)
-        let target = Math.min(this.chaseTarget(v, v.cruise, taxi), v.chase || v.urgent ? Infinity : jamSpeed(v.z, t));
+        const dispersingL = v.clearing || jamJustEnded(v.z);
+        const baseCruiseL = dispersingL ? v.cruise + (v.clearing ? 1 : 5) : v.cruise;
+        let target = Math.min(this.chaseTarget(v, baseCruiseL, taxi), v.chase || v.urgent ? Infinity : jamSpeed(v.z, t));
         let lo = null, lg = Infinity;
         for (const o of this.list) {                 // (l'auteur, 13/11 : « les véhicules entre eux se passent transparents ») : on suit toujours celui de devant, dans sa voie
           if (o === v || o.side !== -1 || o.z <= v.z || Math.abs(o.x - v.x) > (o.wid + v.wid) / 2 + 0.2) continue;
@@ -667,7 +730,7 @@ export class Traffic {
           const g = taxi.z - v.z - (tl(taxi) + v.len) / 2;
           if (g < 18) target = Math.min(target, Math.max(0, -Math.cos(taxi.heading ?? 0) * taxi.speed + (g - 5) * 0.6));
         }
-        v.speed += Math.sign(target - v.speed) * Math.min(Math.abs(target - v.speed), (target > v.speed ? 3 : 9) * dt);
+        v.speed += Math.sign(target - v.speed) * Math.min(Math.abs(target - v.speed), (target > v.speed ? (dispersingL ? 7 : 3) : 9) * dt);
         v.z += v.speed * dt;
         const yawL = steerX(v, dt, Math.PI);   // (en sens inverse aussi, on change de voie : chantier)
         // (l'auteur, 13/11 : « rien ne doit passer transparent ») : jamais dans le véhicule de devant, ni dans le taxi
@@ -682,13 +745,21 @@ export class Traffic {
       if (v.racer?.done) { v.mesh.visible = false; continue; }          // (adversaire arrivé)
       if (v.racer) { /* les adversaires de la course ne sont jamais renouvelés */ }
       else if (v.keep) { /* (incidents.js : la voiture de police de la scène) */ }
-      else if (!back && (v.z > taxi.z + BEHIND || v.z < taxi.z - AHEAD - 160)) this.place(v, taxi.z - AHEAD, 100, taxi);
-      else if (back && v.z < taxi.z - 70) this.place(v, Math.min(zMax, taxi.z + AHEAD + 160), 120, taxi);
+      else if (!back && (v.z > taxi.z + BEHIND || v.z < taxi.z - AHEAD - 160)) {
+        if (v.clearing) { this.hideJam(v); continue; }
+        this.place(v, taxi.z - AHEAD, 100, taxi, v.jam);
+      } else if (back && (v.z < taxi.z - 70 || (v.clearing && v.z > taxi.z + AHEAD + 160))) {
+        if (v.clearing) { this.hideJam(v); continue; }
+        this.place(v, Math.min(zMax, taxi.z + AHEAD + 160), 120, taxi, v.jam);
+      }
 
-      // Les taxis-bus s'arrêtent n'importe où sur la voie de droite pour charger
-      let target = v.racer ? (this.raceFrozen ? 0 : v.cruise) : Math.min(this.chaseTarget(v, v.cruise, taxi), v.chase || v.urgent ? Infinity : jamSpeed(v.z, t));
-      if (v.stop > 0 && !v.flee) { v.stop -= dt; target = 0; }
-      else if ((v.kind === 'bus' || v.kind === 'van') && laneOf(v.targetX) === RIGHT && Math.random() < dt * 0.05) v.stop = 3 + Math.random() * 3;
+      // Les taxis-bus s'arrêtent n'importe où sur la voie de droite pour charger (sauf quand le bouchon se disperse)
+      const dispersing = v.clearing || jamJustEnded(v.z);
+      const baseCruise = dispersing ? v.cruise + (v.clearing ? 1 : 5) : v.cruise;
+      let target = v.racer ? (this.raceFrozen ? 0 : v.cruise) : Math.min(this.chaseTarget(v, baseCruise, taxi), v.chase || v.urgent ? Infinity : jamSpeed(v.z, t));
+      if (dispersing && v.stop > 0) v.stop = 0;
+      if (v.stop > 0 && !v.flee && !dispersing) { v.stop -= dt; target = 0; }
+      else if (!dispersing && (v.kind === 'bus' || v.kind === 'van') && laneOf(v.targetX) === RIGHT && Math.random() < dt * 0.05) v.stop = 3 + Math.random() * 3;
 
       // Distance au véhicule de devant (y compris le taxi du joueur)
       let gap = Infinity, lead = 0, lo = null;
@@ -745,7 +816,7 @@ export class Traffic {
         if (v.stuck > 1.5) { this.tryLaneChange(v, taxi); v.stuck = 0; }
       } else v.stuck = 0;
 
-      const acc = target > v.speed ? (v.kind === 'moto' ? 5 : 3.5) : 9;
+      const acc = target > v.speed ? (dispersing ? 7 : v.kind === 'moto' ? 5 : 3.5) : 9;
       v.speed += Math.sign(target - v.speed) * Math.min(Math.abs(target - v.speed), acc * dt);
       v.z -= v.speed * dt;
       // (l'auteur, 13/11 : « rien ne doit passer transparent ») : jamais dans le véhicule de devant, ni dans le taxi
