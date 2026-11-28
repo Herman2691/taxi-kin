@@ -306,7 +306,7 @@ export class Traffic {
   /** Les véhicules de l'embouteillage grave : construits par petits lots après le départ, cachés tant que le taxi n'est pas dans la zone. */
   stepJamBuild(n = 2) {
     while (n-- > 0 && this.jamTodo.length) {
-      const [side, kind] = this.jamTodo.pop();
+      const [side, kind] = this.jamTodo.shift();
       const v = this.add(this.scene, side, kind);
       v.jam = true;
       this.hideJam(v);
